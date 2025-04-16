@@ -15,13 +15,13 @@
 -   [x] feat(integrations): Implement Nmap integration for basic port scanning
 -   [ ] feat(integrations): Create OWASP ZAP integration for web scanning
 -   [x] feat(integrations): Implement Dirsearch/Gobuster for directory enumeration
--   [ ] feat(integrations): Create Sublist3r/Amass for subdomain discovery
+-   [x] feat(integrations): Create Sublist3r/Amass for subdomain discovery (Sublist3r integrated)
 -   [ ] feat(integrations): Build Wappalyzer/Webanalyze for tech detection
 
 ## Result Normalization
 
--   [ ] feat(results): Create common result data models
--   [ ] feat(results): Implement result parsers for each integrated tool
+-   [x] feat(results): Create common result data models
+-   [~] feat(results): Implement result parsers for each integrated tool (Nmap, Dirsearch, Sublist3r refactored)
 -   [ ] feat(results): Build deduplication system for overlapping results
 -   [ ] feat(results): Create severity normalization across different tools
 -   [ ] feat(results): Implement finding correlation system
@@ -29,10 +29,20 @@
 ## Unit Tests
 
 -   [ ] test(integrations): Create mock tool outputs for testing
--   [x] test(integrations): Implement tests for each tool integration (Nmap, Dirsearch basic tests done)
--   [ ] test(results): Test result normalization and parsing
+-   [x] test(integrations): Implement tests for each tool integration (Nmap, Dirsearch, Sublist3r tests done)
+-   [~] test(results): Test result normalization and parsing (Basic parser tests updated)
 -   [ ] test(integrations): Create integration tests for tool execution flow
 -   [ ] test(integrations): Test error handling and recovery mechanisms
+
+# --- Deferred from Sprint 1 ---
+-   [ ] test(cli): Implement unit tests for core CLI components (Basic tests added)
+-   [ ] chore(test): Implement test coverage reporting (pytest-cov configured)
+-   [ ] feat(tools): Create tool registry system
+-   [ ] feat(tools): Implement tool detection mechanism
+-   [ ] feat(tools): Build system for checking tool prerequisites
+-   [ ] feat(tools): Create Docker-based fallback mechanism for missing tools
+-   [ ] feat(tools): Implement version checking for installed tools
+-   [ ] test(core): Create mocks for tool execution
 
 # --- Sprint 1 Completed Tasks --- 
 
@@ -56,18 +66,8 @@
 -   [x] feat(core): Create logging infrastructure
 -   [x] feat(cli): Build help and documentation system
 
-## Tool Detection Framework
+## Tool Detection Framework (Deferred)
 
--   [ ] feat(tools): Create tool registry system
--   [ ] feat(tools): Implement tool detection mechanism
--   [ ] feat(tools): Build system for checking tool prerequisites
--   [ ] feat(tools): Create Docker-based fallback mechanism for missing tools
--   [ ] feat(tools): Implement version checking for installed tools
-
-## Unit Tests
-
--   [ ] test(cli): Implement unit tests for core CLI components
--   [ ] test(core): Create mocks for tool execution
+## Unit Tests (Deferred & Partial)
 -   [x] test(core): Test URL validation functionality
 -   [x] test(core): Test configuration management
--   [ ] chore(test): Implement test coverage reporting

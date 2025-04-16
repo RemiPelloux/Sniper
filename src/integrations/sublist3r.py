@@ -8,6 +8,9 @@ from typing import Any
 from src.integrations.base import ToolIntegration, ToolIntegrationError
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
 
+# Import result types
+from src.results.types import BaseFinding, FindingSeverity, SubdomainFinding
+
 log = logging.getLogger(__name__)
 
 
@@ -20,6 +23,9 @@ class Sublist3rIntegration(ToolIntegration):
         # Prefer script if available, as it might be cloned repo
         self._sublist3r_path = shutil.which("sublist3r.py") or shutil.which("sublist3r")
         self._is_script = self._sublist3r_path and self._sublist3r_path.endswith(".py")
+
+        # Store the target domain when run is called for use in parsing
+        self._last_target_domain: str | None = None
 
     @property
     def tool_name(self) -> str:
@@ -48,6 +54,9 @@ class Sublist3rIntegration(ToolIntegration):
         if not self.check_prerequisites():
             raise ToolIntegrationError("Sublist3r prerequisites not met.")
         assert self._sublist3r_path is not None
+
+        # Store target domain for use in parsing
+        self._last_target_domain = target
 
         options = options or {}
         timeout = options.get("timeout_seconds", 600)  # Default timeout
@@ -109,23 +118,42 @@ class Sublist3rIntegration(ToolIntegration):
             )
             raise ToolIntegrationError(f"Sublist3r execution failed: {e}") from e
 
-    def parse_output(self, raw_output: Path | ExecutionResult) -> list[str] | None:
-        """Parse Sublist3r output file (list of subdomains)."""
+    def parse_output(
+        self, raw_output: Path | ExecutionResult
+    ) -> list[BaseFinding] | None:
+        """Parse Sublist3r output file into SubdomainFinding objects."""
         if isinstance(raw_output, ExecutionResult):
             log.warning("Cannot parse output from failed/timed-out Sublist3r run.")
             return None
 
         output_path = raw_output
         log.debug(f"Parsing Sublist3r output file: {output_path}")
-        subdomains = []
+        findings: list[BaseFinding] = []
+        # Use the target domain stored during the run
+        target_domain = self._last_target_domain or "unknown_target"
+
         try:
             with output_path.open("r", encoding="utf-8") as f:
                 for line in f:
                     subdomain = line.strip()
                     if subdomain:  # Ignore empty lines
-                        subdomains.append(subdomain)
+                        finding = SubdomainFinding(
+                            target=target_domain,
+                            subdomain=subdomain,
+                            severity=FindingSeverity.INFO,  # Subdomain discovery is informational
+                            description=f"Discovered subdomain: {subdomain}",
+                            source_tool=self.tool_name,
+                            raw_evidence=subdomain,
+                        )
+                        findings.append(finding)
             output_path.unlink(missing_ok=True)  # Clean up
-            return subdomains
+
+            if not findings:
+                log.info(f"No subdomains found or parsed from {output_path}")
+                return None
+
+            log.info(f"Parsed {len(findings)} subdomains from {output_path}")
+            return findings
         except FileNotFoundError:
             log.error(f"Sublist3r output file not found: {output_path}")
             return None

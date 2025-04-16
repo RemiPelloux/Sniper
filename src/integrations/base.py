@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+# Import the BaseFinding model
+from src.results.types import BaseFinding
+
 # Placeholder for future structured results
 # from src.results.models import ScanResult
 
@@ -48,18 +51,18 @@ class ToolIntegration(ABC):
         pass
 
     @abstractmethod
-    def parse_output(self, raw_output: Any) -> Any:  # Replace Any with ScanResult later
+    def parse_output(self, raw_output: Any) -> list[BaseFinding] | None:
         """
-        Parse the raw output from the tool into a standardized format.
+        Parse the raw output from the tool into a standardized list of findings.
 
         Args:
             raw_output: The raw output from the 'run' method.
 
         Returns:
-            Standardized result object (e.g., ScanResult or list thereof).
-            The exact type will be defined by the common result models.
+            A list of BaseFinding objects, or None if parsing fails or yields
+            no results.
 
         Raises:
-            ToolIntegrationError: If parsing fails.
+            ToolIntegrationError: If parsing fails due to an unexpected error.
         """
         pass

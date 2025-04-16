@@ -43,35 +43,35 @@ Sprint 2: Tool Integration Framework
 
 ### Integration Architecture
 
--   Design abstract base classes for tool integration
--   Implement execution strategies (subprocess, API, Docker)
--   Create output parsers for common tool formats
--   Build execution timeout and interrupt handling
--   Implement tool-specific configuration management
+-   [x] Design abstract base classes for tool integration
+-   [~] Implement execution strategies (subprocess, API, Docker) (Subprocess done)
+-   [~] Create output parsers for common tool formats (Initial models and refactoring done)
+-   [~] Build execution timeout and interrupt handling (Timeout done)
+-   [x] Implement tool-specific configuration management
 
 ### Core Tool Integrations
 
--   Implement Nmap integration for basic port scanning
--   Create OWASP ZAP integration for web scanning
--   Implement Dirsearch/Gobuster for basic directory enumeration
--   Create Sublist3r/Amass integration for subdomain discovery
--   Build Wappalyzer/Webanalyze integration for technology detection
+-   [x] Implement Nmap integration for basic port scanning
+-   [ ] Create OWASP ZAP integration for web scanning
+-   [x] Implement Dirsearch/Gobuster for basic directory enumeration
+-   [x] Create Sublist3r/Amass integration for subdomain discovery (Sublist3r done)
+-   [ ] Build Wappalyzer/Webanalyze integration for technology detection
 
 ### Result Normalization
 
--   Create common result data models
--   Implement result parsers for each integrated tool
--   Build deduplication system for overlapping results
--   Create severity normalization across different tools
--   Implement finding correlation system
+-   [x] Create common result data models
+-   [~] Implement result parsers for each integrated tool (Nmap, Dirsearch, Sublist3r done)
+-   [ ] Build deduplication system for overlapping results
+-   [ ] Create severity normalization across different tools
+-   [ ] Implement finding correlation system
 
 ### Unit Tests
 
--   Create mock tool outputs for testing
--   Implement tests for each tool integration
--   Test result normalization and parsing
--   Create integration tests for tool execution flow
--   Test error handling and recovery mechanisms
+-   [ ] Create mock tool outputs for testing
+-   [x] Implement tests for each tool integration (Nmap, Dirsearch, Sublist3r done)
+-   [~] Test result normalization and parsing (Parser tests updated)
+-   [ ] Create integration tests for tool execution flow
+-   [ ] Test error handling and recovery mechanisms
 
 Sprint 3: Basic Reconnaissance Module
 -------------------------------------

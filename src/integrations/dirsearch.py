@@ -11,6 +11,9 @@ from typing import Any
 from src.integrations.base import ToolIntegration, ToolIntegrationError
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
 
+# Import result types
+from src.results.types import BaseFinding, FindingSeverity, WebFinding
+
 log = logging.getLogger(__name__)
 
 # Common extensions, could be configurable
@@ -105,23 +108,84 @@ class DirsearchIntegration(ToolIntegration):
             )
             raise ToolIntegrationError(f"Dirsearch execution failed: {e}") from e
 
-    def parse_output(self, raw_output: Path | ExecutionResult) -> Any:
-        """Parse Dirsearch JSON report file."""
+    def parse_output(
+        self, raw_output: Path | ExecutionResult
+    ) -> list[BaseFinding] | None:
+        """Parse Dirsearch JSON report file into WebFinding objects."""
         if isinstance(raw_output, ExecutionResult):
             log.warning("Cannot parse output from failed/timed-out Dirsearch run.")
             return None
 
         report_path = raw_output
         log.debug(f"Parsing Dirsearch JSON report: {report_path}")
+        findings: list[BaseFinding] = []
         try:
             with report_path.open("r", encoding="utf-8") as f:
-                # The report itself is the results, line-delimited JSON objects per target
-                # We assume one target, so load the whole structure.
-                # Dirsearch JSON is like: {"target": [{"path": ..., "status": ...}]}
                 data = json.load(f)
+
+            # Dirsearch JSON format: {"target_url": [{result_dict}, ...], ...}
+            # We iterate through all targets found in the report
+            for target_url, results in data.items():
+                if not isinstance(results, list):
+                    log.warning(
+                        f"Unexpected format for results under target {target_url} in {report_path}"
+                    )
+                    continue
+
+                for result_item in results:
+                    if not isinstance(result_item, dict):
+                        log.warning(
+                            f"Skipping non-dict item in results for {target_url}"
+                        )
+                        continue
+
+                    status = result_item.get("status")
+                    url = result_item.get("url")
+                    content_type = result_item.get("content-type")
+
+                    if not url or not status:
+                        log.warning(
+                            f"Skipping result item with missing URL or status: {result_item}"
+                        )
+                        continue
+
+                    # Basic severity based on status code (can be refined)
+                    severity = FindingSeverity.INFO
+                    if 200 <= status < 300:
+                        severity = (
+                            FindingSeverity.LOW
+                        )  # Or INFO? Found path is low impact
+                    elif 300 <= status < 400:
+                        severity = FindingSeverity.INFO  # Redirects
+                    elif 401 <= status <= 403:
+                        severity = (
+                            FindingSeverity.MEDIUM
+                        )  # Forbidden/Unauthorized potentially interesting
+
+                    finding = WebFinding(
+                        target=target_url,  # Overall target from report key
+                        url=url,  # Specific URL found
+                        status_code=status,
+                        severity=severity,
+                        description=(
+                            f"Found web resource at {url} with status {status}. "
+                            f"Content-Type: {content_type or 'N/A'}"
+                        ),
+                        source_tool=self.tool_name,
+                        raw_evidence=result_item,  # Store the raw dict entry
+                    )
+                    findings.append(finding)
+
             # Clean up the temporary file after parsing
             report_path.unlink(missing_ok=True)
-            return data
+            if not findings:
+                log.info(f"No findings parsed from Dirsearch report {report_path}")
+                return None
+
+            log.info(
+                f"Parsed {len(findings)} findings from Dirsearch report {report_path}"
+            )
+            return findings
         except FileNotFoundError:
             log.error(f"Dirsearch report file not found: {report_path}")
             return None

@@ -9,6 +9,9 @@ from src.integrations.base import ToolIntegrationError
 from src.integrations.executors import ExecutionResult
 from src.integrations.sublist3r import Sublist3rIntegration
 
+# Import result types
+from src.results.types import FindingSeverity, SubdomainFinding
+
 # Mock paths
 MOCK_SUBLIST3R_EXEC = "/usr/local/bin/sublist3r"
 MOCK_SUBLIST3R_SCRIPT = "/path/to/sublist3r.py"
@@ -198,16 +201,60 @@ async def test_sublist3r_run_prereq_fail_raises(
 def test_sublist3r_parse_success(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
+    """Test parsing a valid Sublist3r output file."""
     integration = Sublist3rIntegration(executor=mock_executor)
+    # Simulate that run was called with this target
+    target_domain = "example.com"
+    integration._last_target_domain = target_domain
+
     sample_content = "one.example.com\ntwo.example.com\n\nthree.example.com\n"
-    expected_subdomains = ["one.example.com", "two.example.com", "three.example.com"]
+    # expected_subdomains = ["one.example.com", "two.example.com", "three.example.com"]
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
         f.write(sample_content)
         output_path = Path(f.name)
 
     parsed = integration.parse_output(output_path)
-    assert parsed == expected_subdomains
+
+    assert parsed is not None
+    assert len(parsed) == 3
+
+    # Check finding 1
+    f1 = parsed[0]
+    assert isinstance(f1, SubdomainFinding)
+    assert f1.target == target_domain
+    assert f1.subdomain == "one.example.com"
+    assert f1.severity == FindingSeverity.INFO
+    assert f1.source_tool == "sublist3r"
+    assert f1.raw_evidence == "one.example.com"
+
+    # Check finding 2
+    f2 = parsed[1]
+    assert isinstance(f2, SubdomainFinding)
+    assert f2.subdomain == "two.example.com"
+    assert f2.target == target_domain
+
+    # Check finding 3
+    f3 = parsed[2]
+    assert isinstance(f3, SubdomainFinding)
+    assert f3.subdomain == "three.example.com"
+
+    # assert parsed == expected_subdomains # Old assertion
     assert not output_path.exists()  # File should be deleted after parsing
+
+
+@patch("shutil.which", return_value=MOCK_SUBLIST3R_EXEC)
+def test_sublist3r_parse_success_empty_file(
+    mock_which: MagicMock, mock_executor: MagicMock
+) -> None:
+    """Test parsing an empty output file."""
+    integration = Sublist3rIntegration(executor=mock_executor)
+    integration._last_target_domain = "example.com"
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        output_path = Path(f.name)
+
+    parsed = integration.parse_output(output_path)
+    assert parsed is None
+    assert not output_path.exists()
 
 
 @patch("shutil.which", return_value=MOCK_SUBLIST3R_EXEC)

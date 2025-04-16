@@ -6,6 +6,9 @@ from src.integrations.base import ToolIntegrationError
 from src.integrations.executors import ExecutionResult
 from src.integrations.nmap import NmapIntegration
 
+# Import result types
+from src.results.types import FindingSeverity, PortFinding
+
 # Remove module-level mark
 # pytestmark = pytest.mark.asyncio
 
@@ -123,20 +126,80 @@ async def test_nmap_run_timeout(
 
 
 @patch("shutil.which", return_value="/usr/bin/nmap")
-def test_nmap_parse_output_success(
+def test_nmap_parse_output_success_finds_ports(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
-    """Test basic parsing of successful execution result."""
+    """Test parsing of successful execution result with open ports."""
     integration = NmapIntegration(executor=mock_executor)
+    # Sample output mimicking nmap's text format
+    sample_stdout = """
+    Starting Nmap 7.92 ( https://nmap.org )
+    Nmap scan report for scanme.nmap.org (45.33.32.156)
+    Host is up (0.11s latency).
+    Not shown: 997 filtered ports
+    PORT      STATE  SERVICE
+    22/tcp    open   ssh
+    80/tcp    open   http
+    31337/udp closed elite
+
+    Nmap done: 1 IP address (1 host up) scanned in 15.75 seconds
+    """
     mock_result = ExecutionResult(
-        command="nmap -F target",
+        command="nmap -F scanme.nmap.org",  # Include target for extraction
         return_code=0,
-        stdout="Nmap scan successful",
+        stdout=sample_stdout,
         stderr="",
         timed_out=False,
     )
     parsed = integration.parse_output(mock_result)
-    assert parsed == "Nmap scan successful"
+
+    assert parsed is not None
+    assert len(parsed) == 2
+
+    # Check first finding (SSH)
+    finding1 = parsed[0]
+    assert isinstance(finding1, PortFinding)
+    assert finding1.port == 22
+    assert finding1.protocol == "tcp"
+    assert finding1.service == "ssh"
+    assert finding1.severity == FindingSeverity.INFO
+    assert finding1.target == "scanme.nmap.org"
+    assert finding1.source_tool == "nmap"
+    assert finding1.raw_evidence is not None
+    assert isinstance(finding1.raw_evidence, str)
+    assert "22/tcp    open   ssh" in finding1.raw_evidence
+
+    # Check second finding (HTTP)
+    finding2 = parsed[1]
+    assert isinstance(finding2, PortFinding)
+    assert finding2.port == 80
+    assert finding2.protocol == "tcp"
+    assert finding2.service == "http"
+    assert finding2.target == "scanme.nmap.org"
+
+
+@patch("shutil.which", return_value="/usr/bin/nmap")
+def test_nmap_parse_output_success_no_ports(
+    mock_which: MagicMock, mock_executor: MagicMock
+) -> None:
+    """Test parsing when nmap output shows no open ports."""
+    integration = NmapIntegration(executor=mock_executor)
+    sample_stdout = """
+    Nmap scan report for example.com (93.184.216.34)
+    Host is up.
+    All 100 scanned ports on example.com (93.184.216.34) are in ignored states.
+    Not shown: 100 filtered ports
+    Nmap done: 1 IP address (1 host up) scanned in 2.35 seconds
+    """
+    mock_result = ExecutionResult(
+        command="nmap -F example.com",
+        return_code=0,
+        stdout=sample_stdout,
+        stderr="",
+        timed_out=False,
+    )
+    parsed = integration.parse_output(mock_result)
+    assert parsed is None  # Expect None if no findings were generated
 
 
 @patch("shutil.which", return_value="/usr/bin/nmap")

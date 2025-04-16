@@ -10,6 +10,9 @@ from src.integrations.base import ToolIntegrationError
 from src.integrations.dirsearch import DirsearchIntegration
 from src.integrations.executors import ExecutionResult
 
+# Import result types
+from src.results.types import FindingSeverity, WebFinding
+
 # Remove module-level mark
 # pytestmark = pytest.mark.asyncio
 
@@ -168,15 +171,83 @@ async def test_dirsearch_run_prereq_fail_raises(
 def test_dirsearch_parse_success(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
+    """Test parsing a valid Dirsearch JSON report."""
     integration = DirsearchIntegration(executor=mock_executor)
-    sample_data = {"http://example.com": [{"status": 200, "path": "/index.html"}]}
+    target_url = "http://example.com"
+    sample_data = {
+        target_url: [
+            {
+                "status": 200,
+                "url": f"{target_url}/index.html",
+                "content-type": "text/html",
+            },
+            {"status": 403, "url": f"{target_url}/admin", "content-type": "text/html"},
+            {
+                "status": 301,
+                "url": f"{target_url}/redirect",
+                "content-type": "text/html",
+            },
+            {
+                "status": 500,
+                "url": f"{target_url}/error",
+                "content-type": "text/html",
+            },  # Should be filtered by run command
+        ]
+    }
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(sample_data, f)
         report_path = Path(f.name)
 
     parsed = integration.parse_output(report_path)
-    assert parsed == sample_data
+
+    assert parsed is not None
+    assert len(parsed) == 4  # Expect 4 findings, including the 500 error
+
+    # Finding 1 (index.html)
+    f1 = parsed[0]
+    assert isinstance(f1, WebFinding)
+    assert f1.target == target_url
+    assert f1.url == f"{target_url}/index.html"
+    assert f1.status_code == 200
+    assert f1.severity == FindingSeverity.LOW
+    assert f1.source_tool == "dirsearch"
+    assert isinstance(f1.raw_evidence, dict)
+    assert f1.raw_evidence["status"] == 200
+
+    # Finding 2 (admin)
+    f2 = parsed[1]
+    assert isinstance(f2, WebFinding)
+    assert f2.target == target_url
+    assert f2.url == f"{target_url}/admin"
+    assert f2.status_code == 403
+    assert f2.severity == FindingSeverity.MEDIUM
+
+    # Finding 3 (redirect)
+    f3 = parsed[2]
+    assert isinstance(f3, WebFinding)
+    assert f3.target == target_url
+    assert f3.url == f"{target_url}/redirect"
+    assert f3.status_code == 301
+    assert f3.severity == FindingSeverity.INFO
+
     # Check file was deleted by parser
+    assert not report_path.exists()
+
+
+@patch("shutil.which", return_value=MOCK_DIRSEARCH_EXEC)
+def test_dirsearch_parse_success_empty_results(
+    mock_which: MagicMock, mock_executor: MagicMock
+) -> None:
+    """Test parsing a valid report with no findings."""
+    integration = DirsearchIntegration(executor=mock_executor)
+    target_url = "http://example.com"
+    sample_data: dict[str, list] = {target_url: []}  # Empty list of results
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(sample_data, f)
+        report_path = Path(f.name)
+
+    parsed = integration.parse_output(report_path)
+    assert parsed is None  # Expect None if no findings were generated
     assert not report_path.exists()
 
 
@@ -184,6 +255,7 @@ def test_dirsearch_parse_success(
 def test_dirsearch_parse_non_json_file(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
+    """Test parsing a file that is not valid JSON."""
     integration = DirsearchIntegration(executor=mock_executor)
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         f.write("this is not json")

@@ -1,9 +1,13 @@
 import logging
+import re
 import shutil
 from typing import Any
 
 from src.integrations.base import ToolIntegration, ToolIntegrationError
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
+
+# Import the specific finding models
+from src.results.types import BaseFinding, FindingSeverity, PortFinding
 
 log = logging.getLogger(__name__)
 
@@ -59,12 +63,81 @@ class NmapIntegration(ToolIntegration):
             log.exception(f"An unexpected error occurred during Nmap execution: {e}")
             raise ToolIntegrationError(f"Nmap execution failed: {e}") from e
 
-    def parse_output(self, raw_output: ExecutionResult) -> Any:
-        """Parse Nmap output (basic implementation - returns stdout)."""
-        log.debug("Parsing Nmap output (current: returning raw stdout).")
-        # TODO: Implement actual Nmap output parsing (e.g., XML or grepable)
+    def parse_output(self, raw_output: ExecutionResult) -> list[BaseFinding] | None:
+        """Parse Nmap output into a list of PortFinding objects.
+
+        Note: This is a very basic parser based on expected stdout format.
+        A robust implementation should parse Nmap's XML output.
+        """
         if raw_output.return_code != 0 or raw_output.timed_out:
             log.warning("Cannot parse output from failed or timed-out Nmap scan.")
-            return None  # Or return structured error data
+            return None
 
-        return raw_output.stdout
+        log.debug("Parsing Nmap stdout for open ports.")
+        findings: list[BaseFinding] = []
+        target_host = self._extract_target_from_command(raw_output.command)
+
+        # Basic regex for lines like: "<port>/tcp open <service>"
+        # NOTE: Fragile, relies on default Nmap text output.
+        port_line_regex = re.compile(r"^(\d+)/(tcp|udp)\s+(open)\s+(\S+)")
+
+        if not raw_output.stdout:
+            log.warning("Nmap stdout was empty, cannot parse ports.")
+            return None
+
+        for line in raw_output.stdout.splitlines():
+            match = port_line_regex.match(line.strip())
+            if match:
+                try:
+                    port = int(match.group(1))
+                    protocol = match.group(2)
+                    # state = match.group(3) # 'open'
+                    service = match.group(4)
+
+                    finding = PortFinding(
+                        # Use the target derived from the command
+                        target=target_host or "unknown_target",
+                        port=port,
+                        protocol=protocol,
+                        service=service,
+                        # Severity for an open port is typically Info
+                        severity=FindingSeverity.INFO,
+                        # Description can be more detailed
+                        description=(
+                            f"Port {port}/{protocol} is open, "
+                            f"running service: {service}"
+                        ),
+                        source_tool=self.tool_name,
+                        raw_evidence=line.strip(),
+                    )
+                    findings.append(finding)
+                except (ValueError, IndexError) as e:
+                    log.warning(f"Failed to parse Nmap line '{line.strip()}': {e}")
+                    continue
+
+        if not findings:
+            log.info("No open ports found or parsed from Nmap output.")
+            return None
+
+        log.info(f"Parsed {len(findings)} open port findings from Nmap output.")
+        return findings
+
+    def _extract_target_from_command(self, command_str: str) -> str | None:
+        """Helper to attempt extracting the target from the executed command string."""
+        # Very basic: assumes target is the last argument
+        # This might break if options are added after the target
+        try:
+            parts = command_str.split()
+            if len(parts) > 1:
+                # Simple check if it looks like a domain or IP
+                # This is not robust validation
+                potential_target = parts[-1]
+                if (
+                    "." in potential_target
+                    or "::" in potential_target
+                    or potential_target.replace(".", "").isdigit()
+                ):
+                    return potential_target
+        except Exception:
+            log.warning("Could not reliably extract target from command string.")
+        return None
