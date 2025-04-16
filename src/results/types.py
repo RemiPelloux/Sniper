@@ -93,6 +93,39 @@ class SubdomainFinding(BaseFinding):
         super().__init__(**data)
 
 
+class TechnologyFinding(BaseFinding):
+    """Model for detected technologies on a web target."""
+
+    technology_name: str = Field(..., description="Name of the detected technology.")
+    version: str | None = Field(None, description="Detected version of the technology.")
+    categories: list[str] = Field(
+        default_factory=list, description="Categories the technology belongs to."
+    )
+    # Wappalyzer often provides confidence scores, could add later
+    # confidence: int | None = Field(None, description="Confidence score (0-100)")
+
+    def __init__(self, **data: Any):
+        if "title" not in data:
+            tech_name = data.get("technology_name", "Unknown Technology")
+            version_str = f" (v{data['version']})" if data.get("version") else ""
+            data["title"] = f"Technology Detected: {tech_name}{version_str}"
+        if "severity" not in data:
+            # Technology detection is usually informational
+            data["severity"] = FindingSeverity.INFO
+        if "description" not in data:
+            tech_name = data.get("technology_name", "Unknown")
+            version_str = f"version {data['version']} " if data.get("version") else ""
+            cat_str = (
+                f" (Categories: {', '.join(data.get('categories', []))})"
+                if data.get("categories")
+                else ""
+            )
+            data["description"] = (
+                f"Detected {tech_name} {version_str}on {data.get('target')}.{cat_str}"
+            )
+        super().__init__(**data)
+
+
 # We can add more specific finding types later, e.g.:
 # class VulnerabilityFinding(WebFinding):
 #     cwe: str | None = None

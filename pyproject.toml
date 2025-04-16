@@ -17,6 +17,13 @@ validators = "^0.34.0"
 pydantic = "^2.11.3"
 pydantic-settings = "^2.8.1"
 
+# Optional dependencies for specific tool integrations
+zaproxy = {version = "^0.4.0", optional = true}
+wappalyzer = {version = "^1.0.12", optional = true} # Requires Firefox and geckodriver
+
+[tool.poetry.extras]
+zap = ["zaproxy"]
+wappalyzer = ["wappalyzer"]
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
@@ -55,6 +62,7 @@ per-file-ignores = [
     "src/core/config.py: E501",
     "src/integrations/dirsearch.py: E501",
     "src/integrations/sublist3r.py: E501",
+    "src/integrations/owasp_zap.py: E501",
 ]
 
 [tool.mypy]
