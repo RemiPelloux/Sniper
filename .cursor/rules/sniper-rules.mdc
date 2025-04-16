@@ -1,0 +1,382 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+PenTest CLI Project Rules & Conventions
+=======================================
+
+1\. Code Organization
+---------------------
+
+### 1.1 Directory Structure
+
+-   All source code must reside within the `src` directory
+-   Unit tests must be placed in the `tests` directory, mirroring the structure of `src`
+-   Machine learning models must be stored in the `models` directory
+-   Training data must be stored in the `data` directory
+-   Documentation must be placed in the `docs` directory
+
+### 1.2 Module Structure
+
+-   Each functional component must be isolated in its own module
+-   Modules must follow the structure:
+
+    ```
+        src/
+        ├── module_name/
+        │   ├── __init__.py         # Public API exports
+        │   ├── core.py             # Core functionality
+        │   ├── exceptions.py       # Module-specific exceptions
+        │   ├── types.py            # Type definitions
+        │   └── utils.py            # Utility functions
+
+    ```
+
+-   Public APIs must be re-exported in `__init__.py` files
+-   No relative imports are allowed; use absolute imports only
+
+2\. Code Style
+--------------
+
+### 2.1 Python Standards
+
+-   Python 3.11+ features are required and must be used
+-   Type hints are mandatory for all functions and methods
+-   Docstrings are required for all public functions, classes, and methods
+-   Docstrings must follow the Google style format
+-   Line length must not exceed 88 characters
+-   Variable names must use snake_case
+-   Class names must use PascalCase
+-   Constants must use UPPER_SNAKE_CASE
+-   Private members must be prefixed with a single underscore
+-   Double underscores (`__`) are reserved for name mangling only
+
+### 2.2 Formatting
+
+-   Black must be used with default settings (line length 88)
+-   All imports must be sorted using isort with the following configuration:
+
+    ```
+    [isort]
+        profile = black
+        line_length = 88
+        multi_line_output = 3
+        include_trailing_comma = true
+        force_grid_wrap = 0
+        use_parentheses = true
+        ensure_newline_before_comments = true
+
+    ```
+
+-   No trailing whitespace is allowed
+-   Files must end with a single newline
+
+### 2.3 Linting
+
+-   Code must pass flake8 with the following configuration:
+
+    ```
+    [flake8]
+        max-line-length = 88
+        extend-ignore = E203
+        exclude = .git,__pycache__,docs/,build/,dist/,*.egg-info/
+        per-file-ignores =   __init__.py: F401
+
+    ```
+
+-   All code must pass mypy type checking with strict mode enabled:
+
+    ```
+    [mypy]
+    python_version = 3.11
+    warn_return_any = true
+    warn_unused_configs = true
+    disallow_untyped_defs = true
+    disallow_incomplete_defs = true
+    check_untyped_defs = true
+    disallow_untyped_decorators = true
+    no_implicit_optional = true
+    strict_optional = true
+
+    ```
+
+3\. Dependencies
+----------------
+
+### 3.1 Package Management
+
+-   Poetry must be used for dependency management
+-   All dependencies must be specified with version constraints
+-   Development dependencies must be separated from runtime dependencies
+-   No pip requirements.txt files are allowed
+-   Dependencies must be reviewed for security vulnerabilities before adding
+
+### 3.2 External Libraries
+
+-   New dependencies must be approved before being added to the project
+-   Maximum number of production dependencies: 15
+-   Dependency size and performance impact must be considered
+-   Dependencies must have compatible licenses (MIT, Apache 2.0, BSD)
+-   Dependencies with native extensions must support all target platforms
+
+4\. Testing
+-----------
+
+### 4.1 Test Structure
+
+-   Every module must have corresponding test modules
+-   Tests must be named with the pattern `test_*.py`
+-   Test cases must be named with the pattern `Test*` for class-based tests
+-   Test functions must be named with the pattern `test_*`
+-   Tests must be grouped by functionality
+-   Each test case must test only one aspect or functionality
+
+### 4.2 Test Requirements
+
+-   Minimum test coverage: 85% for business logic code
+-   All public APIs must have comprehensive tests
+-   Edge cases must be explicitly tested
+-   Error handling must be tested
+-   Tests must run independently without side effects
+-   Mocks must be used for external services, not real connections
+-   Tests must not rely on specific execution order
+-   Tests must not depend on environment-specific configurations
+
+### 4.3 Test Types
+
+-   Unit tests must be isolated and fast
+-   Integration tests must verify component interactions
+-   End-to-end tests must validate complete workflows
+-   Performance tests must verify time and resource requirements
+
+5\. Documentation
+-----------------
+
+### 5.1 Code Documentation
+
+-   All modules must have a docstring explaining their purpose
+-   All public classes and functions must have docstrings
+-   All complex algorithms must have inline comments explaining the approach
+-   Type hints must be used to document expected types
+
+### 5.2 Project Documentation
+
+-   User guides must be written in Markdown
+-   API documentation must be generated from docstrings
+-   A README.md file must provide quick start information
+-   Documentation must follow a consistent structure:
+    -   Overview
+    -   Installation
+    -   Usage
+    -   API Reference
+    -   Contributing
+    -   License
+
+6\. Error Handling
+------------------
+
+### 6.1 Exception Hierarchy
+
+-   Custom exceptions must inherit from a base project exception
+-   Exceptions must be organized hierarchically by module
+-   Exception names must end with "Error" or "Exception"
+-   Exceptions must include informative error messages
+
+### 6.2 Error Handling Patterns
+
+-   Exceptions must be caught at appropriate levels
+-   Resources must be properly released using context managers
+-   Errors must be logged with appropriate severity levels
+-   User-facing errors must be translated to readable messages
+-   Sensitive information must never be included in error messages
+
+7\. Logging
+-----------
+
+### 7.1 Logging Standards
+
+-   All modules must use the standard Python logging module
+-   Log levels must be used appropriately:
+    -   DEBUG: Detailed information for debugging
+    -   INFO: Confirmation of expected events
+    -   WARNING: Unexpected events that do not affect operation
+    -   ERROR: Functionality is affected but operation continues
+    -   CRITICAL: Application cannot continue
+-   Structured logging must be used for machine-readable logs
+-   Personal data must never be logged
+
+### 7.2 Log Format
+
+-   Timestamps must use ISO 8601 format (YYYY-MM-DDTHH:MM:SS.sssZ)
+-   Log entries must include the source module and line number
+-   Log messages must be concise and descriptive
+-   Log configuration must be externalized and not hardcoded
+
+8\. Security
+------------
+
+### 8.1 Security Practices
+
+-   No credentials or secrets may be stored in code or version control
+-   All user input must be validated and sanitized
+-   Data must be escaped before being used in commands or queries
+-   Secure communication protocols must be used (HTTPS, WSS)
+-   Security vulnerabilities must be addressed with highest priority
+
+### 8.2 Penetration Testing Specifics
+
+-   Scan operations must respect rate limits
+-   Scans must be interruptible without side effects
+-   Scan outputs must not expose sensitive target information
+-   Test payloads must be non-destructive by default
+-   Operations must require explicit opt-in for invasive tests
+
+9\. CLI Interface
+-----------------
+
+### 9.1 Command Structure
+
+-   Commands must follow Git-style command patterns:
+
+    ```
+    pentest-cli <command> [subcommand] [options]
+
+    ```
+
+-   All commands must have help documentation
+-   All commands must provide meaningful exit codes
+-   Commands must have short and long option forms where appropriate
+-   Required arguments must not have default values
+
+### 9.2 Output Formatting
+
+-   Output must be color-coded for terminal display
+-   Output must degrade gracefully in non-TTY environments
+-   Progress indicators must be used for long-running operations
+-   Quiet mode (-q) must suppress all non-error output
+-   Verbose mode (-v) must provide additional debugging information
+
+10\. Machine Learning
+---------------------
+
+### 10.1 Model Management
+
+-   Models must be versioned with training data hashes
+-   Models must be serialized using standard formats
+-   Model performance metrics must be tracked and stored
+-   Models must be validated before deployment
+-   Feature importance must be documented
+
+### 10.2 Training Data
+
+-   Training data must be versioned
+-   Data pipelines must be reproducible
+-   Data transformations must be documented
+-   Test/train/validation splits must be consistent
+-   Data privacy must be maintained (no PII)
+
+11\. API Integration
+--------------------
+
+### 11.1 HackerOne API Integration
+
+-   API requests must use retry logic with exponential backoff
+-   API rate limits must be respected
+-   API responses must be validated against expected schemas
+-   API credentials must be stored securely
+-   API interactions must be logged at DEBUG level
+
+### 11.2 General API Standards
+
+-   HTTP client timeouts must be configured
+-   Connection pooling must be used
+-   Responses must be properly handled regardless of HTTP status
+-   Large responses must be streamed, not loaded into memory at once
+-   API wrappers must provide consistent interfaces
+
+12\. Performance
+----------------
+
+### 12.1 Resource Usage
+
+-   Memory usage must be monitored and optimized
+-   CPU-intensive operations must be profiled
+-   I/O operations must be non-blocking where possible
+-   Concurrent operations must be limited based on available resources
+-   Large data structures must be processed in chunks
+
+### 12.2 Scanning Performance
+
+-   Scans must be parallelized where possible
+-   Scan priorities must be adjustable
+-   Resource usage must be throttled according to target capacity
+-   Caching must be used for repeated operations
+-   Progress must be saved periodically to enable resumption
+
+13\. Version Control
+--------------------
+
+### 13.1 Git Workflow
+
+-   Branches must follow the naming convention: `type/short-description`
+    -   Types: feature, bugfix, hotfix, chore, docs
+-   Commits must follow Conventional Commits format:
+
+    ```
+    type(scope): short descriptionLong description if needed
+
+    ```
+
+-   Commits must be atomic and focused on a single change
+-   Pull requests must be reviewed by at least one team member
+-   Pull requests must pass CI checks before merging
+
+### 13.2 Release Management
+
+-   Semantic versioning must be used (MAJOR.MINOR.PATCH)
+-   Release notes must document all changes
+-   Tags must be created for each release
+-   Release branches must follow the pattern `release/vX.Y.Z`
+-   Hotfixes must be applied to both main and release branches
+
+14\. Development Environment
+----------------------------
+
+### 14.1 Environment Setup
+
+-   Development environments must be reproducible
+-   Virtual environments must be used
+-   Environment variables must be documented
+-   Local development must mirror CI environment
+-   Pre-commit hooks must enforce code quality rules
+
+### 14.2 IDE Configuration
+
+-   Editor configuration must be shared via .editorconfig
+-   IDE-specific files must be excluded from version control
+-   Common IDE settings should be documented
+-   Recommended extensions must be listed in documentation
+
+15\. Continuous Integration
+---------------------------
+
+### 15.1 CI Pipeline
+
+-   All code must pass CI checks before merging
+-   CI must run on every pull request
+-   CI must include:
+    -   Linting
+    -   Type checking
+    -   Unit tests
+    -   Integration tests
+    -   Code coverage analysis
+    -   Dependency vulnerability scanning
+-   CI failures must be addressed before merging
+
+### 15.2 Build Process
+
+-   Builds must be reproducible
+-   Build artifacts must be versioned
+-   Build process must be documented
+-   Build dependencies must be pinned to specific versions
