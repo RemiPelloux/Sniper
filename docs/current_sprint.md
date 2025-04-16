@@ -1,41 +1,73 @@
-# Current Sprint
+# Sprint 2: Tool Integration Framework
 
-All tasks for Sprint 2 are complete. Ready for Sprint 3. 
+**Note:** Deferred tasks from Sprint 1 (Tool Detection Framework, CLI Unit Tests, Core Mocks, Coverage Reporting) still need to be addressed in future sprints or integrated as appropriate.
 
-# Sprint 3: Advanced Reconnaissance Module
+## Integration Architecture
 
-## Goals
-- Implement advanced reconnaissance techniques (DNS, Subdomain, WHOIS, SSL/TLS, Tech Stack).
-- Implement initial active reconnaissance techniques (Port Scanning, Service ID).
-- Define data models for storing reconnaissance findings.
-- Add tests for all new reconnaissance modules.
+-   [x] feat(integrations): Design abstract base classes for tool integration
+-   [~] feat(integrations): Implement execution strategies (subprocess, API, Docker) (Subprocess done)
+-   [ ] feat(integrations): Create output parsers for common tool formats
+-   [~] feat(integrations): Build execution timeout and interrupt handling (Timeout in executor done, Interrupt handling deferred)
+-   [x] feat(integrations): Implement tool-specific configuration management
 
-## Tasks
+## Core Tool Integrations
 
-### Recon Module Setup
-- [X] Add reconnaissance dependencies (e.g., `dnspython`)
-- [X] Create reconnaissance data models (`src/recon/types.py` - DNS parts)
-- [ ] Create core reconnaissance runner/handler (potentially in `src/recon/core.py` or integrated into `src/core/scan_manager.py` later).
+-   [x] feat(integrations): Implement Nmap integration for basic port scanning
+-   [ ] feat(integrations): Create OWASP ZAP integration for web scanning
+-   [x] feat(integrations): Implement Dirsearch/Gobuster for directory enumeration
+-   [ ] feat(integrations): Create Sublist3r/Amass for subdomain discovery
+-   [ ] feat(integrations): Build Wappalyzer/Webanalyze for tech detection
 
-### Passive Reconnaissance
-- [X] Implement DNS enumeration module (`src/recon/dns_enum.py` - A, AAAA, MX, NS, TXT).
-- [X] Test DNS enumeration module (`tests/recon/test_dns_enum.py`).
-- [X] Implement Subdomain discovery module (`src/recon/subdomain_finder.py` - Placeholder).
-- [X] Test Subdomain discovery module (`tests/recon/test_subdomain_finder.py` - Placeholder).
-- [X] Implement WHOIS information gathering (`src/recon/whois_info.py`).
-- [X] Test WHOIS information gathering (`tests/recon/test_whois_info.py`).
-- [X] Implement SSL/TLS certificate analysis (`src/recon/ssl_analyzer.py`).
-- [X] Test SSL/TLS certificate analysis (`tests/recon/test_ssl_analyzer.py`).
-- [X] Implement Technology stack fingerprinting (Basic HTTP headers/content analysis) (`src/recon/tech_fingerprint.py`).
-- [X] Test Technology stack fingerprinting (`tests/recon/test_tech_fingerprint.py`).
+## Result Normalization
 
-### Active Reconnaissance (Initial)
-- [X] Implement Port scanning module (`src/recon/port_scanner.py` using `python-nmap`).
-- [X] Test Port scanning module (`tests/recon/test_port_scanner.py`).
-- [X] Implement Service identification (using results from port scan) (`src/recon/service_detector.py`).
-- [X] Test Service identification (`tests/recon/test_service_detector.py`).
+-   [ ] feat(results): Create common result data models
+-   [ ] feat(results): Implement result parsers for each integrated tool
+-   [ ] feat(results): Build deduplication system for overlapping results
+-   [ ] feat(results): Create severity normalization across different tools
+-   [ ] feat(results): Implement finding correlation system
 
-### Integration & Documentation
-- [X] Integrate reconnaissance modules into the main scan workflow (TBD - simple integration for now).
-- [X] Update `roadmap.md` with Sprint 3 progress.
-- [X] Review and refine Sprint 3 tasks. 
+## Unit Tests
+
+-   [ ] test(integrations): Create mock tool outputs for testing
+-   [x] test(integrations): Implement tests for each tool integration (Nmap, Dirsearch basic tests done)
+-   [ ] test(results): Test result normalization and parsing
+-   [ ] test(integrations): Create integration tests for tool execution flow
+-   [ ] test(integrations): Test error handling and recovery mechanisms
+
+# --- Sprint 1 Completed Tasks --- 
+
+# Sprint 1: Project Foundation & Core Architecture
+
+## Environment Setup
+
+-   [ ] chore(setup): Initialize Git repository with proper structure (Assuming already done in workspace)
+-   [x] feat(setup): Create Python project using Poetry for dependency management
+-   [x] chore(setup): Configure development environment (.gitignore, .editorconfig)
+-   [x] chore(setup): Set up linting and code formatting tools (black, flake8, isort, mypy)
+-   [x] chore(setup): Configure pytest for testing infrastructure
+-   [x] chore(docs): Create initial documentation structure (Partially done)
+
+## Core CLI Framework
+
+-   [x] feat(cli): Implement basic CLI structure using Click/Typer
+-   [x] feat(cli): Create command parser for core operations (scan, report, tools, ml)
+-   [x] feat(core): Implement URL validation and target handling
+-   [x] feat(core): Add configuration management system
+-   [x] feat(core): Create logging infrastructure
+-   [x] feat(cli): Build help and documentation system
+
+## Tool Detection Framework
+
+-   [ ] feat(tools): Create tool registry system
+-   [ ] feat(tools): Implement tool detection mechanism
+-   [ ] feat(tools): Build system for checking tool prerequisites
+-   [ ] feat(tools): Create Docker-based fallback mechanism for missing tools
+-   [ ] feat(tools): Implement version checking for installed tools
+
+## Unit Tests
+
+-   [ ] test(cli): Implement unit tests for core CLI components
+-   [ ] test(core): Create mocks for tool execution
+-   [x] test(core): Test URL validation functionality
+-   [x] test(core): Test configuration management
+-   [ ] chore(test): Implement test coverage reporting

@@ -1,52 +1,39 @@
 [tool.poetry]
-name = "pentest-cli"
+name = "sniper-cli"
 version = "0.1.0"
-description = "CLI tool for penetration testing with ML capabilities"
-authors = ["Your Name <you@example.com>"] # Replace with actual author info
-readme = "README.md" # Assuming a README will be created later
-license = "MIT" # Or appropriate license
-packages = [{ include = "src" }]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Topic :: Security",
-    "Development Status :: 3 - Alpha",
-]
+description = "Penetration Testing CLI Tool with ML"
+authors = ["Your Name <you@example.com>"] # Placeholder - User should update this
+readme = "README.md"
+license = "MIT" # Consider if this is the desired license
+packages = [{include = "src"}]
+
+[tool.poetry.scripts]
+sniper = "src.cli.main:app"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-typer = {extras = ["all"], version = "^0.12.3"}
-validators = "^0.33.0"
-tomli = "^2.0.1" # For reading TOML config if needed
-tomli-w = "^1.0.0" # For writing TOML config if needed
-dnspython = "^2.6.1"
-python-whois = "^0.8.0"
-httpx = "^0.27.0" # Add httpx for HTTP requests
-python-nmap = "^0.7.1" # Add python-nmap for port scanning
+typer = {extras = ["all"], version = "^0.15.2"}
+validators = "^0.34.0"
+pydantic = "^2.11.3"
+pydantic-settings = "^2.8.1"
 
 
-[tool.poetry.dev-dependencies]
-pytest = "^8.2.2"
-pytest-asyncio = "^0.23.7"
-black = "^24.4.2"
-isort = "^5.13.2"
-flake8 = "^7.1.0"
-mypy = "^1.10.1"
-
-[tool.poetry.scripts]
-pentest-cli = "src.cli.main:app" # Entry point for the CLI
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+flake8 = "^7.2.0"
+isort = "^6.0.1"
+mypy = "^1.15.0"
+pytest = "^8.3.5"
+pytest-cov = "^6.1.1"
+flake8-pyproject = "^1.2.3"
+pytest-asyncio = "^0.26.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-# Tool Configurations based on sniper-rules.mdc
-
 [tool.black]
 line-length = 88
-target-version = ['py311']
 
 [tool.isort]
 profile = "black"
@@ -59,9 +46,16 @@ ensure_newline_before_comments = true
 
 [tool.flake8]
 max-line-length = 88
-extend-ignore = "E203" # Ignore whitespace before ':' which conflicts with black
+extend-ignore = "E203"
 exclude = ".git,__pycache__,docs/,build/,dist/,*.egg-info/,venv/"
-per-file-ignores = "__init__.py: F401" # Ignore unused imports in __init__
+per-file-ignores = [
+    "__init__.py: F401",
+    "src/cli/main.py: E501",
+    "tests/core/test_logging.py: E501",
+    "src/core/config.py: E501",
+    "src/integrations/dirsearch.py: E501",
+    "src/integrations/sublist3r.py: E501",
+]
 
 [tool.mypy]
 python_version = "3.11"
@@ -73,4 +67,19 @@ check_untyped_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
 strict_optional = true
-exclude = ["venv/"] # Exclude virtual environment if created 
+# Add paths for mypy to check
+exclude = ["venv"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --cov=src --cov-report=term-missing --cov-fail-under=85"
+testpaths = [
+    "tests",
+]
+pythonpath = [
+    ".",  # Add current directory (project root) to PYTHONPATH
+]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+asyncio_mode = "auto" 

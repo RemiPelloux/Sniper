@@ -1,50 +1,41 @@
-# PenTest CLI Tool with ML
+# Sniper CLI
 
-This project is a command-line interface (CLI) application designed for automated penetration testing. It utilizes machine learning to enhance its testing strategies based on real-world vulnerability data.
+Penetration Testing CLI Tool with Machine Learning Enhancement.
 
-## Features (Planned)
+*This project is under active development.*
 
-*   Automated scanning of target URLs
-*   Comprehensive reporting (JSON, HTML, Markdown)
-*   Modular scanner architecture
-*   Reconnaissance capabilities
-*   Machine learning integration (using HackerOne Hacktivity data)
+## Overview
 
-## Status
-
-Alpha - Under Development
+(To be filled in)
 
 ## Installation
 
-```bash
-# Clone the repository (if you haven't already)
-git clone <repository-url>
-cd pentest-cli
+(To be filled in - Requires Poetry)
 
-# Install dependencies using Poetry
+```bash
 poetry install
 ```
 
-## Basic Usage
+## Usage
+
+(To be filled in)
 
 ```bash
-poetry run pentest-cli scan <target-url>
+poetry run sniper --help
 ```
 
-Example:
+## Project Structure
 
-```bash
-poetry run pentest-cli scan https://example.com
-```
+-   `src/`: Main application source code.
+-   `tests/`: Unit and integration tests.
+-   `docs/`: Project documentation (roadmap, specifications, etc.).
+-   `models/`: (Planned) Machine learning models.
+-   `data/`: (Planned) Training and reference data.
 
-## Development
+## Contributing
 
-This project uses Poetry for dependency management.
+(To be filled in)
 
-*   Run tests: `poetry run pytest`
-*   Check formatting: `poetry run black . --check`
-*   Apply formatting: `poetry run black .`
-*   Run linter: `poetry run flake8`
-*   Run type checking: `poetry run mypy src tests`
+## License
 
-(Further development instructions will be added here) 
+MIT License (See `pyproject.toml`) 

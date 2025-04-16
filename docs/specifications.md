@@ -1,7 +1,7 @@
 Penetration Testing CLI Tool with Machine Learning
-Cahier des Charges / Technical Specification
+Cahier des Charges / Technical Specification - Revised Version
 1. Project Overview
-A command-line interface (CLI) application that performs automated penetration testing on a given URL, produces comprehensive reports, and employs machine learning to continuously improve its testing strategies based on real-world vulnerability data from HackerOne's Hacktivity API.
+A command-line interface (CLI) application that performs automated penetration testing on a given URL by integrating existing open-source security tools, produces comprehensive reports, and employs machine learning to continuously improve its testing strategies based on real-world vulnerability data from publicly available HackerOne reports.
 2. Core Features
 2.1 URL Input and Validation
 
@@ -9,9 +9,9 @@ Accept a target URL as a command-line parameter
 Validate URL format and accessibility
 Support for additional parameters (scan depth, specific test categories, etc.)
 
-2.2 Penetration Testing Engine
+2.2 Integrated Penetration Testing Engine
 
-Comprehensive scanning capabilities
+Orchestration layer for existing open-source security tools
 Modular architecture for different test categories
 Non-destructive testing by default with option for more invasive tests
 Rate limiting and considerate scanning to avoid DoS
@@ -26,7 +26,7 @@ Evidence and proof of concepts
 
 2.4 Machine Learning Component
 
-Data ingestion from HackerOne Hacktivity API
+Data collection from publicly available HackerOne reports
 Training models based on successful penetration techniques
 Reconnaissance pattern recognition
 Attack vector prediction
@@ -37,10 +37,11 @@ pentest-cli/
 ├── src/
 │   ├── cli/              # Command-line interface
 │   ├── core/             # Core application logic
-│   ├── scanners/         # Modular test implementations
+│   ├── integrations/     # Tool integration modules
+│   ├── orchestrator/     # Tool orchestration layer
 │   ├── recon/            # Reconnaissance modules
 │   ├── ml/               # Machine learning components
-│   ├── api/              # API integrations
+│   ├── data/             # Data collection modules
 │   ├── reporting/        # Report generation
 │   └── utils/            # Helper utilities
 ├── models/               # ML model storage
@@ -53,12 +54,28 @@ Core Application
 Language: Python 3.11+ (for ML library compatibility and modern features)
 CLI Framework: Click or Typer for user-friendly command interface
 Concurrency: asyncio for efficient scanning operations
+Tool Integration: subprocess, Docker API, or dedicated Python wrappers
 
-Penetration Testing Tools
+Integrated Security Tools
+Web Application Testing
 
-Web Scanning: OWASP ZAP (via Python API) or custom implementation using requests/aiohttp
-Network Scanning: Python-nmap for port scanning and service detection
-Vulnerability Assessment: Custom modules built on industry standard techniques
+SQLi: SQLmap (command-line integration)
+XSS: XSStrike (direct integration)
+General Web: OWASP ZAP (headless mode via Python API)
+CSRF/Auth: Burp Suite Community (headless mode via CLI)
+Directory Discovery: Dirsearch/Gobuster
+
+Network Scanning
+
+Port Scanning: Nmap (via python-nmap)
+Service Fingerprinting: Nmap scripts
+SSL/TLS Analysis: SSLyze/testssl.sh
+
+Infrastructure Testing
+
+Vulnerability Scanning: OpenVAS/Nuclei
+CMS Scanning: WPScan/CMSmap
+Cloud Configuration: ScoutSuite/Prowler
 
 Machine Learning Stack
 
@@ -67,15 +84,16 @@ Data Processing: pandas, numpy for data manipulation
 NLP Components: spaCy or Hugging Face transformers for text analysis
 Feature Engineering: scikit-learn for preprocessing
 
-API Integration
+Data Collection
 
-HTTP Client: requests or httpx for API interactions
-Authentication: OAuth handling for HackerOne API
+Web Scraping: BeautifulSoup4/Scrapy for public HackerOne reports
+Data Storage: SQLite for local storage
 
 Reporting
 
 Templating: Jinja2 for report generation
 Output Formats: Markdown, HTML, and JSON
+Visualization: matplotlib/seaborn for charts
 
 Development Tools
 
@@ -84,106 +102,145 @@ Testing: pytest
 Code Quality: black, isort, flake8, mypy
 Documentation: Sphinx
 
-4. Machine Learning Implementation
-4.1 Data Collection
+4. Tool Integration
+4.1 Tool Management
 
-Integration with HackerOne Hacktivity API
-Parameters for API queries:
-GET /hackers/hacktivity
-queryString=severity_rating:[rating] AND disclosed_at:>=01-01-2020
-page[number]=1
-page[size]=100
+Automatic detection of installed tools
+Dependency checking at startup
+Docker fallback for missing tools
+Configuration management for tool-specific settings
 
-Filters to focus on paid reports for high-quality data
-Scheduled updates to keep training data current
+4.2 Tool Orchestration
 
-4.2 Data Processing
+Parallel execution where possible
+Sequential execution where dependencies exist
+Result aggregation and normalization
+Intelligent tool selection based on target
+
+4.3 Integrated Tools by Category
+Reconnaissance Tools
+
+Domain Information: Whois, amass, subfinder
+Subdomain Discovery: Sublist3r, Amass, Subfinder
+Technology Detection: Wappalyzer (via CLI), Webanalyze
+Content Discovery: Dirsearch, ffuf, Gobuster
+Parameter Discovery: Arjun, ParamSpider
+
+Vulnerability Scanning Tools
+
+Web Vulnerability Scanner: OWASP ZAP (via Python API)
+SQL Injection: SQLmap
+XSS: XSStrike, XSSer
+Command Injection: Commix
+SSRF: SSRFmap
+XXE: XXEinjector
+Path Traversal: DotDotPwn
+Authentication Testing: Hydra
+API Testing: Arjun + custom modules
+
+Network Security Tools
+
+Port Scanner: Nmap
+SSL/TLS: SSLyze, testssl.sh
+Service Identification: Nmap scripts
+Banner Grabbing: Custom script around netcat/telnet
+
+5. Machine Learning Implementation
+5.1 Data Collection
+
+Web scraping of publicly disclosed HackerOne reports
+Parsing of vulnerability disclosure platforms
+Collection from public vulnerability databases (NVD, CVE)
+Creation of structured dataset from unstructured data
+Data anonymization and sanitization
+
+5.2 Data Processing
 
 Extract vulnerability patterns from reports
 Categorize by vulnerability types (XSS, SQLI, CSRF, etc.)
 Associate with affected technologies and asset types
 Normalize and clean data
 
-4.3 Model Training
+5.3 Model Training
 
 Supervised Learning: Classification of potential vulnerabilities based on observed patterns
 Unsupervised Learning: Clustering for identifying novel attack vectors
 Reinforcement Learning: Optimize scanning strategies based on success rates
-Continuous Learning: Regular retraining with new vulnerability data
+Continuous Learning: Regular retraining with newly collected data
 
-4.4 Model Application
+5.4 Model Application
 
 Guide reconnaissance efforts based on target profiling
 Prioritize testing vectors with higher probability of success
 Adapt testing techniques based on initial findings
 Generate intelligent fuzzing patterns
+Tool selection optimization
 
-5. Reconnaissance Capabilities
-5.1 Target Profiling
+6. Reconnaissance Capabilities
+6.1 Target Profiling
 
-Technology stack identification
-Service enumeration
-Domain information gathering
-SSL/TLS analysis
-Content discovery
+Technology stack identification (via Wappalyzer/Webanalyze)
+Service enumeration (via Nmap)
+Domain information gathering (via whois, amass)
+SSL/TLS analysis (via SSLyze/testssl.sh)
+Content discovery (via dirsearch/gobuster)
 
-5.2 ML-Enhanced Reconnaissance
+6.2 ML-Enhanced Reconnaissance
 
 Pattern-based technology fingerprinting
 Identifying potential attack surfaces based on similar targets
 Predictive analysis of high-value assets
 Automated OSINT techniques
 
-5.3 Passive Recon Techniques
+6.3 Passive Recon Techniques
 
-DNS enumeration
-Subdomain discovery
+DNS enumeration (via dnsrecon, dnsenum)
+Subdomain discovery (via Sublist3r, Amass, Subfinder)
 Public information gathering
-Historical data analysis
+Historical data analysis (via Wayback Machine)
 
-5.4 Active Recon Techniques
+6.4 Active Recon Techniques
 
-Port scanning
-Service identification
-Path discovery
-Parameter analysis
+Port scanning (via Nmap)
+Service identification (via Nmap scripts)
+Path discovery (via dirsearch/gobuster)
+Parameter analysis (via Arjun)
 
-6. Testing Modules
-6.1 Web Application Testing
+7. Integration Workflow
+7.1 Workflow Execution
 
-XSS (Reflected, Stored, DOM)
-SQL Injection
-Command Injection
-File Inclusion vulnerabilities
-CSRF vulnerabilities
-Authentication weaknesses
-Authorization bypasses
-Business logic flaws
+Parse command-line options and validate target
+Perform initial reconnaissance
+Process recon results through ML model
+Determine optimal testing strategy
+Execute selected tools in appropriate sequence
+Collect and normalize results
+Process findings through ML for prioritization
+Generate comprehensive reports
 
-6.2 API Testing
+7.2 Tool Integration Methods
 
-Endpoint discovery
-Authentication/authorization testing
-Input validation
-Rate limiting tests
-Data exposure checks
+Direct Execution: Via subprocess for CLI tools
+API Integration: For tools with Python APIs (ZAP)
+Docker Containers: For tools with complex dependencies
+Python Libraries: For tools with Python wrappers
 
-6.3 Infrastructure Testing
+7.3 Result Normalization
 
-Server misconfigurations
-Default credentials
-Outdated software
-Insecure protocols
-Network security issues
+Common vulnerability format across tools
+Deduplication of findings
+Correlation of related vulnerabilities
+Severity standardization
 
-7. Reporting System
-7.1 JSON Output Structure
+8. Reporting System
+8.1 JSON Output Structure
 json{
   "scan_metadata": {
     "target": "https://example.com",
     "timestamp": "2025-04-16T12:00:00Z",
     "scan_duration": "00:45:23",
-    "tool_version": "1.0.0"
+    "tool_version": "1.0.0",
+    "tools_used": ["nmap", "sqlmap", "zap", "xsstrike", "...]
   },
   "summary": {
     "total_vulnerabilities": 12,
@@ -205,6 +262,7 @@ json{
       "proof_of_concept": "...",
       "impact": "...",
       "remediation": "...",
+      "source_tool": "sqlmap",
       "references": [...]
     },
     // Additional vulnerabilities
@@ -216,7 +274,7 @@ json{
     "endpoints": [...]
   }
 }
-7.2 Human-Readable Report
+8.2 Human-Readable Report
 
 Executive summary
 Methodology
@@ -226,73 +284,76 @@ Technical details
 Remediation guidelines
 Appendices
 
-8. Command Line Interface
-8.1 Basic Usage
+9. Command Line Interface
+9.1 Basic Usage
 pentest-cli scan https://example.com --output report.html --json-output findings.json
-8.2 Advanced Options
+9.2 Advanced Options
 pentest-cli scan https://example.com \
   --depth comprehensive \
   --modules web,api,infra \
+  --tools sqlmap,nmap,zap \
   --threads 10 \
   --timeout 3600 \
   --ignore-ssl \
   --ml-enhance \
   --output-format html,pdf,json
-8.3 ML Management
-pentest-cli ml update                # Update ML models with latest HackerOne data
-pentest-cli ml train                 # Force retraining of models
-pentest-cli ml stats                 # Show model performance statistics
-9. Implementation Plan
-9.1 Phase 1: Core Framework
+9.3 Tool Management
+pentest-cli tools list                # List integrated tools
+pentest-cli tools check               # Check tool availability
+pentest-cli tools install             # Install missing tools
+pentest-cli tools update              # Update installed tools
+9.4 ML Management
+pentest-cli ml update                 # Update ML models with latest scraped data
+pentest-cli ml train                  # Force retraining of models
+pentest-cli ml stats                  # Show model performance statistics
+10. Implementation Plan
+10.1 Phase 1: Core Framework
 
 CLI structure and base functionality
-Basic scanning capabilities
+Tool integration framework
+Basic reconnaissance modules
 Simple reporting
 
-9.2 Phase 2: Comprehensive Testing
+10.2 Phase 2: Tool Integration
 
-Full suite of testing modules
-Enhanced reconnaissance
-Detailed reporting system
+Integration of core security tools
+Result normalization
+Tool orchestration
+Enhanced reporting system
 
-9.3 Phase 3: Machine Learning Integration
+10.3 Phase 3: Machine Learning Base
 
-HackerOne API integration
-Initial model training
-Basic ML-guided scanning
+Data collection from public sources
+Initial data processing pipeline
+Basic model training
+First ML-guided scanning
 
-9.4 Phase 4: Advanced Features
+10.4 Phase 4: Advanced Features
 
-Continuous learning capabilities
-Advanced visualization and reporting
+Comprehensive tool integration
+Advanced ML capabilities
+Continuous learning implementation
 Performance optimization
 
-10. Security and Ethical Considerations
-10.1 Tool Security
+11. Security and Ethical Considerations
+11.1 Tool Security
 
 Protection of sensitive data in reports
-Secure storage of API credentials
+Secure execution of integrated tools
 Validation of input parameters
 
-10.2 Ethical Usage
+11.2 Ethical Usage
 
 Rate limiting to prevent DoS
 Respect for scope boundaries
 Legal disclaimer and usage guidelines
 Option to require explicit permission
 
-10.3 Compliance
+11.3 Compliance
 
 GDPR considerations for data handling
 Compatibility with bug bounty program guidelines
 Legal usage notices
-
-11. Performance Requirements
-
-Complete basic scan in under 10 minutes for standard websites
-Handle large applications (1000+ endpoints) efficiently
-Efficient resource utilization (<2GB RAM for standard scans)
-Support for distributed scanning for large targets
 
 12. Dependencies and Requirements
 12.1 System Requirements
@@ -300,22 +361,24 @@ Support for distributed scanning for large targets
 Linux, macOS, or Windows compatibility
 Python 3.11+ runtime
 4GB+ RAM recommended
-Network access for API communication
+Network access
+Docker (optional, for containerized tools)
 
-12.2 External Dependencies
+12.2 External Tools
 
-HackerOne API access
-Optional integration with other security tools
+Core security tools installed locally or via Docker
+Python wrappers for integrated tools
 
 13. Testing Strategy
 13.1 Unit Testing
 
 Test coverage for core components
-Mock API responses for consistent testing
+Mock tool executions for consistent testing
 
 13.2 Integration Testing
 
 End-to-end workflow testing
+Tool integration validation
 Performance benchmarking
 
 13.3 Security Testing
