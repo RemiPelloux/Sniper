@@ -58,18 +58,9 @@ This roadmap outlines the planned development trajectory for the Sniper Security
 - [ ] Implement resource-aware task allocation
 - [ ] Create deployment documentation and examples
 
-## Sprint 6: Cloud Integration and Scalability
-- [ ] Implement AWS integration for scanning
-- [ ] Create Azure scanning capabilities
-- [ ] Develop GCP integration
-- [ ] Implement Docker and Kubernetes scanning
-- [ ] Create cloud resource discovery
-- [ ] Develop auto-scaling for distributed scanning
-- [ ] Implement secure credential management
-- [ ] Create multi-region scanning coordination
-- [ ] Develop cloud-based result storage and analysis
 
-## Sprint 7: Advanced Attack Simulation
+
+## Sprint 6: Advanced Attack Simulation
 - [ ] Implement safe exploitation framework
 - [ ] Create payload generation for validated vulnerabilities
 - [ ] Develop exploitation chain analysis
@@ -79,7 +70,7 @@ This roadmap outlines the planned development trajectory for the Sniper Security
 - [ ] Implement sandbox for exploitation testing
 - [ ] Create post-exploitation simulation
 
-## Sprint 8: Advanced Web Application Testing
+## Sprint 7: Advanced Web Application Testing
 - [ ] Implement advanced XSS detection
 - [ ] Create SQL injection testing and validation
 - [ ] Develop API security testing framework
@@ -89,7 +80,7 @@ This roadmap outlines the planned development trajectory for the Sniper Security
 - [ ] Implement authentication and session testing
 - [ ] Create secure header analysis
 
-## Sprint 9: Compliance and Reporting Enhancements
+## Sprint 8: Compliance and Reporting Enhancements
 - [ ] Implement OWASP Top 10 compliance mapping
 - [ ] Create NIST compliance reporting
 - [ ] Develop PCI DSS compliance checks
@@ -99,7 +90,7 @@ This roadmap outlines the planned development trajectory for the Sniper Security
 - [ ] Implement remediation guidance generation
 - [ ] Create trend analysis for recurring scans
 
-## Sprint 10: Enterprise Integration and Plugins
+## Sprint 9: Enterprise Integration and Plugins
 - [ ] Develop JIRA integration for issue tracking
 - [ ] Create GitHub/GitLab integration for DevSecOps
 - [ ] Implement CI/CD pipeline integration
@@ -108,6 +99,17 @@ This roadmap outlines the planned development trajectory for the Sniper Security
 - [ ] Implement enterprise authentication systems integration
 - [ ] Develop asset management integration
 - [ ] Create SLA and monitoring integration
+
+## Sprint 10: Cloud Integration and Scalability
+- [ ] Implement AWS integration for scanning
+- [ ] Create Azure scanning capabilities
+- [ ] Develop GCP integration
+- [ ] Implement Docker and Kubernetes scanning
+- [ ] Create cloud resource discovery
+- [ ] Develop auto-scaling for distributed scanning
+- [ ] Implement secure credential management
+- [ ] Create multi-region scanning coordination
+- [ ] Develop cloud-based result storage and analysis
 
 ## Future Enhancements
 - Advanced IoT device scanning

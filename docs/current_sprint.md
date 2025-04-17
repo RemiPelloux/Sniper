@@ -180,10 +180,8 @@ Status: **In Progress** (April 2024)
 #### Advanced Third-Party Integrations
 - [ ] Implement Slack notifications
 - [ ] Create JIRA integration for ticket creation
-- [ ] Add Microsoft Teams integration
 - [ ] Implement Email notification system
 - [ ] Create Git repository integration
-- [ ] Add SIEM integration for security operations
 - [ ] Implement webhooks for custom integrations
 
 
@@ -195,14 +193,6 @@ Status: **In Progress** (April 2024)
 - [ ] Implement scan control capabilities
 - [ ] Add offline report access
 
-#### Cloud Integration
-- [ ] Add support for AWS deployment
-- [ ] Implement Azure integration
-- [ ] Create deployment scripts for major cloud providers
-- [ ] Design cloud resource provisioning and management
-- [ ] Implement serverless functions for specific tasks
-- [ ] Add cloud storage integration for scan results
-- [ ] Implement cost optimization strategies
 
 ### Development Focus:
 - Building a scalable distributed architecture to handle enterprise-level scanning loads
