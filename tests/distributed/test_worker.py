@@ -481,12 +481,13 @@ class TestWorkerNodeClient:
 
     def test_detect_capabilities(self):
         """Test capability detection."""
-        with patch('src.distributed.worker.setup_logging'), \
-             patch('src.distributed.worker.SniperWorkerNode'):
-            
+        with patch("src.distributed.worker.setup_logging"), patch(
+            "src.distributed.worker.SniperWorkerNode"
+        ):
+
             client = WorkerNodeClient()
             capabilities = client._detect_capabilities()
-            
+
             # Verify some capabilities were detected
             assert isinstance(capabilities, list)
             assert len(capabilities) > 0
@@ -494,24 +495,25 @@ class TestWorkerNodeClient:
 
     def test_start_stop(self):
         """Test start and stop methods."""
-        with patch('src.distributed.worker.setup_logging'), \
-             patch('src.distributed.worker.SniperWorkerNode') as mock_worker:
-            
+        with patch("src.distributed.worker.setup_logging"), patch(
+            "src.distributed.worker.SniperWorkerNode"
+        ) as mock_worker:
+
             # Create mock worker node
             mock_worker_instance = MagicMock()
             mock_worker.return_value = mock_worker_instance
-            
+
             # Configure mock methods
             mock_worker_instance.start.return_value = True
-            
+
             # Create client
             client = WorkerNodeClient()
-            
+
             # Test start
             result = client.start()
             assert result is True
             mock_worker_instance.start.assert_called_once()
-            
+
             # Test stop
             client.stop()
             mock_worker_instance.stop.assert_called_once()

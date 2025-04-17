@@ -3,380 +3,359 @@ description:
 globs: 
 alwaysApply: true
 ---
-PenTest CLI Project Rules & Conventions
-=======================================
+# Sniper Project: Technical Standards & Conventions
+===============================================
 
-1\. Code Organization
----------------------
+**Preamble:** These standards define the expected level of quality, maintainability, and scalability for the Sniper project. Adherence is mandatory. Code clarity, modular design, robust error handling, comprehensive testing, and performance optimization are paramount. Technical debt is unacceptable without explicit justification and a remediation plan.
 
-### 1.1 Directory Structure
+## 1. Architecture & Design Principles
+-------------------------------------
 
--   All source code must reside within the `src` directory
--   Unit tests must be placed in the `tests` directory, mirroring the structure of `src`
--   Machine learning models must be stored in the `models` directory
--   Training data must be stored in the `data` directory
--   Documentation must be placed in the `docs` directory
+### 1.1 Core Philosophy
+- **Clarity over Cleverness:** Code must be immediately understandable. Avoid obscure language features or overly complex abstractions.
+- **Single Responsibility Principle (SRP):** Every module, class, and function must have one, well-defined responsibility.
+- **Modularity:** Design components to be independent, interchangeable, and testable in isolation.
+- **Scalability:** Architect solutions anticipating future growth in features, data volume, and user load.
+- **Performance:** Performance is a core requirement, not an afterthought. Optimize critical paths and resource usage.
+- **Security:** Embed security considerations into every stage of development.
 
-### 1.2 Module Structure
+### 1.2 Modular Architecture
+- **Bounded Contexts:** Group related functionality into cohesive modules representing distinct capabilities (e.g., scanning, reporting, integration_hackerone).
+- **Explicit Interfaces:** Module public APIs must be minimal, clearly defined in `__init__.py`, and well-documented. Internal implementation details MUST remain encapsulated.
+- **Dependency Management:**
+    - Dependencies between modules must be explicit and unidirectional (DAG).
+    - **Strictly forbid circular dependencies.**
+    - Minimize coupling between modules.
+- **Testability:** Modules must be designed for isolated unit testing.
 
--   Each functional component must be isolated in its own module
--   Modules must follow the structure:
-
+### 1.3 Code Organization
+- **Project Structure:**
+    - All application source code resides within the `app` directory.
+    - Tests reside in `tests`, mirroring the `app` structure.
+    - ML models in `models`.
+    - Data in `data`.
+    - Documentation in `docs`.
+    - Configuration files in `config`.
+- **Module Structure:**
     ```
-        src/
-        ├── module_name/
-        │   ├── __init__.py         # Public API exports
-        │   ├── core.py             # Core functionality
-        │   ├── exceptions.py       # Module-specific exceptions
-        │   ├── types.py            # Type definitions
-        │   └── utils.py            # Utility functions
-
+    app/
+    ├── module_name/
+    │   ├── __init__.py         # Public API exports (minimal)
+    │   ├── core.py             # Core logic, orchestrating functionality
+    │   ├── services.py         # Business logic implementation
+    │   ├── types.py            # Data structures, Enums, Pydantic models
+    │   ├── exceptions.py       # Module-specific exceptions
+    │   ├── constants.py        # Module-specific constants
+    │   └── utils.py            # Pure, reusable utility functions
     ```
+- **File Size:** Aim for modules/files under 300 lines. Exceeding this requires justification.
+- **Imports:** Use absolute imports (`from app.module import ...`). No relative imports. `isort` enforces grouping (standard library, third-party, application).
 
--   Public APIs must be re-exported in `__init__.py` files
--   No relative imports are allowed; use absolute imports only
-
-2\. Code Style
---------------
+## 2. Code Style & Quality
+-------------------------
 
 ### 2.1 Python Standards
+- **Version:** Python 3.11+. Utilize modern language features appropriately.
+- **Type Hinting:** Mandatory for all function/method signatures and variables where ambiguity exists. Use Pydantic for data validation where applicable.
+- **Docstrings:** Required for all public modules, classes, functions, and methods. Follow Google style format. Explain *why*, not just *what*.
+- **Naming:**
+    - `snake_case` for variables, functions, methods, modules.
+    - `PascalCase` for classes.
+    - `UPPER_SNAKE_CASE` for constants.
+    - `_leading_underscore` for internal/protected members. `__double_leading_underscore` only for name mangling if absolutely necessary.
+    - Names must be descriptive and unambiguous.
+- **Line Length:** Max 88 characters (enforced by Black).
+- **Constants:** No magic numbers or strings. Define constants in `constants.py` or at the module level.
 
--   Python 3.11+ features are required and must be used
--   Type hints are mandatory for all functions and methods
--   Docstrings are required for all public functions, classes, and methods
--   Docstrings must follow the Google style format
--   Line length must not exceed 88 characters
--   Variable names must use snake_case
--   Class names must use PascalCase
--   Constants must use UPPER_SNAKE_CASE
--   Private members must be prefixed with a single underscore
--   Double underscores (`__`) are reserved for name mangling only
-
-### 2.2 Formatting
-
--   Black must be used with default settings (line length 88)
--   All imports must be sorted using isort with the following configuration:
-
-    ```
-    [isort]
-        profile = black
-        line_length = 88
-        multi_line_output = 3
-        include_trailing_comma = true
-        force_grid_wrap = 0
-        use_parentheses = true
-        ensure_newline_before_comments = true
-
-    ```
-
--   No trailing whitespace is allowed
--   Files must end with a single newline
-
-### 2.3 Linting
-
--   Code must pass flake8 with the following configuration:
-
-    ```
-    [flake8]
-        max-line-length = 88
-        extend-ignore = E203
-        exclude = .git,__pycache__,docs/,build/,dist/,*.egg-info/
-        per-file-ignores =   __init__.py: F401
-
-    ```
-
--   All code must pass mypy type checking with strict mode enabled:
-
-    ```
+### 2.2 Formatting & Linting
+- **Formatter:** `Black` (default settings, line length 88). Mandatory, enforced via pre-commit hooks.
+- **Import Sorting:** `isort` (profile=black). Mandatory, enforced via pre-commit hooks.
+- **Linter:** `flake8` (max-line-length=88, extend-ignore=E203). Code must pass without errors.
+- **Type Checker:** `mypy` (strict mode). Code must pass without errors.
+    ```ini
     [mypy]
     python_version = 3.11
+    # Enable strict mode options
+    warn_redundant_casts = true
+    warn_unused_ignores = true
     warn_return_any = true
     warn_unused_configs = true
-    disallow_untyped_defs = true
-    disallow_incomplete_defs = true
     check_untyped_defs = true
+    disallow_any_generics = true
+    disallow_incomplete_defs = true
+    disallow_subclassing_any = true
+    disallow_untyped_calls = true
     disallow_untyped_decorators = true
+    disallow_untyped_defs = true
     no_implicit_optional = true
-    strict_optional = true
-
+    strict_equality = true
+    strict_optional = true # Ensure Optionals are handled explicitly
+    # Project structure
+    mypy_path = app
+    namespace_packages = True
+    explicit_package_bases = True
     ```
+- **Pre-commit Hooks:** Configure pre-commit to run Black, isort, flake8, and mypy automatically.
 
-3\. Dependencies
-----------------
+### 2.3 Function & Method Design
+- **Single Task:** Functions must perform one specific task well.
+- **Length:** Aim for functions under 25 lines. Longer functions require strong justification and potential refactoring.
+- **Parameters:** Limit to 3-4 parameters. Use parameter objects (e.g., Pydantic models) or `*args/**kwargs` judiciously for more complex cases.
+- **Pure Functions:** Prefer pure functions. Isolate side effects (I/O, state mutation) into specific functions/methods. Clearly document side effects.
+- **Return Early:** Use guard clauses and return early to reduce nesting and improve readability.
+- **Complexity:** Avoid deep nesting and high cyclomatic complexity. Refactor complex logic.
 
-### 3.1 Package Management
+### 2.4 Variable Management
+- **Scope:** Minimize variable scope (local preferred).
+- **State:** Avoid global state. Use dependency injection or explicit state management classes for shared state. Mutations must be controlled and predictable.
 
--   Poetry must be used for dependency management
--   All dependencies must be specified with version constraints
--   Development dependencies must be separated from runtime dependencies
--   No pip requirements.txt files are allowed
--   Dependencies must be reviewed for security vulnerabilities before adding
+## 3. Dependency Management
+--------------------------
 
-### 3.2 External Libraries
+### 3.1 Tooling
+- **Poetry:** Mandatory for dependency management and packaging.
+- **`pyproject.toml`:** Single source of truth for dependencies, build settings, and tool configurations.
+- **No `requirements.txt`:** Do not use `pip freeze` or `requirements.txt`.
 
--   New dependencies must be approved before being added to the project
--   Maximum number of production dependencies: 15
--   Dependency size and performance impact must be considered
--   Dependencies must have compatible licenses (MIT, Apache 2.0, BSD)
--   Dependencies with native extensions must support all target platforms
+### 3.2 Library Usage
+- **Approval:** New production dependencies require explicit approval. Justify the need and evaluate alternatives.
+- **Limits:** Maximum 15 *direct* production dependencies (excluding transitive ones). Strive for fewer.
+- **Evaluation:** Consider size, performance impact, maintenance status, security record, and license compatibility (MIT, Apache 2.0, BSD preferred).
+- **Versioning:** Pin dependencies using compatible version specifiers (e.g., `^1.2`, `>=1.2,<2.0`). Regularly update dependencies after testing.
+- **Security:** Use `poetry check` and vulnerability scanning tools (e.g., `safety`, Snyk) regularly and in CI.
 
-4\. Testing
------------
+## 4. Testing Strategy
+----------------------
 
-### 4.1 Test Structure
+### 4.1 General Requirements
+- **Coverage:** Aim for ≥ 90% statement coverage for all application logic. Coverage is necessary but not sufficient; tests must be meaningful.
+- **Mandatory:** All code merged must have corresponding tests.
+- **Isolation:** Unit tests must run in isolation with no external dependencies (network, filesystem, database). Use mocks/stubs effectively.
+- **Speed:** Tests must be fast. Slow tests hinder development velocity.
+- **Reliability:** Tests must be deterministic and reliable. No flaky tests.
+- **Readability:** Tests should be clear, concise, and easy to understand. Follow Arrange-Act-Assert pattern.
 
--   Every module must have corresponding test modules
--   Tests must be named with the pattern `test_*.py`
--   Test cases must be named with the pattern `Test*` for class-based tests
--   Test functions must be named with the pattern `test_*`
--   Tests must be grouped by functionality
--   Each test case must test only one aspect or functionality
+### 4.2 Test Types
+- **Unit Tests:** Test individual functions/methods/classes in isolation. Focus on logic, edge cases, and error handling. Reside in `tests/unit`.
+- **Integration Tests:** Test the interaction between modules or components (e.g., service interacting with a repository, module API contracts). Reside in `tests/integration`. May require minimal, controlled external setup (e.g., test database).
+- **End-to-End (E2E) Tests:** Test complete workflows through the CLI or API, simulating user interaction. Reside in `tests/e2e`. Use sparingly for critical paths.
+- **Performance Tests:** Establish benchmarks for critical operations and monitor for regressions.
 
-### 4.2 Test Requirements
+### 4.3 Test Implementation
+- **Framework:** `pytest`.
+- **Fixtures:** Use `pytest` fixtures for setup/teardown. Keep fixtures focused and minimal.
+- **Mocking:** Use `unittest.mock` or `pytest-mock`. Mocks should be specific and verify interactions correctly.
+- **Assertions:** Use descriptive assertion messages.
+- **Parametrization:** Use `pytest.mark.parametrize` for testing multiple inputs/scenarios efficiently.
 
--   Minimum test coverage: 85% for business logic code
--   All public APIs must have comprehensive tests
--   Edge cases must be explicitly tested
--   Error handling must be tested
--   Tests must run independently without side effects
--   Mocks must be used for external services, not real connections
--   Tests must not rely on specific execution order
--   Tests must not depend on environment-specific configurations
+## 5. Documentation
+-------------------
 
-### 4.3 Test Types
+### 5.1 Code Documentation (Docstrings)
+- **Mandatory:** All public modules, classes, functions, methods require comprehensive Google-style docstrings.
+- **Content:** Explain purpose, arguments, return values, raised exceptions, usage examples, and any non-obvious behavior or side effects.
+- **Algorithms:** Complex algorithms or logic require inline comments explaining the approach (`# Why this way...`).
 
--   Unit tests must be isolated and fast
--   Integration tests must verify component interactions
--   End-to-end tests must validate complete workflows
--   Performance tests must verify time and resource requirements
+### 5.2 Project Documentation (`docs/`)
+- **Format:** Markdown (`.md`).
+- **Audience:** Target users and future developers.
+- **Content:**
+    - `README.md`: Project overview, quick start, installation, basic usage, contribution guidelines link, license.
+    - **User Guide:** Detailed explanation of features, commands, configuration, and workflows.
+    - **Architecture:** High-level overview, module responsibilities, design decisions, data flow diagrams.
+    - **API Reference:** Generated automatically from docstrings (e.g., using Sphinx or MkDocs with relevant plugins).
+    - **Contribution Guide:** Setup, coding standards, testing, PR process, commit conventions.
+    - **Changelog:** Maintain a `CHANGELOG.md` documenting changes per release.
+- **Maintenance:** Documentation is a deliverable and must be kept up-to-date with code changes.
 
-5\. Documentation
------------------
+## 6. Error Handling
+--------------------
 
-### 5.1 Code Documentation
+### 6.1 Strategy
+- **No Silent Failures:** Handle errors explicitly. Catch specific exceptions. Avoid broad `except Exception:`.
+- **Custom Exceptions:** Define a base project exception (`SniperError`) and derive module-specific exceptions from it (e.g., `ScannerError`, `ApiIntegrationError`). Exception names must end in `Error`.
+- **Clarity:** Error messages must be clear, actionable, and provide context. Avoid exposing internal details or stack traces to end-users unless in verbose/debug mode.
+- **Boundaries:** Establish clear error handling boundaries (e.g., API layers, command handlers).
+- **Resource Management:** Use `try...finally` or context managers (`with` statement) to ensure resources (files, network connections) are always released.
+- **Graceful Degradation:** Where appropriate, design systems to degrade gracefully rather than failing completely.
 
--   All modules must have a docstring explaining their purpose
--   All public classes and functions must have docstrings
--   All complex algorithms must have inline comments explaining the approach
--   Type hints must be used to document expected types
+## 7. Logging
+-------------
 
-### 5.2 Project Documentation
+### 7.1 Implementation
+- **Library:** Standard Python `logging` module configured centrally.
+- **Structured Logging:** Use structured logging (e.g., JSON format) for easier parsing and analysis by log management systems. Include standard fields like timestamp, level, logger name, message, and relevant context (e.g., request ID, user ID if applicable).
+- **Configuration:** Externalize logging configuration (e.g., via file or environment variables). Do not hardcode levels or handlers in code.
+- **Levels:** Use standard levels appropriately:
+    - `DEBUG`: Fine-grained information for developers.
+    - `INFO`: Routine operations, confirmation of expected events.
+    - `WARNING`: Unexpected situations or potential issues that don't prevent operation.
+    - `ERROR`: Errors preventing specific operations but allowing the application to continue.
+    - `CRITICAL`: Severe errors causing the application to terminate.
 
--   User guides must be written in Markdown
--   API documentation must be generated from docstrings
--   A README.md file must provide quick start information
--   Documentation must follow a consistent structure:
-    -   Overview
-    -   Installation
-    -   Usage
-    -   API Reference
-    -   Contributing
-    -   License
+### 7.2 Best Practices
+- **Context:** Include relevant context in log messages.
+- **Performance:** Be mindful of logging overhead in performance-critical code paths. Avoid excessive logging.
+- **No Sensitive Data:** **NEVER** log credentials, API keys, PII, or other sensitive information. Sanitize data before logging if necessary.
+- **Consistency:** Maintain a consistent format and style across all log messages.
+- **Timestamps:** Use ISO 8601 format (`YYYY-MM-DDTHH:MM:SS.sssZ`) in UTC.
 
-6\. Error Handling
-------------------
+## 8. Security
+-------------
 
-### 6.1 Exception Hierarchy
-
--   Custom exceptions must inherit from a base project exception
--   Exceptions must be organized hierarchically by module
--   Exception names must end with "Error" or "Exception"
--   Exceptions must include informative error messages
-
-### 6.2 Error Handling Patterns
-
--   Exceptions must be caught at appropriate levels
--   Resources must be properly released using context managers
--   Errors must be logged with appropriate severity levels
--   User-facing errors must be translated to readable messages
--   Sensitive information must never be included in error messages
-
-7\. Logging
------------
-
-### 7.1 Logging Standards
-
--   All modules must use the standard Python logging module
--   Log levels must be used appropriately:
-    -   DEBUG: Detailed information for debugging
-    -   INFO: Confirmation of expected events
-    -   WARNING: Unexpected events that do not affect operation
-    -   ERROR: Functionality is affected but operation continues
-    -   CRITICAL: Application cannot continue
--   Structured logging must be used for machine-readable logs
--   Personal data must never be logged
-
-### 7.2 Log Format
-
--   Timestamps must use ISO 8601 format (YYYY-MM-DDTHH:MM:SS.sssZ)
--   Log entries must include the source module and line number
--   Log messages must be concise and descriptive
--   Log configuration must be externalized and not hardcoded
-
-8\. Security
-------------
-
-### 8.1 Security Practices
-
--   No credentials or secrets may be stored in code or version control
--   All user input must be validated and sanitized
--   Data must be escaped before being used in commands or queries
--   Secure communication protocols must be used (HTTPS, WSS)
--   Security vulnerabilities must be addressed with highest priority
+### 8.1 General Practices
+- **Input Validation:** Validate and sanitize **ALL** external input (CLI args, API requests, file contents) rigorously. Use libraries like Pydantic for data validation.
+- **Output Encoding:** Encode/escape output appropriately to prevent injection attacks (e.g., HTML escaping, SQL parameterization).
+- **Secrets Management:** **NEVER** hardcode secrets (API keys, passwords, tokens). Use environment variables, configuration files (with appropriate permissions), or dedicated secrets management tools (e.g., HashiCorp Vault, AWS Secrets Manager). Access secrets securely at runtime.
+- **Dependencies:** Regularly scan dependencies for known vulnerabilities (see Section 3.2).
+- **Least Privilege:** Run processes with the minimum necessary permissions.
+- **Secure Communication:** Use HTTPS/TLS for all network communication involving sensitive data.
 
 ### 8.2 Penetration Testing Specifics
+- **Rate Limiting:** Respect target API rate limits and provide configurable delays/throttling.
+- **Interruptibility:** Ensure scan operations can be safely interrupted and potentially resumed.
+- **Data Handling:** Handle discovered sensitive information (credentials, vulnerabilities) securely. Avoid storing sensitive target data unnecessarily. Redact sensitive information in logs and reports by default.
+- **Payloads:** Default to non-destructive testing payloads. Invasive or potentially disruptive tests require explicit user confirmation (`--force` flag, interactive prompt).
+- **Scope Awareness:** Implement mechanisms to respect defined target scopes.
 
--   Scan operations must respect rate limits
--   Scans must be interruptible without side effects
--   Scan outputs must not expose sensitive target information
--   Test payloads must be non-destructive by default
--   Operations must require explicit opt-in for invasive tests
-
-9\. CLI Interface
------------------
-
-### 9.1 Command Structure
-
--   Commands must follow Git-style command patterns:
-
-    ```
-    pentest-cli <command> [subcommand] [options]
-
-    ```
-
--   All commands must have help documentation
--   All commands must provide meaningful exit codes
--   Commands must have short and long option forms where appropriate
--   Required arguments must not have default values
-
-### 9.2 Output Formatting
-
--   Output must be color-coded for terminal display
--   Output must degrade gracefully in non-TTY environments
--   Progress indicators must be used for long-running operations
--   Quiet mode (-q) must suppress all non-error output
--   Verbose mode (-v) must provide additional debugging information
-
-10\. Machine Learning
----------------------
-
-### 10.1 Model Management
-
--   Models must be versioned with training data hashes
--   Models must be serialized using standard formats
--   Model performance metrics must be tracked and stored
--   Models must be validated before deployment
--   Feature importance must be documented
-
-### 10.2 Training Data
-
--   Training data must be versioned
--   Data pipelines must be reproducible
--   Data transformations must be documented
--   Test/train/validation splits must be consistent
--   Data privacy must be maintained (no PII)
-
-11\. API Integration
---------------------
-
-### 11.1 HackerOne API Integration
-
--   API requests must use retry logic with exponential backoff
--   API rate limits must be respected
--   API responses must be validated against expected schemas
--   API credentials must be stored securely
--   API interactions must be logged at DEBUG level
-
-### 11.2 General API Standards
-
--   HTTP client timeouts must be configured
--   Connection pooling must be used
--   Responses must be properly handled regardless of HTTP status
--   Large responses must be streamed, not loaded into memory at once
--   API wrappers must provide consistent interfaces
-
-12\. Performance
+## 9. CLI Design
 ----------------
 
-### 12.1 Resource Usage
+### 9.1 Structure & Usability
+- **Framework:** Use a robust CLI framework like `Typer` or `Click`.
+- **Command Pattern:** Follow Git-style subcommands (`sniper <command> <subcommand> [options]`).
+- **Help:** Provide comprehensive help messages (`--help`) for all commands and subcommands.
+- **Clarity:** Command and option names should be intuitive and unambiguous. Provide short (`-o`) and long (`--output`) forms for common options.
+- **Exit Codes:** Use standard exit codes to indicate success (0) or specific failure types (non-zero). Document exit codes.
+- **Defaults:** Provide sensible defaults but require explicit values for mandatory arguments.
 
--   Memory usage must be monitored and optimized
--   CPU-intensive operations must be profiled
--   I/O operations must be non-blocking where possible
--   Concurrent operations must be limited based on available resources
--   Large data structures must be processed in chunks
+### 9.2 Input/Output
+- **Verbosity:** Implement standard verbosity levels (`-q`/`--quiet`, `-v`/`--verbose`).
+- **Progress:** Use progress indicators (e.g., `rich.progress`) for long-running operations. Ensure they degrade gracefully in non-TTY environments.
+- **Output Formatting:**
+    - Default to human-readable, potentially colorized output for interactive terminals.
+    - Provide machine-readable output formats (e.g., JSON, CSV) via options (`--output-format json`).
+    - Handle non-TTY output gracefully (no colors, no progress bars unless explicitly requested).
+- **Error Reporting:** Display clear, user-friendly error messages to stderr. Include detailed technical information only in verbose/debug modes or log files.
+
+## 10. API Integration (External Services)
+-----------------------------------------
+
+### 10.1 General Principles
+- **Abstraction:** Wrap external API interactions within dedicated modules/services to isolate dependencies.
+- **Resilience:** Implement retry logic (with exponential backoff and jitter) for transient network errors or API failures (e.g., 5xx status codes).
+- **Rate Limiting:** Respect API rate limits. Implement client-side throttling if necessary.
+- **Timeouts:** Configure appropriate connection and read timeouts for all HTTP requests.
+- **Error Handling:** Handle API-specific errors gracefully. Translate API errors into internal project exceptions.
+- **Validation:** Validate data received from APIs against expected schemas. Do not trust external data.
+- **Client Configuration:** Use configurable HTTP clients (e.g., `httpx`) allowing for proxy settings, custom headers, etc. Use connection pooling.
+
+### 10.2 Specific Integrations (e.g., HackerOne)
+- **Credentials:** Manage API keys/tokens securely (see Section 8.1).
+- **Logging:** Log API interactions at DEBUG level, redacting sensitive information.
+- **Data Streaming:** Stream large API responses where possible instead of loading everything into memory.
+
+## 11. Machine Learning (If Applicable)
+--------------------------------------
+
+### 11.1 Model Management
+- **Versioning:** Version models alongside the code and training data hash/version used to create them. Use tools like MLflow or DVC.
+- **Serialization:** Use standard, secure formats for model serialization (e.g., `joblib`, `pickle` with caution, ONNX).
+- **Validation:** Rigorously validate model performance on unseen data before deployment. Track metrics (accuracy, precision, recall, F1, etc.).
+- **Documentation:** Document model architecture, training process, features, limitations, and performance metrics.
+
+### 11.2 Data Management
+- **Reproducibility:** Ensure data preprocessing and feature engineering pipelines are fully reproducible. Version control data or use data versioning tools.
+- **Splitting:** Maintain consistent train/validation/test splits.
+- **Privacy:** Anonymize or pseudonymize PII in training data. Adhere to relevant data privacy regulations.
+
+## 12. Performance & Scalability
+-------------------------------
+
+### 12.1 Optimization
+- **Proactive Design:** Consider performance implications during design. Choose appropriate data structures and algorithms.
+- **Profiling:** Profile performance-critical code paths to identify bottlenecks (`cProfile`, `py-spy`). Optimize based on data, not guesswork.
+- **Resource Usage:** Monitor and constrain memory and CPU usage. Avoid memory leaks.
+- **Concurrency/Parallelism:** Utilize `asyncio` for I/O-bound tasks or `multiprocessing`/`threading` for CPU-bound tasks where appropriate. Manage concurrency levels carefully.
+- **Caching:** Implement caching strategies (in-memory, disk-based) for expensive computations or frequently accessed data where appropriate. Ensure cache invalidation logic is sound.
+- **Batching:** Batch external API calls or database operations where feasible.
 
 ### 12.2 Scanning Performance
+- **Parallelization:** Design scanners to support parallel execution where safe and beneficial.
+- **Throttling:** Implement configurable throttling to avoid overwhelming target systems or hitting rate limits.
+- **State Management:** For long scans, periodically save state to allow resumption after interruption.
 
--   Scans must be parallelized where possible
--   Scan priorities must be adjustable
--   Resource usage must be throttled according to target capacity
--   Caching must be used for repeated operations
--   Progress must be saved periodically to enable resumption
-
-13\. Version Control
---------------------
-
-### 13.1 Git Workflow
-
--   Branches must follow the naming convention: `type/short-description`
-    -   Types: feature, bugfix, hotfix, chore, docs
--   Commits must follow Conventional Commits format:
-
-    ```
-    type(scope): short descriptionLong description if needed
-
-    ```
-
--   Commits must be atomic and focused on a single change
--   Pull requests must be reviewed by at least one team member
--   Pull requests must pass CI checks before merging
-
-### 13.2 Release Management
-
--   Semantic versioning must be used (MAJOR.MINOR.PATCH)
--   Release notes must document all changes
--   Tags must be created for each release
--   Release branches must follow the pattern `release/vX.Y.Z`
--   Hotfixes must be applied to both main and release branches
-
-14\. Development Environment
+## 13. Configuration Management
 ----------------------------
 
-### 14.1 Environment Setup
+### 13.1 Approach
+- **Centralized:** Manage configuration through a combination of default settings, configuration files (e.g., TOML, YAML), and environment variables.
+- **Hierarchy:** Define a clear precedence order (e.g., environment variables override config files, which override defaults).
+- **Validation:** Use Pydantic or similar tools to define and validate configuration schemas at startup.
+- **Location:** Store default/example configuration files in a dedicated `config/` directory. User-specific configurations should reside outside the project repository.
+- **Secrets:** Separate configuration from secrets (see Section 8.1).
 
--   Development environments must be reproducible
--   Virtual environments must be used
--   Environment variables must be documented
--   Local development must mirror CI environment
--   Pre-commit hooks must enforce code quality rules
-
-### 14.2 IDE Configuration
-
--   Editor configuration must be shared via .editorconfig
--   IDE-specific files must be excluded from version control
--   Common IDE settings should be documented
--   Recommended extensions must be listed in documentation
-
-15\. Continuous Integration
+## 14. Multi-Language Support
 ---------------------------
 
-### 15.1 CI Pipeline
+### 14.1 Design
+- **LLM Interaction:** API endpoints interacting with LLMs MUST accept an optional `language` parameter (e.g., `en`, `fr`, `es`). Pass this parameter to the LLM prompt/request.
+- **CLI/UI Text:** Externalize user-facing strings (messages, help text, labels) into resource files (e.g., `.po` files using `gettext`, JSON files).
+- **Locale:** Use standard locale identifiers (e.g., `en_US`, `fr_FR`). Determine the appropriate locale based on user settings, environment, or explicit configuration/parameters.
+- **Implementation:** Utilize standard internationalization (i18n) and localization (l10n) libraries.
 
--   All code must pass CI checks before merging
--   CI must run on every pull request
--   CI must include:
-    -   Linting
-    -   Type checking
-    -   Unit tests
-    -   Integration tests
-    -   Code coverage analysis
-    -   Dependency vulnerability scanning
--   CI failures must be addressed before merging
+## 15. Version Control (Git)
+--------------------------
 
-### 15.2 Build Process
+### 15.1 Workflow
+- **Branching Model:** Gitflow or a simpler feature-branch workflow (e.g., GitHub Flow). Main branch (`main` or `master`) must always be stable and deployable.
+- **Branch Naming:** `type/short-description` (e.g., `feature/add-scan-command`, `bugfix/resolve-api-timeout`). Types: `feature`, `bugfix`, `hotfix`, `chore`, `docs`, `refactor`.
+- **Commits:**
+    - Follow Conventional Commits format (`type(scope): description`). Example: `feat(scanner): add support for port range specification`.
+    - Commits must be atomic, logical units of work.
+    - Write clear, concise commit messages explaining the *what* and *why*.
+- **Pull Requests (PRs):**
+    - All changes must go through PRs, even for core committers.
+    - PRs require at least one approval from another team member.
+    - PRs must pass all CI checks before merging.
+    - Link PRs to relevant issues.
+    - Use squash-and-merge or rebase-and-merge to maintain a clean history on the main branch.
 
--   Builds must be reproducible
--   Build artifacts must be versioned
--   Build process must be documented
--   Build dependencies must be pinned to specific versions
+### 15.2 Release Management
+- **Versioning:** Use Semantic Versioning (MAJOR.MINOR.PATCH).
+- **Tagging:** Create annotated Git tags for every release (`git tag -a vX.Y.Z -m "Release vX.Y.Z"`).
+- **Changelog:** Maintain `CHANGELOG.md` based on Conventional Commits or PR descriptions.
+- **Release Process:** Document the release process (e.g., creating release branches, final testing, tagging, publishing).
+
+## 16. Development Environment
+----------------------------
+
+### 16.1 Setup
+- **Reproducibility:** Ensure the development environment setup is automated and reproducible (e.g., using Docker, dev containers, or detailed setup scripts).
+- **Virtual Environments:** Mandatory (managed by Poetry).
+- **Configuration:** Document required environment variables and provide `.env.example` files.
+- **Consistency:** The local development environment should mirror the CI and production environments as closely as possible.
+
+### 16.2 Tooling
+- **IDE Configuration:** Provide an `.editorconfig` file for consistent basic editor settings (indentation, whitespace). Recommend IDE extensions for Python development, linting, and formatting in project documentation.
+- **Pre-commit Hooks:** Mandatory. Configure hooks to run linters, formatters, and type checkers before each commit.
+
+## 17. Continuous Integration (CI)
+---------------------------------
+
+### 17.1 Pipeline Requirements
+- **Trigger:** Run on every push to any branch and on every PR.
+- **Mandatory Checks:**
+    - Linting (`flake8`)
+    - Formatting Check (`black --check`, `isort --check-only`)
+    - Type Checking (`mypy`)
+    - Unit Tests (`pytest tests/unit`)
+    - Integration Tests (`pytest tests/integration`)
+    - Code Coverage Analysis (report coverage, potentially enforce minimum threshold)
+    - Dependency Security Scan (`safety`, `pip-audit`, or Snyk)
+- **Failure Policy:** PRs cannot be merged if *any* CI check fails. Failures must be addressed promptly.
+
+### 17.2 Build & Deployment (CD - If Applicable)
+- **Build:** Ensure the build process is automated and reproducible.
+- **Artifacts:** Version build artifacts (e.g., Docker images, Python wheels).
+- **Deployment:** Automate deployment to staging/production environments. Implement appropriate testing and rollback strategies.
