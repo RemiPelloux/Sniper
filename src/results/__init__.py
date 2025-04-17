@@ -4,6 +4,9 @@ This module handles the standardization, normalization and processing
 of findings from various security tools.
 """
 
+# Export normalizers
+from src.results.normalizer import FindingNormalizer, ResultNormalizer
+
 # Export finding types for easy import
 from src.results.types import (
     BaseFinding,
@@ -13,9 +16,6 @@ from src.results.types import (
     TechnologyFinding,
     WebFinding,
 )
-
-# Export normalizers
-from src.results.normalizer import FindingNormalizer, ResultNormalizer
 
 # Export all
 __all__ = [
@@ -29,4 +29,4 @@ __all__ = [
     # Normalizers
     "FindingNormalizer",
     "ResultNormalizer",
-] 
+]

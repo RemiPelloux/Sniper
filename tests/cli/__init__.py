@@ -1,1 +1,1 @@
-"""Tests for the CLI interface modules.""" 
+"""Tests for the CLI interface modules."""

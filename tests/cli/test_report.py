@@ -1,14 +1,14 @@
 """Tests for the report generation CLI module."""
 
-import os
 import json
+import os
 import tempfile
-import pytest
-from typer.testing import CliRunner
 from unittest.mock import patch
 
-from src.cli.report import app, ReportFormat, ReportTemplate
+import pytest
+from typer.testing import CliRunner
 
+from src.cli.report import ReportFormat, ReportTemplate, app
 
 runner = CliRunner()
 
@@ -67,7 +67,7 @@ def test_generate_report():
     # Create a temporary file path
     temp_fd, temp_filename = tempfile.mkstemp(suffix=".json")
     os.close(temp_fd)
-    
+
     try:
         # Write scan data to the file
         scan_data = {
@@ -75,34 +75,36 @@ def test_generate_report():
                 "target": "https://example.com",
                 "timestamp": "2023-04-01T12:00:00Z",
                 "scan_duration": "00:10:15",
-                "tools_used": ["nmap", "zap"]
+                "tools_used": ["nmap", "zap"],
             },
-            "findings": []
+            "findings": [],
         }
-        with open(temp_filename, 'w') as f:
+        with open(temp_filename, "w") as f:
             json.dump(scan_data, f)
-        
+
         # Create a temporary output directory
         with tempfile.TemporaryDirectory() as temp_dir:
             result = runner.invoke(
-                app, 
+                app,
                 [
-                    "generate", 
+                    "generate",
                     temp_filename,
-                    "--output-dir", temp_dir,
-                    "--format", "json"
-                ]
+                    "--output-dir",
+                    temp_dir,
+                    "--format",
+                    "json",
+                ],
             )
-            
+
             # Check command execution
             assert result.exit_code == 0
             assert "Report generation complete" in result.stdout
-            
+
             # Check that output file was created
             output_files = os.listdir(temp_dir)
             assert len(output_files) == 1
             assert output_files[0].endswith(".json")
-            
+
             # Verify content of output file
             with open(os.path.join(temp_dir, output_files[0]), "r") as f:
                 report_data = json.load(f)
@@ -118,52 +120,56 @@ def test_generate_report_multiple_formats():
     # Create a temporary file path
     temp_fd, temp_filename = tempfile.mkstemp(suffix=".json")
     os.close(temp_fd)
-    
+
     try:
         # Write scan data to the file
         scan_data = {
             "scan_metadata": {
                 "target": "https://example.com",
-                "timestamp": "2023-04-01T12:00:00Z"
+                "timestamp": "2023-04-01T12:00:00Z",
             },
-            "findings": []
+            "findings": [],
         }
-        with open(temp_filename, 'w') as f:
+        with open(temp_filename, "w") as f:
             json.dump(scan_data, f)
-        
+
         # Create a temporary output directory
         with tempfile.TemporaryDirectory() as temp_dir:
             # Use separate invocations for each format
             # First markdown
             md_result = runner.invoke(
-                app, 
+                app,
                 [
-                    "generate", 
+                    "generate",
                     temp_filename,
-                    "--output-dir", temp_dir,
-                    "--format", "markdown"
-                ]
+                    "--output-dir",
+                    temp_dir,
+                    "--format",
+                    "markdown",
+                ],
             )
-            
+
             # Then HTML
             html_result = runner.invoke(
-                app, 
+                app,
                 [
-                    "generate", 
+                    "generate",
                     temp_filename,
-                    "--output-dir", temp_dir,
-                    "--format", "html"
-                ]
+                    "--output-dir",
+                    temp_dir,
+                    "--format",
+                    "html",
+                ],
             )
-            
+
             # Check command execution
             assert md_result.exit_code == 0
             assert html_result.exit_code == 0
-            
+
             # Check that output files were created
             output_files = os.listdir(temp_dir)
             assert len(output_files) == 2
-            
+
             # Check file extensions
             extensions = [os.path.splitext(f)[1] for f in output_files]
             assert ".md" in extensions or ".markdown" in extensions
@@ -177,14 +183,9 @@ def test_generate_report_multiple_formats():
 def test_generate_report_nonexistent_input():
     """Test error handling for nonexistent input file."""
     result = runner.invoke(
-        app, 
-        [
-            "generate", 
-            "nonexistent_file.json",
-            "--format", "markdown"
-        ]
+        app, ["generate", "nonexistent_file.json", "--format", "markdown"]
     )
-    
+
     # Command should fail
     assert result.exit_code != 0
-    assert "not found" in result.stdout 
+    assert "not found" in result.stdout

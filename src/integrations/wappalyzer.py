@@ -1,7 +1,7 @@
 import json
 import logging
 import shutil
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from src.integrations.base import ToolIntegration, ToolIntegrationError
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
@@ -230,6 +230,33 @@ class WappalyzerIntegration(ToolIntegration):
             log.exception(f"Error processing Wappalyzer output: {e}")
             return None
 
+    def scan(self, target: str, verify_ssl: bool = True) -> list[BaseFinding]:
+        """
+        Legacy method for backward compatibility.
+
+        This is a wrapper around the run and parse_output methods that simplifies the interface
+        for callers that don't need the full flexibility of the run method.
+
+        Args:
+            target: The URL to scan.
+            verify_ssl: Whether to verify SSL certificates.
+
+        Returns:
+            List of findings from the scan.
+        """
+        log.warning(
+            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
+        )
+
+        try:
+            # Run the scan and get raw results
+            scan_result = self.run(target, options={"verify_ssl": verify_ssl})
+
+            # Parse the results
+            findings = self.parse_output(scan_result)
+            return findings if findings is not None else []
+        except Exception as e:
+            log.exception(f"Error in scan method: {e}")
+            return []
+
     # _extract_target_from_command is no longer needed as URL comes from JSON output
-    # def _extract_target_from_command(self, command_str: str) -> str | None:
-    #     ...

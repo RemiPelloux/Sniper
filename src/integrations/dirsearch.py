@@ -6,7 +6,7 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional
 
 from src.integrations.base import ToolIntegration, ToolIntegrationError
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
@@ -197,3 +197,38 @@ class DirsearchIntegration(ToolIntegration):
             log.exception(f"Error reading/parsing Dirsearch report {report_path}: {e}")
             report_path.unlink(missing_ok=True)
             return None
+
+    def scan(
+        self, target: str, wordlist_size: str = "medium", verify_ssl: bool = True
+    ) -> List[BaseFinding]:
+        """
+        Legacy method for backward compatibility.
+
+        This is a wrapper around the run and parse_output methods that simplifies the interface
+        for callers that don't need the full flexibility of the run method.
+
+        Args:
+            target: The URL to scan.
+            wordlist_size: Size of wordlist to use (small, medium, large).
+            verify_ssl: Whether to verify SSL certificates.
+
+        Returns:
+            List of findings from the scan.
+        """
+        log.warning(
+            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
+        )
+
+        try:
+            # Run the scan and get raw results
+            scan_result = self.run(
+                target,
+                options={"wordlist_size": wordlist_size, "verify_ssl": verify_ssl},
+            )
+
+            # Parse the results
+            findings = self.parse_output(scan_result)
+            return findings if findings is not None else []
+        except Exception as e:
+            log.exception(f"Error in scan method: {e}")
+            return []

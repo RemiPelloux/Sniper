@@ -1,3 +1,33 @@
+"""
+OWASP ZAP Integration Module
+
+This module provides integration with the OWASP Zed Attack Proxy (ZAP), a powerful
+web application security scanner. It allows the tool to perform both passive and
+active scans against web applications to identify security vulnerabilities.
+
+Features:
+- Support for both passive and active scanning modes
+- AJAX spider for JavaScript-heavy applications
+- Customizable scan options and configurations
+- Detailed vulnerability findings including severity, evidence, and solution recommendations
+- Optional daemon management (start/stop) for headless operation
+
+Dependencies:
+- Either the 'python-owasp-zap-v2.4' or 'zaproxy' Python package
+- OWASP ZAP executable in the PATH for daemon mode
+
+Configuration:
+- Supports custom host, port, and API key settings via core configuration
+- Can use an existing ZAP instance or start a new one
+- Adjustable timeout and scan parameters
+
+Usage:
+    integration = ZapIntegration()
+    result = await integration.run("https://example.com",
+                                 {"active_scan": True, "ajax_spider": False})
+    findings = integration.parse_output(result)
+"""
+
 import logging
 import shutil
 from typing import Any, Dict, List, Optional
@@ -158,7 +188,9 @@ class ZapIntegration(ToolIntegration):
         # Parse options with defaults
         scan_options = options or {}
         scan_type = scan_options.get("scan_type", "passive")  # passive or active
-        # context_name = scan_options.get("context_name", "Default Context") # Unused for now
+        active_scan = scan_options.get("active_scan", False)
+        ajax_spider = scan_options.get("ajax_spider", False)
+        verify_ssl = scan_options.get("verify_ssl", True)
 
         try:
             # Start ZAP daemon if needed
@@ -177,10 +209,9 @@ class ZapIntegration(ToolIntegration):
             self._zap_api.core.new_session()
 
             # Access the target (Spider or AJAX Spider based on options)
-            use_ajax = scan_options.get("use_ajax_spider", False)
             scan_id: Optional[str] = None  # Hint scan_id type
 
-            if use_ajax:
+            if ajax_spider:
                 log.info(f"Starting AJAX Spider scan of {target}")
                 scan_id = self._zap_api.ajaxSpider.scan(target)
                 # Wait for AJAX Spider to complete
@@ -205,7 +236,7 @@ class ZapIntegration(ToolIntegration):
 
             # If active scan requested, run it
             active_scan_id: Optional[str] = None  # Hint active_scan_id type
-            if scan_type.lower() == "active":
+            if active_scan or scan_type.lower() == "active":
                 log.info(f"Starting active scan against {target}")
                 active_scan_id = self._zap_api.ascan.scan(target)
 
@@ -240,74 +271,122 @@ class ZapIntegration(ToolIntegration):
             log.exception(f"An error occurred during ZAP scan: {e}")
             raise ToolIntegrationError(f"ZAP scan failed: {e}") from e
 
+    def scan(
+        self,
+        target: str,
+        active_scan: bool = False,
+        ajax_spider: bool = False,
+        verify_ssl: bool = True,
+    ) -> List[BaseFinding]:
+        """
+        Legacy method for backward compatibility.
+
+        This is a wrapper around the run and parse_output methods that simplifies the interface
+        for callers that don't need the full flexibility of the run method. It directly returns
+        the parsed findings instead of the raw results.
+
+        Args:
+            target: The URL to scan.
+            active_scan: Whether to perform an active scan.
+            ajax_spider: Whether to use AJAX spider.
+            verify_ssl: Whether to verify SSL certificates.
+
+        Returns:
+            List of findings from the scan.
+        """
+        import asyncio
+
+        log.warning(
+            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
+        )
+
+        # Run the scan and get raw results
+        options = {
+            "active_scan": active_scan,
+            "ajax_spider": ajax_spider,
+            "verify_ssl": verify_ssl,
+        }
+
+        try:
+            # Use asyncio to run the async method
+            scan_result = asyncio.run(self.run(target, options=options))
+
+            # Parse the results
+            findings = self.parse_output(scan_result)
+            return findings if findings is not None else []
+        except Exception as e:
+            log.exception(f"Error in scan method: {e}")
+            return []
+
     def parse_output(self, raw_output: Dict[str, Any]) -> Optional[List[BaseFinding]]:
         """Parse ZAP output into a list of WebFinding objects."""
         if not raw_output or not raw_output.get("alerts"):
             log.warning("No ZAP alerts found in output.")
+            if raw_output and "alerts" in raw_output and raw_output["alerts"] == []:
+                # Return empty list for empty alerts, rather than None
+                return []
             return None
 
         try:
             findings: List[BaseFinding] = []
+            alerts = raw_output["alerts"]
+            target = raw_output.get("target", "")
 
-            # Map ZAP risk levels to our severity levels
-            risk_to_severity = {
-                "High": FindingSeverity.HIGH,
-                "Medium": FindingSeverity.MEDIUM,
-                "Low": FindingSeverity.LOW,
-                "Informational": FindingSeverity.INFO,
-                # Default to INFO for unknown risk levels
-                "": FindingSeverity.INFO,
-            }
+            for alert in alerts:
+                # Map ZAP risk levels to our severity enum
+                severity_map = {
+                    "Informational": FindingSeverity.INFO,
+                    "Low": FindingSeverity.LOW,
+                    "Medium": FindingSeverity.MEDIUM,
+                    "High": FindingSeverity.HIGH,
+                    "Critical": FindingSeverity.CRITICAL,
+                }
 
-            for alert in raw_output.get("alerts", []):
-                # Map important fields from ZAP alert to our finding format
-                try:
-                    url = alert.get("url", "")
+                risk = alert.get("risk", "Informational")
+                # Handle numeric risk levels if they're not strings
+                if isinstance(risk, int):
+                    # ZAP uses 0-3 for risk levels
+                    risk_map = {
+                        0: "Informational",
+                        1: "Low",
+                        2: "Medium",
+                        3: "High",
+                        4: "Critical",
+                    }
+                    risk = risk_map.get(risk, "Informational")
 
-                    finding = WebFinding(
-                        title=f"ZAP: {alert.get('name', 'Unknown Vulnerability')}",
-                        description=alert.get(
-                            "description", "No description available"
-                        ),
-                        severity=risk_to_severity.get(
-                            alert.get("risk", ""), FindingSeverity.INFO
-                        ),
-                        target=raw_output.get("target", "unknown"),
-                        source_tool=self.tool_name,
-                        raw_evidence=alert,
-                        url=url,
-                        method=alert.get("method"),
-                        parameter=alert.get("param", None),
-                        status_code=None,  # ZAP doesn't typically include status codes in alerts
-                    )
-                    findings.append(finding)
-                except ValidationError as ve:
-                    log.warning(f"Failed to create WebFinding for ZAP alert: {ve}")
-                    continue
+                # Get the severity from our map, default to INFO if not found
+                severity = severity_map.get(risk, FindingSeverity.INFO)
 
-            if not findings:
-                log.info("No findings parsed from ZAP output.")
-                return None
+                # Create a WebFinding from the alert
+                finding = WebFinding(
+                    title=alert.get("name", "Unknown Vulnerability"),
+                    description=alert.get("description", "No description provided"),
+                    severity=severity,
+                    url=alert.get("url", target),
+                    method=alert.get("method", "GET"),
+                    parameter=alert.get("param", ""),
+                    evidence=alert.get("evidence", ""),
+                    solution=alert.get("solution", ""),
+                    confidence=alert.get("confidence", "Low"),
+                    tool=self.tool_name,
+                    raw_data=alert,
+                    target=target,
+                )
 
-            log.info(f"Parsed {len(findings)} findings from ZAP output.")
+                findings.append(finding)
+
             return findings
-
-        except Exception as e:
-            log.exception(f"Error parsing ZAP output: {e}")
+        except (ValueError, ValidationError) as e:
+            log.error(f"Error parsing ZAP output: {e}")
             return None
 
     async def shutdown(self) -> None:
-        """Shut down ZAP daemon if it was started by this integration."""
-        if not self._zap_api or self._zap_config.get("use_existing_instance", True):
-            # Don't shut down if we're using an existing instance
-            return
-
-        # Add assertion for mypy
-        assert self._zap_api is not None
-
-        log.info("Shutting down ZAP daemon...")
-        try:
-            self._zap_api.core.shutdown()
-            log.info("ZAP daemon shutdown successfully")
-        except Exception as e:
-            log.warning(f"Error shutting down ZAP daemon: {e}")
+        """Shutdown the ZAP instance if we started it."""
+        if self._zap_api and not self._zap_config.get("use_existing_instance", False):
+            try:
+                log.info("Shutting down ZAP daemon")
+                self._zap_api.core.shutdown()
+                log.info("ZAP daemon shutdown successfully")
+            except Exception as e:
+                log.error(f"Failed to shutdown ZAP daemon: {e}")

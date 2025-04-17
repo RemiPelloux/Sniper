@@ -1,7 +1,7 @@
 import logging
 import re
 import shutil
-from typing import Any
+from typing import Any, List, Optional
 
 from src.integrations.base import ToolIntegration, ToolIntegrationError
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
@@ -141,3 +141,32 @@ class NmapIntegration(ToolIntegration):
         except Exception:
             log.warning("Could not reliably extract target from command string.")
         return None
+
+    def scan(self, target: str, ports: Optional[str] = None) -> List[BaseFinding]:
+        """
+        Legacy method for backward compatibility.
+
+        This is a wrapper around the run and parse_output methods that simplifies the interface
+        for callers that don't need the full flexibility of the run method.
+
+        Args:
+            target: The host or network to scan.
+            ports: The ports to scan (e.g., "22,80,443" or "top1000").
+
+        Returns:
+            List of findings from the scan.
+        """
+        log.warning(
+            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
+        )
+
+        try:
+            # Run the scan and get raw results
+            scan_result = self.run(target, options={"ports": ports} if ports else None)
+
+            # Parse the results
+            findings = self.parse_output(scan_result)
+            return findings if findings is not None else []
+        except Exception as e:
+            log.exception(f"Error in scan method: {e}")
+            return []

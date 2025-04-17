@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # from src.integrations.base import ToolIntegrationError # Unused
-from src.integrations.base import ToolIntegrationError # Added for run exception test
+from src.integrations.base import ToolIntegrationError  # Added for run exception test
 from src.integrations.executors import ExecutionResult
 from src.integrations.wappalyzer import WappalyzerIntegration
 
@@ -127,7 +127,7 @@ class TestWappalyzerIntegration:
             timed_out=False,
         )
         # Setup the mock executor's execute method
-        wappalyzer_integration._executor.execute = AsyncMock(return_value=mock_result) # type: ignore
+        wappalyzer_integration._executor.execute = AsyncMock(return_value=mock_result)  # type: ignore
 
         target_url = "https://example.com"
         result = await wappalyzer_integration.run(target_url)
@@ -163,7 +163,7 @@ class TestWappalyzerIntegration:
             stderr="",
             timed_out=True,
         )
-        wappalyzer_integration._executor.execute = AsyncMock(return_value=mock_result) # type: ignore
+        wappalyzer_integration._executor.execute = AsyncMock(return_value=mock_result)  # type: ignore
 
         target_url = "https://example.com"
         options = {"timeout_seconds": 1, "threads": 3, "scan_type": "fast"}
@@ -195,7 +195,7 @@ class TestWappalyzerIntegration:
             stderr="Some error message",
             timed_out=False,
         )
-        wappalyzer_integration._executor.execute = AsyncMock(return_value=mock_result) # type: ignore
+        wappalyzer_integration._executor.execute = AsyncMock(return_value=mock_result)  # type: ignore
 
         target_url = "https://invalid-url"
         result = await wappalyzer_integration.run(target_url)
@@ -223,18 +223,17 @@ class TestWappalyzerIntegration:
     ) -> None:
         """Test Wappalyzer run when the executor raises an exception."""
         # Make the mock executor raise an arbitrary exception
-        wappalyzer_integration._executor.execute = AsyncMock(side_effect=RuntimeError("Executor exploded")) # type: ignore
+        wappalyzer_integration._executor.execute = AsyncMock(side_effect=RuntimeError("Executor exploded"))  # type: ignore
 
         target_url = "https://example.com"
         # Expect ToolIntegrationError to be raised due to the caught exception
-        with pytest.raises(ToolIntegrationError, match="Wappalyzer execution failed: Executor exploded"):
+        with pytest.raises(
+            ToolIntegrationError, match="Wappalyzer execution failed: Executor exploded"
+        ):
             await wappalyzer_integration.run(target_url)
 
         # Ensure execute was still called
-        cast(
-            MagicMock, wappalyzer_integration._executor
-        ).execute.assert_called_once()
-
+        cast(MagicMock, wappalyzer_integration._executor).execute.assert_called_once()
 
     # --- Tests for parse_output ---
 
@@ -270,7 +269,7 @@ class TestWappalyzerIntegration:
         assert nginx_finding.version == "1.18.0"
         assert "Web servers" in nginx_finding.categories
         assert nginx_finding.source_tool == "wappalyzer"
-        assert nginx_finding.raw_evidence is not None # mypy check
+        assert nginx_finding.raw_evidence is not None  # mypy check
         assert nginx_finding.raw_evidence.get("slug") == "nginx"
 
         # Check second finding (React)
@@ -288,9 +287,8 @@ class TestWappalyzerIntegration:
         assert react_finding.version is None
         assert "JavaScript frameworks" in react_finding.categories
         assert react_finding.source_tool == "wappalyzer"
-        assert react_finding.raw_evidence is not None # mypy check
+        assert react_finding.raw_evidence is not None  # mypy check
         assert react_finding.raw_evidence.get("slug") == "react"
-
 
     def test_wappalyzer_parse_failure_or_timeout(
         self, wappalyzer_integration: WappalyzerIntegration
@@ -339,7 +337,6 @@ class TestWappalyzerIntegration:
         empty_urls_result = ExecutionResult("cmd", 0, mock_data, "", False)
         assert wappalyzer_integration.parse_output(empty_urls_result) is None
 
-
     def test_wappalyzer_parse_missing_technologies_key(
         self, wappalyzer_integration: WappalyzerIntegration
     ) -> None:
@@ -358,7 +355,6 @@ class TestWappalyzerIntegration:
         not_list_tech_result = ExecutionResult("cmd", 0, mock_data, "", False)
         assert wappalyzer_integration.parse_output(not_list_tech_result) is None
 
-
     def test_wappalyzer_parse_empty_technologies_list(
         self, wappalyzer_integration: WappalyzerIntegration
     ) -> None:
@@ -371,20 +367,23 @@ class TestWappalyzerIntegration:
         assert wappalyzer_integration.parse_output(empty_tech_result) is None
 
     def test_wappalyzer_parse_invalid_item_in_technologies(
-         self, wappalyzer_integration: WappalyzerIntegration
-     ) -> None:
-         """Test parsing skips non-dict items in the technologies list."""
-         mock_data = json.dumps(
-             {
-                 "urls": {"http://a.com": {"status": 200}},
-                 "technologies": ["not_a_dict", {"name": "ValidTech", "categories": []}], # Contains invalid item
-             }
-         )
-         result = ExecutionResult("cmd", 0, mock_data, "", False)
-         findings = wappalyzer_integration.parse_output(result)
-         assert findings is not None
-         assert len(findings) == 1 # Only the valid tech should be parsed
-         assert findings[0].technology_name == "ValidTech" # type: ignore
+        self, wappalyzer_integration: WappalyzerIntegration
+    ) -> None:
+        """Test parsing skips non-dict items in the technologies list."""
+        mock_data = json.dumps(
+            {
+                "urls": {"http://a.com": {"status": 200}},
+                "technologies": [
+                    "not_a_dict",
+                    {"name": "ValidTech", "categories": []},
+                ],  # Contains invalid item
+            }
+        )
+        result = ExecutionResult("cmd", 0, mock_data, "", False)
+        findings = wappalyzer_integration.parse_output(result)
+        assert findings is not None
+        assert len(findings) == 1  # Only the valid tech should be parsed
+        assert findings[0].technology_name == "ValidTech"  # type: ignore
 
     def test_wappalyzer_parse_missing_tech_name(
         self, wappalyzer_integration: WappalyzerIntegration
@@ -395,8 +394,12 @@ class TestWappalyzerIntegration:
                 "urls": {"http://a.com": {"status": 200}},
                 "technologies": [
                     {"name": "Good", "version": "1.0", "categories": []},
-                    {"version": "2.0", "categories": []}, # Missing name
-                    {"name": 123, "version": "3.0", "categories": []} # Invalid name type
+                    {"version": "2.0", "categories": []},  # Missing name
+                    {
+                        "name": 123,
+                        "version": "3.0",
+                        "categories": [],
+                    },  # Invalid name type
                 ],
             }
         )
@@ -404,8 +407,7 @@ class TestWappalyzerIntegration:
         findings = wappalyzer_integration.parse_output(result)
         assert findings is not None
         assert len(findings) == 1
-        assert findings[0].technology_name == "Good" # type: ignore
-
+        assert findings[0].technology_name == "Good"  # type: ignore
 
     def test_wappalyzer_parse_invalid_category_format(
         self, wappalyzer_integration: WappalyzerIntegration
@@ -419,10 +421,10 @@ class TestWappalyzerIntegration:
                         "name": "TechWithCategories",
                         "categories": [
                             {"id": 1, "slug": "cat1", "name": "Category One"},
-                            "not_a_dict", # Invalid item
-                            {"id": 2, "slug": "cat2"}, # Missing name
-                            {"id": 3, "slug": "cat3", "name": "Category Three"}
-                        ]
+                            "not_a_dict",  # Invalid item
+                            {"id": 2, "slug": "cat2"},  # Missing name
+                            {"id": 3, "slug": "cat3", "name": "Category Three"},
+                        ],
                     }
                 ],
             }
@@ -436,24 +438,24 @@ class TestWappalyzerIntegration:
         # Should contain only the valid category names
         assert tech_finding.categories == ["Category One", "Category Three"]
 
-
     def test_wappalyzer_parse_finding_creation_error(
         self, wappalyzer_integration: WappalyzerIntegration
     ) -> None:
         """Test parsing handles errors during TechnologyFinding creation."""
         mock_data = json.dumps(
-             {
-                 "urls": {"http://a.com": {"status": 200}},
-                 "technologies": [
-                     {"name": "GoodTech", "categories": []},
-                     {"name": "BadTech", "categories": []} # This will cause an error
-                 ]
-             }
+            {
+                "urls": {"http://a.com": {"status": 200}},
+                "technologies": [
+                    {"name": "GoodTech", "categories": []},
+                    {"name": "BadTech", "categories": []},  # This will cause an error
+                ],
+            }
         )
         result = ExecutionResult("cmd", 0, mock_data, "", False)
 
         # Mock TechnologyFinding to raise an error for the second tech
         original_finding = TechnologyFinding
+
         def mock_finding_init(*args: Any, **kwargs: Any) -> TechnologyFinding:
             if kwargs.get("technology_name") == "BadTech":
                 raise ValueError("Invalid finding data")
@@ -464,15 +466,18 @@ class TestWappalyzerIntegration:
             return instance
 
         # Use create=True because TechnologyFinding is imported in the module under test
-        with patch("src.integrations.wappalyzer.TechnologyFinding", side_effect=mock_finding_init, create=True) as mock_tf:
-             findings = wappalyzer_integration.parse_output(result)
+        with patch(
+            "src.integrations.wappalyzer.TechnologyFinding",
+            side_effect=mock_finding_init,
+            create=True,
+        ) as mock_tf:
+            findings = wappalyzer_integration.parse_output(result)
 
         assert findings is not None
-        assert len(findings) == 1 # Only GoodTech should be parsed
-        assert findings[0].technology_name == "GoodTech" # type: ignore
+        assert len(findings) == 1  # Only GoodTech should be parsed
+        assert findings[0].technology_name == "GoodTech"  # type: ignore
         # Ensure our mock was actually called (at least tried for both)
         assert mock_tf.call_count == 2
-
 
     def test_wappalyzer_parse_general_exception(
         self, wappalyzer_integration: WappalyzerIntegration
@@ -489,13 +494,19 @@ class TestWappalyzerIntegration:
                 self._data = data
 
             def get(self, key: str, default: Any = None) -> Any:
-                if key == "technologies": # Return a list containing a faulty mock
-                    return [FaultyTechDetailsMock(tech) for tech in self._data.get(key, [])]
+                if key == "technologies":  # Return a list containing a faulty mock
+                    return [
+                        FaultyTechDetailsMock(tech) for tech in self._data.get(key, [])
+                    ]
                 return self._data.get(key, default)
 
             # Make it behave like a dict for isinstance checks if needed
-            def __iter__(self): return iter(self._data)
-            def keys(self): return self._data.keys()
+            def __iter__(self):
+                return iter(self._data)
+
+            def keys(self):
+                return self._data.keys()
+
             # Add other dict methods if required by the parser's checks
 
         class FaultyTechDetailsMock:
@@ -504,12 +515,16 @@ class TestWappalyzerIntegration:
 
             def get(self, key: str, default: Any = None) -> Any:
                 if key == "version":
-                     raise TypeError("Simulated unexpected access issue")
+                    raise TypeError("Simulated unexpected access issue")
                 return self._data.get(key, default)
 
             # Make it behave like a dict for isinstance checks
-            def __iter__(self): return iter(self._data)
-            def keys(self): return self._data.keys()
+            def __iter__(self):
+                return iter(self._data)
+
+            def keys(self):
+                return self._data.keys()
+
             # Add other dict methods if required by the parser's checks
 
         def mock_loads(*args, **kwargs):
@@ -519,4 +534,4 @@ class TestWappalyzerIntegration:
         # Patch json.loads within the wappalyzer module
         with patch("src.integrations.wappalyzer.json.loads", side_effect=mock_loads):
             # The exception should be caught by the broad except block in parse_output
-             assert wappalyzer_integration.parse_output(mock_result) is None
+            assert wappalyzer_integration.parse_output(mock_result) is None

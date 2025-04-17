@@ -3,7 +3,7 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional
 
 from src.integrations.base import ToolIntegration, ToolIntegrationError
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
@@ -161,3 +161,31 @@ class Sublist3rIntegration(ToolIntegration):
             log.exception(f"Error reading/parsing Sublist3r output {output_path}: {e}")
             output_path.unlink(missing_ok=True)  # Clean up
             return None
+
+    def scan(self, target: str) -> List[BaseFinding]:
+        """
+        Legacy method for backward compatibility.
+
+        This is a wrapper around the run and parse_output methods that simplifies the interface
+        for callers that don't need the full flexibility of the run method.
+
+        Args:
+            target: The root domain to scan for subdomains.
+
+        Returns:
+            List of findings from the scan.
+        """
+        log.warning(
+            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
+        )
+
+        try:
+            # Run the scan and get raw results
+            scan_result = self.run(target)
+
+            # Parse the results
+            findings = self.parse_output(scan_result)
+            return findings if findings is not None else []
+        except Exception as e:
+            log.exception(f"Error in scan method: {e}")
+            return []

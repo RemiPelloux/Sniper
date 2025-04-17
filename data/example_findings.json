@@ -1,0 +1,223 @@
+[
+  {
+    "id": "finding-1",
+    "title": "SQL Injection in login form",
+    "description": "A SQL injection vulnerability was found in the login form that allows an attacker to bypass authentication by using specially crafted input. The application does not properly sanitize user input before using it in SQL queries.",
+    "severity": "High",
+    "finding_type": "sql_injection",
+    "target": "https://example.com/login",
+    "source_tool": "zap",
+    "url": "https://example.com/login",
+    "confidence": 0.85
+  },
+  {
+    "id": "finding-2",
+    "title": "Cross-Site Scripting (XSS) in search parameter",
+    "description": "Reflected XSS vulnerability in the search parameter allows attackers to inject malicious JavaScript that executes in victims' browsers. This could lead to session hijacking or credential theft.",
+    "severity": "Medium",
+    "finding_type": "xss",
+    "target": "https://example.com/search",
+    "source_tool": "zap",
+    "url": "https://example.com/search?q=test",
+    "confidence": 0.75
+  },
+  {
+    "id": "finding-3",
+    "title": "Insecure Direct Object Reference",
+    "description": "The application allows direct access to internal objects by manipulating parameter values. This could allow unauthorized access to data belonging to other users.",
+    "severity": "Medium",
+    "finding_type": "authorization_issue",
+    "target": "https://example.com/profile",
+    "source_tool": "zap",
+    "url": "https://example.com/profile?id=123",
+    "confidence": 0.65
+  },
+  {
+    "id": "finding-4",
+    "title": "Server Information Disclosure",
+    "description": "HTTP response headers reveal sensitive information about the server version and technology stack, which could help attackers target known vulnerabilities.",
+    "severity": "Low",
+    "finding_type": "information_disclosure",
+    "target": "https://example.com",
+    "source_tool": "nmap",
+    "confidence": 0.9
+  },
+  {
+    "id": "finding-5",
+    "title": "Weak Password Policy",
+    "description": "The application allows users to set weak passwords without enforcing complexity requirements, making it vulnerable to brute force attacks.",
+    "severity": "Medium",
+    "finding_type": "authentication_issue",
+    "target": "https://example.com/register",
+    "source_tool": "zap",
+    "url": "https://example.com/register",
+    "confidence": 0.7
+  },
+  {
+    "id": "finding-6",
+    "title": "Missing HTTP Strict Transport Security Header",
+    "description": "The application does not use HTTP Strict Transport Security (HSTS) header, potentially allowing downgrade attacks and cookie hijacking.",
+    "severity": "Low",
+    "finding_type": "missing_headers",
+    "target": "https://example.com",
+    "source_tool": "zap",
+    "url": "https://example.com",
+    "confidence": 0.95
+  },
+  {
+    "id": "finding-7",
+    "title": "Sensitive Data Exposure in Error Messages",
+    "description": "Detailed error messages expose sensitive information about the application's internal workings, database structure, and file paths.",
+    "severity": "Medium",
+    "finding_type": "information_disclosure",
+    "target": "https://example.com/error",
+    "source_tool": "zap",
+    "url": "https://example.com/error",
+    "confidence": 0.6
+  },
+  {
+    "id": "finding-8",
+    "title": "Open Port 22 (SSH)",
+    "description": "SSH service is running on port 22 and accessible from the internet. While not a vulnerability itself, it increases the attack surface.",
+    "severity": "Info",
+    "finding_type": "port",
+    "target": "example.com",
+    "source_tool": "nmap",
+    "port": 22,
+    "protocol": "tcp",
+    "service": "SSH",
+    "confidence": 1.0
+  },
+  {
+    "id": "finding-9",
+    "title": "Path Traversal Vulnerability",
+    "description": "A path traversal vulnerability allows attackers to access files outside the web root directory by using '../' sequences in file paths. This could expose sensitive system files.",
+    "severity": "High",
+    "finding_type": "path_traversal",
+    "target": "https://example.com/download",
+    "source_tool": "zap",
+    "url": "https://example.com/download?file=../../../etc/passwd",
+    "confidence": 0.8
+  },
+  {
+    "id": "finding-10",
+    "title": "Outdated jQuery Library",
+    "description": "The application is using an outdated version of jQuery (1.8.3) with known security vulnerabilities.",
+    "severity": "Low",
+    "finding_type": "technology",
+    "target": "https://example.com",
+    "source_tool": "wappalyzer",
+    "technology": "jQuery",
+    "version": "1.8.3",
+    "confidence": 0.95
+  },
+  {
+    "id": "finding-11",
+    "title": "Cross-Site Request Forgery (CSRF)",
+    "description": "The application does not implement CSRF tokens for form submissions, making it vulnerable to cross-site request forgery attacks.",
+    "severity": "Medium",
+    "finding_type": "csrf",
+    "target": "https://example.com/account",
+    "source_tool": "zap",
+    "url": "https://example.com/account/update",
+    "confidence": 0.7
+  },
+  {
+    "id": "finding-12",
+    "title": "Subdomain Takeover Vulnerability",
+    "description": "A subdomain points to a decommissioned service, allowing potential takeover by creating an account on the service.",
+    "severity": "High",
+    "finding_type": "subdomain",
+    "target": "api.example.com",
+    "source_tool": "sublist3r",
+    "subdomain": "api.example.com",
+    "confidence": 0.6
+  },
+  {
+    "id": "finding-13",
+    "title": "Command Injection in Import Feature",
+    "description": "The import feature is vulnerable to command injection through maliciously crafted CSV files that can execute system commands when processed.",
+    "severity": "Critical",
+    "finding_type": "command_injection",
+    "target": "https://example.com/import",
+    "source_tool": "zap",
+    "url": "https://example.com/import",
+    "confidence": 0.85
+  },
+  {
+    "id": "finding-14",
+    "title": "Clickjacking Vulnerability",
+    "description": "The application does not set X-Frame-Options header, making it vulnerable to clickjacking attacks where the site could be loaded in an iframe.",
+    "severity": "Low",
+    "finding_type": "missing_headers",
+    "target": "https://example.com",
+    "source_tool": "zap",
+    "url": "https://example.com",
+    "confidence": 0.9
+  },
+  {
+    "id": "finding-15",
+    "title": "Directory Listing Enabled",
+    "description": "Directory listing is enabled, revealing the contents of directories when no index file is present. This could expose sensitive files.",
+    "severity": "Low",
+    "finding_type": "information_disclosure",
+    "target": "https://example.com/assets/",
+    "source_tool": "dirsearch",
+    "url": "https://example.com/assets/",
+    "confidence": 1.0
+  },
+  {
+    "id": "finding-16",
+    "title": "Session ID in URL",
+    "description": "Session identifiers are included in URLs, making them visible in browser history, referrer headers, and potentially stored in proxy logs.",
+    "severity": "Medium",
+    "finding_type": "session_management",
+    "target": "https://example.com/dashboard",
+    "source_tool": "zap",
+    "url": "https://example.com/dashboard?session=123456",
+    "confidence": 0.75
+  },
+  {
+    "id": "finding-17",
+    "title": "XML External Entity (XXE) Injection",
+    "description": "The XML parser in the application is vulnerable to XXE attacks, allowing attackers to read system files or perform server-side request forgery.",
+    "severity": "High",
+    "finding_type": "xxe",
+    "target": "https://example.com/api/xml",
+    "source_tool": "zap",
+    "url": "https://example.com/api/xml",
+    "confidence": 0.7
+  },
+  {
+    "id": "finding-18",
+    "title": "Insecure Cookie Settings",
+    "description": "Cookies are set without the secure and httpOnly flags, making them vulnerable to theft via XSS and man-in-the-middle attacks.",
+    "severity": "Medium",
+    "finding_type": "insecure_configuration",
+    "target": "https://example.com",
+    "source_tool": "zap",
+    "url": "https://example.com",
+    "confidence": 0.8
+  },
+  {
+    "id": "finding-19",
+    "title": "Sensitive Data in Local Storage",
+    "description": "Application stores sensitive user data in browser localStorage, which persists even after session ends and is accessible to any JavaScript on the page.",
+    "severity": "Medium",
+    "finding_type": "insecure_data_storage",
+    "target": "https://example.com",
+    "source_tool": "zap",
+    "url": "https://example.com",
+    "confidence": 0.65
+  },
+  {
+    "id": "finding-20",
+    "title": "Apache Server Version Disclosure",
+    "description": "The Apache server version is disclosed in HTTP headers, providing information that could be used to target specific vulnerabilities.",
+    "severity": "Info",
+    "finding_type": "information_disclosure",
+    "target": "https://example.com",
+    "source_tool": "nmap",
+    "confidence": 1.0
+  }
+] 
