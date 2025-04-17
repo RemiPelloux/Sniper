@@ -1,5 +1,6 @@
+from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -130,3 +131,21 @@ class TechnologyFinding(BaseFinding):
 # class VulnerabilityFinding(WebFinding):
 #     cwe: str | None = None
 #     cvss_score: float | None = None
+
+
+class ScanResult(BaseModel):
+    """Model representing a complete scan result."""
+
+    scan_id: str = Field(..., description="Unique identifier for the scan.")
+    target: str = Field(..., description="Target of the scan (domain, IP, etc.).")
+    start_time: Optional[datetime] = Field(None, description="When the scan started.")
+    end_time: Optional[datetime] = Field(None, description="When the scan completed.")
+    findings: List[BaseFinding] = Field(
+        default_factory=list, description="List of findings from the scan."
+    )
+    raw_results: Dict[str, Any] = Field(
+        default_factory=dict, description="Raw tool outputs by tool name."
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        None, description="Additional metadata about the scan."
+    )

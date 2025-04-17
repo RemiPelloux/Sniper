@@ -33,6 +33,7 @@ zaproxy = {version = "^0.4.0", optional = true}
 wappalyzer = {version = "^1.0.12", optional = true} # Requires Firefox and geckodriver
 nltk = "^3.9.1"
 joblib = "^1.4.2"
+psutil = "^7.0.0"
 
 [tool.poetry.extras]
 zap = ["zaproxy"]

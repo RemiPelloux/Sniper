@@ -5,9 +5,9 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
+import markdown
 import typer
 from rich.console import Console
-import markdown
 
 from src.reporting.html_generator import HTMLReportGenerator
 
@@ -106,7 +106,7 @@ def generate_report(
                 html_generator.generate(
                     scan_data=scan_data,
                     output_file=output_file,
-                    include_evidence=include_evidence
+                    include_evidence=include_evidence,
                 )
             elif report_format == ReportFormat.MARKDOWN:
                 # Generate a markdown report
@@ -115,7 +115,7 @@ def generate_report(
                         scan_data=scan_data,
                         template=template.value,
                         include_evidence=include_evidence,
-                        file=f
+                        file=f,
                     )
 
         typer.echo(f"Report generation complete. Reports saved to {output_dir}")
@@ -129,7 +129,7 @@ def generate_report(
 def generate_markdown_report(scan_data, template, include_evidence, file):
     """
     Generate a markdown report from scan data.
-    
+
     Args:
         scan_data: Dictionary containing scan results
         template: Template name to use
@@ -138,41 +138,43 @@ def generate_markdown_report(scan_data, template, include_evidence, file):
     """
     metadata = scan_data.get("scan_metadata", {})
     findings = scan_data.get("findings", [])
-    
+
     # Write report header
-    file.write(f"# Security Scan Report - {metadata.get('target', 'Unknown Target')}\n\n")
+    file.write(
+        f"# Security Scan Report - {metadata.get('target', 'Unknown Target')}\n\n"
+    )
     file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     file.write(f"Template: {template}\n\n")
-    
+
     # Write metadata
     file.write("## Scan Details\n\n")
     file.write(f"- **Target:** {metadata.get('target', 'Unknown')}\n")
     file.write(f"- **Scan Date:** {metadata.get('timestamp', 'Unknown')}\n")
     file.write(f"- **Duration:** {metadata.get('scan_duration', 'Unknown')}\n")
     file.write(f"- **Tools Used:** {', '.join(metadata.get('tools_used', []))}\n\n")
-    
+
     # Group findings by severity
     findings_by_severity = {
         "critical": [],
         "high": [],
         "medium": [],
         "low": [],
-        "info": []
+        "info": [],
     }
-    
+
     for finding in findings:
         severity = finding.get("severity", "").lower()
         if severity in findings_by_severity:
             findings_by_severity[severity].append(finding)
         else:
             findings_by_severity["info"].append(finding)
-    
+
     # Write findings sections
     severity_order = ["critical", "high", "medium", "low", "info"]
     for severity in severity_order:
         if findings_by_severity[severity]:
             file.write(f"## {severity.title()} Severity Findings\n\n")
-            
+
             for finding in findings_by_severity[severity]:
                 file.write(f"### {finding.get('title', 'Untitled Finding')}\n\n")
                 file.write(f"- **Location:** {finding.get('location', 'Unknown')}\n")
@@ -181,23 +183,25 @@ def generate_markdown_report(scan_data, template, include_evidence, file):
                 if "cve" in finding:
                     file.write(f"- **CVE:** {finding['cve']}\n")
                 file.write("\n")
-                
-                file.write(f"**Description:** {finding.get('description', 'No description')}\n\n")
-                
+
+                file.write(
+                    f"**Description:** {finding.get('description', 'No description')}\n\n"
+                )
+
                 if finding.get("remediation"):
                     file.write(f"**Remediation:** {finding['remediation']}\n\n")
-                
+
                 if include_evidence and finding.get("evidence"):
                     file.write("**Evidence:**\n\n```\n")
                     file.write(finding["evidence"])
                     file.write("\n```\n\n")
-                
+
                 if finding.get("references"):
                     file.write("**References:**\n\n")
                     for ref in finding["references"]:
                         file.write(f"- {ref}\n")
                     file.write("\n")
-    
+
     # If no findings were found
     if sum(len(findings_by_severity[sev]) for sev in severity_order) == 0:
         file.write("## Findings\n\n")

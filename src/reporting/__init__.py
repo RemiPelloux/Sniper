@@ -2,4 +2,4 @@
 
 from src.reporting.html_generator import HTMLReportGenerator
 
-__all__ = ["HTMLReportGenerator"] 
+__all__ = ["HTMLReportGenerator"]

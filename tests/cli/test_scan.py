@@ -1,8 +1,8 @@
 """Tests for the scan orchestration CLI module."""
 
-import os
 import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock, ANY
+import os
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 import typer
@@ -15,8 +15,8 @@ from src.cli.scan import (
     configure_scan_parameters,
     resolve_scan_modules,
 )
-from src.results.normalizer import ResultNormalizer
 from src.integrations.wappalyzer import WappalyzerIntegration
+from src.results.normalizer import ResultNormalizer
 
 runner = CliRunner()
 
@@ -87,24 +87,27 @@ def test_technology_scan_function(mock_wappalyzer_class):
     """Test the technology scan function wrapper."""
     target = "https://example.com"
     ignore_ssl = False
-    
+
     # Create a properly mocked integration object
     mock_instance = MagicMock()
     # The run method needs to be an AsyncMock to be awaitable
     mock_instance.run = AsyncMock()
     mock_instance.run.return_value = MagicMock()
     mock_instance.parse_output.return_value = []
-    
+
     # Make the constructor return our mocked instance
     mock_wappalyzer_class.return_value = mock_instance
-    
+
     # Call the function (wrap in asyncio.run since it's async)
     from src.cli.scan import run_technology_scan
+
     result = asyncio.run(run_technology_scan(target, ignore_ssl))
-    
+
     # Verify the instance was created and methods called with right args
     mock_wappalyzer_class.assert_called_once()
-    mock_instance.run.assert_called_once_with(target, options={"verify_ssl": not ignore_ssl})
+    mock_instance.run.assert_called_once_with(
+        target, options={"verify_ssl": not ignore_ssl}
+    )
     mock_instance.parse_output.assert_called_once()
     assert result == []
 
@@ -113,21 +116,22 @@ def test_technology_scan_function(mock_wappalyzer_class):
 def test_subdomain_scan_function(mock_sublist3r_class):
     """Test the subdomain scan function wrapper."""
     target = "https://example.com"
-    
+
     # Create a properly mocked integration object
     mock_instance = MagicMock()
     # The run method needs to be an AsyncMock to be awaitable
     mock_instance.run = AsyncMock()
     mock_instance.run.return_value = MagicMock()
     mock_instance.parse_output.return_value = []
-    
+
     # Make the constructor return our mocked instance
     mock_sublist3r_class.return_value = mock_instance
-    
+
     # Call the function (wrap in asyncio.run since it's async)
     from src.cli.scan import run_subdomain_scan
+
     result = asyncio.run(run_subdomain_scan(target))
-    
+
     # Verify the instance was created and methods called with right args
     mock_sublist3r_class.assert_called_once()
     mock_instance.run.assert_called_once_with(target)
@@ -140,21 +144,22 @@ def test_port_scan_function(mock_nmap_class):
     """Test the port scan function wrapper."""
     target = "https://example.com"
     depth = ScanDepth.STANDARD
-    
+
     # Create a properly mocked integration object
     mock_instance = MagicMock()
     # The run method needs to be an AsyncMock to be awaitable
     mock_instance.run = AsyncMock()
     mock_instance.run.return_value = MagicMock()
     mock_instance.parse_output.return_value = []
-    
+
     # Make the constructor return our mocked instance
     mock_nmap_class.return_value = mock_instance
-    
+
     # Call the function (wrap in asyncio.run since it's async)
     from src.cli.scan import run_port_scan
+
     result = asyncio.run(run_port_scan(target, depth))
-    
+
     # Verify the instance was created and methods called with right args
     mock_nmap_class.assert_called_once()
     mock_instance.run.assert_called_once_with(target, options={"ports": "top1000"})
@@ -168,30 +173,26 @@ def test_web_scan_function(mock_zap_class):
     target = "https://example.com"
     depth = ScanDepth.STANDARD
     ignore_ssl = False
-    
+
     # Create a properly mocked integration object
     mock_instance = MagicMock()
     # The run method needs to be an AsyncMock to be awaitable
     mock_instance.run = AsyncMock()
     mock_instance.run.return_value = MagicMock()
     mock_instance.parse_output.return_value = []
-    
+
     # Make the constructor return our mocked instance
     mock_zap_class.return_value = mock_instance
-    
+
     # Call the function (wrap in asyncio.run since it's async)
     from src.cli.scan import run_web_scan
+
     result = asyncio.run(run_web_scan(target, depth, ignore_ssl))
-    
+
     # Verify the instance was created and methods called with right args
     mock_zap_class.assert_called_once()
     mock_instance.run.assert_called_once_with(
-        target, 
-        options={
-            "active_scan": True,
-            "ajax_spider": False, 
-            "verify_ssl": True
-        }
+        target, options={"active_scan": True, "ajax_spider": False, "verify_ssl": True}
     )
     mock_instance.parse_output.assert_called_once()
     assert result == []
@@ -203,29 +204,26 @@ def test_directory_scan_function(mock_dirsearch_class):
     target = "https://example.com"
     depth = ScanDepth.STANDARD
     ignore_ssl = False
-    
+
     # Create a properly mocked integration object
     mock_instance = MagicMock()
     # The run method needs to be an AsyncMock to be awaitable
     mock_instance.run = AsyncMock()
     mock_instance.run.return_value = MagicMock()
     mock_instance.parse_output.return_value = []
-    
+
     # Make the constructor return our mocked instance
     mock_dirsearch_class.return_value = mock_instance
-    
+
     # Call the function (wrap in asyncio.run since it's async)
     from src.cli.scan import run_directory_scan
+
     result = asyncio.run(run_directory_scan(target, depth, ignore_ssl))
-    
+
     # Verify the instance was created and methods called with right args
     mock_dirsearch_class.assert_called_once()
     mock_instance.run.assert_called_once_with(
-        target, 
-        options={
-            "wordlist_size": "medium", 
-            "verify_ssl": True
-        }
+        target, options={"wordlist_size": "medium", "verify_ssl": True}
     )
     mock_instance.parse_output.assert_called_once()
     assert result == []
@@ -257,7 +255,7 @@ def test_scan_command_integration(
     # Test with invoke
     result = runner.invoke(app, ["https://example.com"])
     assert result.exit_code == 0
-    
+
     # Verify all scan functions were called
     mock_tech_scan.assert_called_once()
     mock_subdomain_scan.assert_called_once()
@@ -288,7 +286,7 @@ def test_scan_command_specific_module(
     # Test with invoke - specify only PORT and WEB modules
     result = runner.invoke(app, ["https://example.com", "-m", "ports", "-m", "web"])
     assert result.exit_code == 0
-    
+
     # Verify only specified scan functions were called
     mock_port_scan.assert_called_once()
     mock_web_scan.assert_called_once()
@@ -333,7 +331,7 @@ def test_scan_command_with_exception():
     """Test that scan command handles missing target parameter."""
     # Invoke command without a required target parameter
     result = runner.invoke(app)
-    
+
     # Expect non-zero exit code due to the missing param
     assert result.exit_code != 0
     assert "Error" in result.stdout or "Error" in result.stderr

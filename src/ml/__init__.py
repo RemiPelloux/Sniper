@@ -6,19 +6,18 @@ learning techniques, helping to prioritize findings and predict vulnerabilities.
 
 from src.ml.model import (
     VulnerabilityPredictor,
+    calculate_risk_scores,
     get_prediction_model,
     predict_vulnerabilities,
-    calculate_risk_scores
 )
-
 from src.ml.utils import (
-    extract_text_features,
-    normalize_features,
     calculate_vulnerability_score,
-    get_severity_value,
-    features_to_vector,
     evaluate_model_performance,
-    extract_finding_features
+    extract_finding_features,
+    extract_text_features,
+    features_to_vector,
+    get_severity_value,
+    normalize_features,
 )
 
 __all__ = [
@@ -27,7 +26,6 @@ __all__ = [
     "get_prediction_model",
     "predict_vulnerabilities",
     "calculate_risk_scores",
-    
     # Utility functions
     "extract_text_features",
     "normalize_features",
@@ -35,5 +33,5 @@ __all__ = [
     "get_severity_value",
     "features_to_vector",
     "evaluate_model_performance",
-    "extract_finding_features"
-] 
+    "extract_finding_features",
+]

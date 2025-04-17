@@ -9,17 +9,19 @@ import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from src.results.types import BaseFinding
 from src.integrations.dirsearch import DirsearchIntegration
 from src.integrations.nmap import NmapIntegration
 from src.integrations.owasp_zap import ZapIntegration
 from src.integrations.sublist3r import Sublist3rIntegration
 from src.integrations.wappalyzer import WappalyzerIntegration
 from src.results.normalizer import ResultNormalizer
+from src.results.types import BaseFinding
+
 
 # Define enums for scan functionality
 class ScanModule(str, Enum):
     """Scan modules that can be enabled or disabled."""
+
     TECHNOLOGIES = "technologies"
     SUBDOMAINS = "subdomains"
     PORTS = "ports"
@@ -27,11 +29,14 @@ class ScanModule(str, Enum):
     DIRECTORIES = "directories"
     ALL = "all"
 
+
 class ScanDepth(str, Enum):
     """Depth/intensity levels for scanning."""
+
     QUICK = "quick"
     STANDARD = "standard"
     COMPREHENSIVE = "comprehensive"
+
 
 log = logging.getLogger(__name__)
 console = Console()
@@ -40,36 +45,40 @@ app = typer.Typer()
 
 def validate_target_url(target: str) -> str:
     """Validate and normalize the target URL.
-    
+
     Args:
         target: The target URL, domain, or IP to validate
-        
+
     Returns:
         The normalized target URL
-        
+
     Raises:
         ValueError: If the target is invalid
     """
     # Simple validation for now - in a real implementation, this would do more
     if not target:
         raise ValueError("Target URL cannot be empty")
-    
+
     # Add http:// prefix if no protocol specified
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
-        
+
     return target
 
 
-def configure_scan_parameters(depth: ScanDepth, threads: int = 10, timeout: int = 3600) -> None:
+def configure_scan_parameters(
+    depth: ScanDepth, threads: int = 10, timeout: int = 3600
+) -> None:
     """Configure scan parameters based on depth.
-    
+
     Args:
         depth: The depth level of the scan
         threads: Number of threads to use
         timeout: Timeout for scan operations in seconds
     """
-    log.info(f"Configuring scan with depth={depth.value}, threads={threads}, timeout={timeout}sec")
+    log.info(
+        f"Configuring scan with depth={depth.value}, threads={threads}, timeout={timeout}sec"
+    )
     # This function could modify global scan parameters or return a config object
     # For now it just logs the configuration
 
@@ -142,7 +151,9 @@ def scan(
         try:
             # Run each selected module
             if ScanModule.TECHNOLOGIES.value in module_list:
-                technology_findings = asyncio.run(run_technology_scan(target, ignore_ssl))
+                technology_findings = asyncio.run(
+                    run_technology_scan(target, ignore_ssl)
+                )
                 all_findings.extend(technology_findings)
 
             if ScanModule.SUBDOMAINS.value in module_list:
@@ -158,7 +169,9 @@ def scan(
                 all_findings.extend(web_findings)
 
             if ScanModule.DIRECTORIES.value in module_list:
-                directory_findings = asyncio.run(run_directory_scan(target, depth, ignore_ssl))
+                directory_findings = asyncio.run(
+                    run_directory_scan(target, depth, ignore_ssl)
+                )
                 all_findings.extend(directory_findings)
 
         except Exception as e:
@@ -202,7 +215,7 @@ async def run_port_scan(target: str, depth: ScanDepth) -> List:
     """Run port scan using Nmap."""
     log.debug(f"Running port scan against {target} with depth {depth.value}")
     scanner = NmapIntegration()
-    
+
     # Configure scan parameters based on depth
     ports = None
     if depth == ScanDepth.QUICK:
@@ -210,7 +223,7 @@ async def run_port_scan(target: str, depth: ScanDepth) -> List:
     elif depth == ScanDepth.STANDARD:
         ports = "top1000"
     # Comprehensive uses default (all ports)
-    
+
     execution_result = await scanner.run(target, options={"ports": ports})
     return scanner.parse_output(execution_result) or []
 
@@ -219,16 +232,19 @@ async def run_web_scan(target: str, depth: ScanDepth, ignore_ssl: bool) -> List:
     """Run web vulnerability scan using OWASP ZAP."""
     log.debug(f"Running web scan against {target} with depth {depth.value}")
     scanner = ZapIntegration()
-    
+
     # Configure scan parameters based on depth
     active_scan = depth != ScanDepth.QUICK
     ajax_spider = depth == ScanDepth.COMPREHENSIVE
-    
-    execution_result = await scanner.run(target, options={
-        "active_scan": active_scan, 
-        "ajax_spider": ajax_spider, 
-        "verify_ssl": not ignore_ssl
-    })
+
+    execution_result = await scanner.run(
+        target,
+        options={
+            "active_scan": active_scan,
+            "ajax_spider": ajax_spider,
+            "verify_ssl": not ignore_ssl,
+        },
+    )
     return scanner.parse_output(execution_result) or []
 
 
@@ -236,18 +252,17 @@ async def run_directory_scan(target: str, depth: ScanDepth, ignore_ssl: bool) ->
     """Run directory discovery using Dirsearch."""
     log.debug(f"Running directory scan against {target} with depth {depth.value}")
     scanner = DirsearchIntegration()
-    
+
     # Configure scan parameters based on depth
     wordlist_size = "small"
     if depth == ScanDepth.STANDARD:
         wordlist_size = "medium"
     elif depth == ScanDepth.COMPREHENSIVE:
         wordlist_size = "large"
-    
-    execution_result = await scanner.run(target, options={
-        "wordlist_size": wordlist_size, 
-        "verify_ssl": not ignore_ssl
-    })
+
+    execution_result = await scanner.run(
+        target, options={"wordlist_size": wordlist_size, "verify_ssl": not ignore_ssl}
+    )
     return scanner.parse_output(execution_result) or []
 
 
