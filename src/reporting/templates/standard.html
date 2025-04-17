@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <h1>{{ title }}</h1>
+    
+    <section>
+        <h2>Overview</h2>
+        <p>This report provides the results of a security scan performed on {{ metadata.target }}.</p>
+        
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total }}</div>
+                <div class="stat-label">Total Findings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.critical }}</div>
+                <div class="stat-label">Critical</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.high }}</div>
+                <div class="stat-label">High</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.medium }}</div>
+                <div class="stat-label">Medium</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.risk_score }}</div>
+                <div class="stat-label">Risk Score (0-10)</div>
+            </div>
+        </div>
+        
+        <h3>Scan Details</h3>
+        <table>
+            <tr>
+                <th>Target</th>
+                <td>{{ metadata.target }}</td>
+            </tr>
+            <tr>
+                <th>Scan Date</th>
+                <td>{{ metadata.timestamp }}</td>
+            </tr>
+            <tr>
+                <th>Duration</th>
+                <td>{{ metadata.scan_duration }}</td>
+            </tr>
+            <tr>
+                <th>Tools Used</th>
+                <td>{{ metadata.tools_used | join(", ") }}</td>
+            </tr>
+        </table>
+    </section>
+    
+    {% if stats.total > 0 %}
+        {% if findings_by_severity.critical %}
+            <section>
+                <h2>Critical Findings</h2>
+                {% for finding in findings_by_severity.critical %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            </section>
+        {% endif %}
+        
+        {% if findings_by_severity.high %}
+            <section>
+                <h2>High Severity Findings</h2>
+                {% for finding in findings_by_severity.high %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            </section>
+        {% endif %}
+        
+        {% if findings_by_severity.medium %}
+            <section>
+                <h2>Medium Severity Findings</h2>
+                {% for finding in findings_by_severity.medium %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            </section>
+        {% endif %}
+        
+        {% if findings_by_severity.low %}
+            <section>
+                <h2>Low Severity Findings</h2>
+                {% for finding in findings_by_severity.low %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            </section>
+        {% endif %}
+        
+        {% if findings_by_severity.info %}
+            <section>
+                <h2>Informational Findings</h2>
+                {% for finding in findings_by_severity.info %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            </section>
+        {% endif %}
+    {% else %}
+        <section>
+            <h2>Findings</h2>
+            <p>No security issues were found during the scan.</p>
+        </section>
+    {% endif %}
+    
+    <section>
+        <h2>Recommendations</h2>
+        <p>Based on the scan results, here are the recommended actions:</p>
+        
+        {% if stats.by_severity.critical > 0 %}
+            <h3>Critical Priority</h3>
+            <p>Address all critical vulnerabilities immediately as they represent immediate security risks:</p>
+            <ul>
+                {% for finding in findings_by_severity.critical %}
+                    <li>{{ finding.title }} - {{ finding.location }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        {% if stats.by_severity.high > 0 %}
+            <h3>High Priority</h3>
+            <p>Address high severity vulnerabilities as soon as possible:</p>
+            <ul>
+                {% for finding in findings_by_severity.high %}
+                    <li>{{ finding.title }} - {{ finding.location }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        {% if stats.by_severity.medium > 0 or stats.by_severity.low > 0 %}
+            <h3>Additional Recommendations</h3>
+            <p>Review and address remaining issues according to your security priorities and resources.</p>
+        {% endif %}
+    </section>
+{% endblock %} 

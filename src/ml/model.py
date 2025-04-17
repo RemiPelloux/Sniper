@@ -34,7 +34,7 @@ from src.results.types import BaseFinding
 # from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Import Sniper modules
-from src.core.config import ConfigManager
+from src.core.config import settings
 from src.core.logging import setup_logging
 
 # Set up logging
@@ -42,8 +42,7 @@ logger = logging.getLogger(__name__)
 setup_logging()
 
 # Load configuration
-config_manager = ConfigManager()
-ml_config = config_manager.get_config().get("ml", {})
+ml_config = settings.tool_configs.get("ml", {})
 
 class VulnerabilityPredictor:
     """

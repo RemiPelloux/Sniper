@@ -7,6 +7,9 @@ from typing import List, Optional
 
 import typer
 from rich.console import Console
+import markdown
+
+from src.reporting.html_generator import HTMLReportGenerator
 
 app = typer.Typer(name="report", help="Generate and manage scan reports.")
 log = logging.getLogger(__name__)
@@ -93,19 +96,27 @@ def generate_report(
             )
             typer.echo(f"Generating {report_format.value} report to {output_file}...")
 
-            # Placeholder for actual report generation
-            # In a full implementation, this would call format-specific functions
-            with open(output_file, "w") as f:
-                if report_format == ReportFormat.JSON:
-                    # For JSON, just pretty-print the data
+            if report_format == ReportFormat.JSON:
+                # For JSON, just pretty-print the data
+                with open(output_file, "w") as f:
                     json.dump(scan_data, f, indent=2)
-                else:
-                    # For other formats, just write a placeholder
-                    f.write(f"# {report_format.value.upper()} Report\n\n")
-                    f.write(f"Generated: {datetime.now()}\n")
-                    f.write(f"Template: {template.value}\n")
-                    f.write(f"Include Evidence: {include_evidence}\n\n")
-                    f.write("Report content would be generated here.")
+            elif report_format == ReportFormat.HTML:
+                # Generate HTML report using our HTML generator
+                html_generator = HTMLReportGenerator(template_name=template.value)
+                html_generator.generate(
+                    scan_data=scan_data,
+                    output_file=output_file,
+                    include_evidence=include_evidence
+                )
+            elif report_format == ReportFormat.MARKDOWN:
+                # Generate a markdown report
+                with open(output_file, "w") as f:
+                    generate_markdown_report(
+                        scan_data=scan_data,
+                        template=template.value,
+                        include_evidence=include_evidence,
+                        file=f
+                    )
 
         typer.echo(f"Report generation complete. Reports saved to {output_dir}")
 
@@ -113,6 +124,84 @@ def generate_report(
         typer.echo(f"Error generating report: {str(e)}", err=True)
         log.error(f"Report generation failed: {str(e)}", exc_info=True)
         raise typer.Exit(code=1)
+
+
+def generate_markdown_report(scan_data, template, include_evidence, file):
+    """
+    Generate a markdown report from scan data.
+    
+    Args:
+        scan_data: Dictionary containing scan results
+        template: Template name to use
+        include_evidence: Whether to include detailed evidence
+        file: File object to write to
+    """
+    metadata = scan_data.get("scan_metadata", {})
+    findings = scan_data.get("findings", [])
+    
+    # Write report header
+    file.write(f"# Security Scan Report - {metadata.get('target', 'Unknown Target')}\n\n")
+    file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    file.write(f"Template: {template}\n\n")
+    
+    # Write metadata
+    file.write("## Scan Details\n\n")
+    file.write(f"- **Target:** {metadata.get('target', 'Unknown')}\n")
+    file.write(f"- **Scan Date:** {metadata.get('timestamp', 'Unknown')}\n")
+    file.write(f"- **Duration:** {metadata.get('scan_duration', 'Unknown')}\n")
+    file.write(f"- **Tools Used:** {', '.join(metadata.get('tools_used', []))}\n\n")
+    
+    # Group findings by severity
+    findings_by_severity = {
+        "critical": [],
+        "high": [],
+        "medium": [],
+        "low": [],
+        "info": []
+    }
+    
+    for finding in findings:
+        severity = finding.get("severity", "").lower()
+        if severity in findings_by_severity:
+            findings_by_severity[severity].append(finding)
+        else:
+            findings_by_severity["info"].append(finding)
+    
+    # Write findings sections
+    severity_order = ["critical", "high", "medium", "low", "info"]
+    for severity in severity_order:
+        if findings_by_severity[severity]:
+            file.write(f"## {severity.title()} Severity Findings\n\n")
+            
+            for finding in findings_by_severity[severity]:
+                file.write(f"### {finding.get('title', 'Untitled Finding')}\n\n")
+                file.write(f"- **Location:** {finding.get('location', 'Unknown')}\n")
+                file.write(f"- **Type:** {finding.get('type', 'Unknown')}\n")
+                file.write(f"- **Confidence:** {finding.get('confidence', 'Medium')}\n")
+                if "cve" in finding:
+                    file.write(f"- **CVE:** {finding['cve']}\n")
+                file.write("\n")
+                
+                file.write(f"**Description:** {finding.get('description', 'No description')}\n\n")
+                
+                if finding.get("remediation"):
+                    file.write(f"**Remediation:** {finding['remediation']}\n\n")
+                
+                if include_evidence and finding.get("evidence"):
+                    file.write("**Evidence:**\n\n```\n")
+                    file.write(finding["evidence"])
+                    file.write("\n```\n\n")
+                
+                if finding.get("references"):
+                    file.write("**References:**\n\n")
+                    for ref in finding["references"]:
+                        file.write(f"- {ref}\n")
+                    file.write("\n")
+    
+    # If no findings were found
+    if sum(len(findings_by_severity[sev]) for sev in severity_order) == 0:
+        file.write("## Findings\n\n")
+        file.write("No security issues were found during the scan.\n\n")
 
 
 @app.command("list-templates")

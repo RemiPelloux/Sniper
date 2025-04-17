@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Scan Report - https://example-vulnerable-site.com</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --text-color: #333;
+            --light-bg: #f8f9fa;
+            --dark-bg: #343a40;
+            --light-text: #f8f9fa;
+            --critical-color: #d63031;
+            --high-color: #e17055;
+            --medium-color: #fdcb6e;
+            --low-color: #00b894;
+            --info-color: #74b9ff;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--light-bg);
+            padding: 0;
+            margin: 0;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 20px;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .meta-info {
+            font-size: 14px;
+        }
+        
+        h1, h2, h3, h4 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+        }
+        
+        h1 {
+            font-size: 2rem;
+        }
+        
+        h2 {
+            font-size: 1.5rem;
+            border-bottom: 2px solid var(--secondary-color);
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+        
+        h3 {
+            font-size: 1.2rem;
+            margin-top: 20px;
+        }
+        
+        section {
+            margin-bottom: 30px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #777;
+        }
+        
+        .severity-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: white;
+            margin-right: 10px;
+        }
+        
+        .severity-critical {
+            background-color: var(--critical-color);
+        }
+        
+        .severity-high {
+            background-color: var(--high-color);
+        }
+        
+        .severity-medium {
+            background-color: var(--medium-color);
+            color: #333;
+        }
+        
+        .severity-low {
+            background-color: var(--low-color);
+        }
+        
+        .severity-info {
+            background-color: var(--info-color);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .finding-details {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        
+        .finding-details p {
+            margin-bottom: 10px;
+        }
+        
+        .collapsible {
+            cursor: pointer;
+            padding: 10px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .collapsible:after {
+            content: '\002B';
+            font-weight: bold;
+            float: right;
+            margin-left: 5px;
+        }
+        
+        .active:after {
+            content: "\2212";
+        }
+        
+        .content {
+            padding: 0 18px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+            background-color: #f8f9fa;
+            margin-bottom: 15px;
+        }
+        
+        .evidence-code {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid var(--secondary-color);
+            font-family: monospace;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            color: #777;
+            font-size: 0.9rem;
+            border-top: 1px solid #eee;
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .meta-info {
+                margin-top: 15px;
+            }
+            
+            .stats-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">Sniper Security Report</div>
+                <div class="meta-info">
+                    <div>Generated: 2023-06-15 10:30:00</div>
+                    <div>Report Type: Standard</div>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="container">
+    <h1>Security Scan Report - https://example-vulnerable-site.com</h1>
+    
+    <section>
+        <h2>Overview</h2>
+        <p>This report provides the results of a security scan performed on https://example-vulnerable-site.com.</p>
+        
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-value">8</div>
+                <div class="stat-label">Total Findings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">1</div>
+                <div class="stat-label">Critical</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">1</div>
+                <div class="stat-label">High</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">3</div>
+                <div class="stat-label">Medium</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">4.7</div>
+                <div class="stat-label">Risk Score (0-10)</div>
+            </div>
+        </div>
+        
+        <h3>Scan Details</h3>
+        <table>
+            <tr>
+                <th>Target</th>
+                <td>https://example-vulnerable-site.com</td>
+            </tr>
+            <tr>
+                <th>Scan Date</th>
+                <td>2023-06-15T10:30:00Z</td>
+            </tr>
+            <tr>
+                <th>Duration</th>
+                <td>00:15:30</td>
+            </tr>
+            <tr>
+                <th>Tools Used</th>
+                <td>nmap, zap, wappalyzer, sublist3r</td>
+            </tr>
+        </table>
+    </section>
+    
+            <section>
+                <h2>Critical Findings</h2>
+<div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-critical">CRITICAL</span>
+            <strong>SQL Injection Vulnerability</strong> /login.php
+        </div>
+        <div>high Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> SQL injection vulnerability found in login form that allows an attacker to bypass authentication and potentially access, modify, or delete data from the database.</p>
+            <p><strong>Type:</strong> vulnerability</p>
+            <p><strong>Location:</strong> /login.php</p>
+            <p><strong>Confidence:</strong> high</p>
+            
+                <p><strong>Remediation:</strong> Use prepared statements and parameterized queries instead of direct string concatenation. Implement proper input validation and use an ORM or database abstraction layer that automatically escapes parameters.</p>
+            
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">POST parameter &#39;username&#39; is vulnerable to SQL injection. When testing with the payload &#39; OR 1=1 -- -&#39;, the application returns a successful login response.</div>
+            
+                <p><strong>References:</strong></p>
+                <ul>
+                        <li><a href="https://owasp.org/www-community/attacks/SQL_Injection" target="_blank">https://owasp.org/www-community/attacks/SQL_Injection</a></li>
+                        <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html" target="_blank">https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html</a></li>
+                </ul>
+        </div>
+    </div>
+</div>             </section>
+        
+            <section>
+                <h2>High Severity Findings</h2>
+<div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-high">HIGH</span>
+            <strong>Cross-Site Scripting (XSS)</strong> /search.php?q=
+        </div>
+        <div>medium Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> Reflected XSS vulnerability in search function allows attackers to inject malicious scripts that execute in the context of other users&#39; browsers.</p>
+            <p><strong>Type:</strong> vulnerability</p>
+            <p><strong>Location:</strong> /search.php?q=</p>
+            <p><strong>Confidence:</strong> medium</p>
+            
+                <p><strong>Remediation:</strong> Implement proper output encoding for all user-controlled data before inserting it into HTML. Use Content-Security-Policy headers to restrict script execution sources.</p>
+            
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">Parameter &#39;q&#39; is reflected without proper encoding. When testing with the payload &lt;script&gt;alert(&#39;XSS&#39;)&lt;/script&gt;, the JavaScript code executes in the browser.</div>
+            
+                <p><strong>References:</strong></p>
+                <ul>
+                        <li><a href="https://owasp.org/www-community/attacks/xss/" target="_blank">https://owasp.org/www-community/attacks/xss/</a></li>
+                        <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html" target="_blank">https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html</a></li>
+                </ul>
+        </div>
+    </div>
+</div>             </section>
+        
+            <section>
+                <h2>Medium Severity Findings</h2>
+<div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-medium">MEDIUM</span>
+            <strong>Missing HTTP Security Headers</strong> All pages
+        </div>
+        <div>high Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> Several important security headers are missing from the HTTP responses, which could make the application more vulnerable to various attacks.</p>
+            <p><strong>Type:</strong> misconfiguration</p>
+            <p><strong>Location:</strong> All pages</p>
+            <p><strong>Confidence:</strong> high</p>
+            
+                <p><strong>Remediation:</strong> Configure the web server or application to include appropriate security headers in all HTTP responses. Implement a Content Security Policy that restricts resource loading to trusted sources.</p>
+            
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">The following headers are missing: Content-Security-Policy, X-XSS-Protection, X-Content-Type-Options, Referrer-Policy, Permissions-Policy</div>
+            
+                <p><strong>References:</strong></p>
+                <ul>
+                        <li><a href="https://owasp.org/www-project-secure-headers/" target="_blank">https://owasp.org/www-project-secure-headers/</a></li>
+                        <li><a href="https://securityheaders.com/" target="_blank">https://securityheaders.com/</a></li>
+                </ul>
+        </div>
+    </div>
+</div> <div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-medium">MEDIUM</span>
+            <strong>Insecure Cookies</strong> All pages
+        </div>
+        <div>high Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> Session cookies are set without the Secure and HttpOnly flags, making them vulnerable to theft through man-in-the-middle attacks and client-side scripts.</p>
+            <p><strong>Type:</strong> misconfiguration</p>
+            <p><strong>Location:</strong> All pages</p>
+            <p><strong>Confidence:</strong> high</p>
+            
+                <p><strong>Remediation:</strong> Set the Secure flag to ensure cookies are only sent over HTTPS connections. Set the HttpOnly flag to prevent client-side script access to cookies. Consider implementing the SameSite attribute to prevent CSRF attacks.</p>
+            
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">Set-Cookie: PHPSESSID=abcdef123456; path=/</div>
+            
+                <p><strong>References:</strong></p>
+                <ul>
+                        <li><a href="https://owasp.org/www-community/controls/SecureCookieAttribute" target="_blank">https://owasp.org/www-community/controls/SecureCookieAttribute</a></li>
+                        <li><a href="https://owasp.org/www-community/HttpOnly" target="_blank">https://owasp.org/www-community/HttpOnly</a></li>
+                </ul>
+        </div>
+    </div>
+</div> <div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-medium">MEDIUM</span>
+            <strong>Directory Listing Enabled</strong> /uploads/
+        </div>
+        <div>high Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> Directory listing is enabled on the server, allowing attackers to browse directory contents and potentially access sensitive files.</p>
+            <p><strong>Type:</strong> misconfiguration</p>
+            <p><strong>Location:</strong> /uploads/</p>
+            <p><strong>Confidence:</strong> high</p>
+            
+                <p><strong>Remediation:</strong> Disable directory listing in the web server configuration. For Apache, use &#39;Options -Indexes&#39; in your .htaccess or httpd.conf file. For Nginx, remove the &#39;autoindex on&#39; directive.</p>
+            
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">When accessing /uploads/ directory, the server returns a listing of all files instead of a 403 Forbidden or custom error page.</div>
+            
+                <p><strong>References:</strong></p>
+                <ul>
+                        <li><a href="https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/04-Review_Old_Backup_and_Unreferenced_Files_for_Sensitive_Information.html" target="_blank">https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/04-Review_Old_Backup_and_Unreferenced_Files_for_Sensitive_Information.html</a></li>
+                </ul>
+        </div>
+    </div>
+</div>             </section>
+        
+            <section>
+                <h2>Low Severity Findings</h2>
+<div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-low">LOW</span>
+            <strong>Open Ports</strong> Server
+        </div>
+        <div>high Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> Multiple network services were detected running on the target host.</p>
+            <p><strong>Type:</strong> information</p>
+            <p><strong>Location:</strong> Server</p>
+            <p><strong>Confidence:</strong> high</p>
+            
+                <p><strong>Remediation:</strong> Restrict access to necessary services only. Use a firewall to limit access to required ports and consider implementing network segmentation to isolate critical services.</p>
+            
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">Ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3306 (MySQL)</div>
+            
+                <p><strong>References:</strong></p>
+                <ul>
+                        <li><a href="https://www.sans.org/security-resources/policies/general/pdf/firewall-security-policy" target="_blank">https://www.sans.org/security-resources/policies/general/pdf/firewall-security-policy</a></li>
+                </ul>
+        </div>
+    </div>
+</div> <div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-low">LOW</span>
+            <strong>Information Disclosure</strong> HTTP Headers
+        </div>
+        <div>medium Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> Server is revealing version information in HTTP headers, which could help attackers identify vulnerable components.</p>
+            <p><strong>Type:</strong> vulnerability</p>
+            <p><strong>Location:</strong> HTTP Headers</p>
+            <p><strong>Confidence:</strong> medium</p>
+            
+                <p><strong>Remediation:</strong> Configure the web server to remove or sanitize version information from HTTP headers. Use security headers like &#39;Server-Tokens: prod&#39; to minimize information leakage.</p>
+            
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">Server: Apache/2.4.41 (Ubuntu)
+X-Powered-By: PHP/7.4.3</div>
+            
+                <p><strong>References:</strong></p>
+                <ul>
+                        <li><a href="https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/01-Information_Gathering/02-Fingerprint_Web_Server.html" target="_blank">https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/01-Information_Gathering/02-Fingerprint_Web_Server.html</a></li>
+                </ul>
+        </div>
+    </div>
+</div>             </section>
+        
+            <section>
+                <h2>Informational Findings</h2>
+<div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-info">INFO</span>
+            <strong>WordPress Installation Detected</strong> /
+        </div>
+        <div>high Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> WordPress content management system was detected on the target site.</p>
+            <p><strong>Type:</strong> technology</p>
+            <p><strong>Location:</strong> /</p>
+            <p><strong>Confidence:</strong> high</p>
+            
+                <p><strong>Remediation:</strong> Ensure WordPress is updated to the latest version. Remove unnecessary plugins and themes. Consider implementing a Web Application Firewall to protect against common WordPress attacks.</p>
+            
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">WordPress meta tags and script references detected. Version: 5.8.2</div>
+            
+                <p><strong>References:</strong></p>
+                <ul>
+                        <li><a href="https://wordpress.org/support/article/hardening-wordpress/" target="_blank">https://wordpress.org/support/article/hardening-wordpress/</a></li>
+                </ul>
+        </div>
+    </div>
+</div>             </section>
+    
+    <section>
+        <h2>Recommendations</h2>
+        <p>Based on the scan results, here are the recommended actions:</p>
+        
+            <h3>Critical Priority</h3>
+            <p>Address all critical vulnerabilities immediately as they represent immediate security risks:</p>
+            <ul>
+                    <li>SQL Injection Vulnerability - /login.php</li>
+            </ul>
+        
+            <h3>High Priority</h3>
+            <p>Address high severity vulnerabilities as soon as possible:</p>
+            <ul>
+                    <li>Cross-Site Scripting (XSS) - /search.php?q=</li>
+            </ul>
+        
+            <h3>Additional Recommendations</h3>
+            <p>Review and address remaining issues according to your security priorities and resources.</p>
+    </section>
+    </div>
+    
+    <footer>
+        <div class="container">
+            <p>Generated by Sniper Security Scanner (v1.0.0)</p>
+            <p>Report generated on 2023-06-15 10:30:00</p>
+        </div>
+    </footer>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var coll = document.getElementsByClassName("collapsible");
+            for (var i = 0; i < coll.length; i++) {
+                coll[i].addEventListener("click", function() {
+                    this.classList.toggle("active");
+                    var content = this.nextElementSibling;
+                    if (content.style.maxHeight) {
+                        content.style.maxHeight = null;
+                    } else {
+                        content.style.maxHeight = content.scrollHeight + "px";
+                    }
+                });
+            }
+        });
+    </script>
+    
+</body>
+</html> 

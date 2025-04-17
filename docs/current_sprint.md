@@ -37,8 +37,8 @@
 **Tasks Completed:**
 1. ✅ Enhanced OWASP ZAP integration with authentication support
 2. ✅ Implemented basic ML model for vulnerability prediction
-3. [ ] Add Docker containerization support
-4. [ ] Enhance reporting module with HTML output
+3. ✅ Add Docker containerization support
+4. ✅ Enhance reporting module with HTML output
 5. ✅ Improved documentation for all integrations
 6. [ ] Add interactive CLI mode for easier usage
 7. [ ] Configure CI/CD pipeline for automated testing
@@ -57,6 +57,13 @@
   - ✅ Finding loader utilities for parsing and handling security findings
   - ✅ Comprehensive unit tests with good coverage
 - OWASP ZAP integration has been enhanced with more comprehensive documentation and improved error handling
+- Docker containerization is now supported with a Dockerfile and docker-compose configuration
+- HTML report generation is now implemented with:
+  - ✅ Multiple templates (standard, executive, detailed)
+  - ✅ Responsive design for viewing on different devices
+  - ✅ Interactive elements for better user experience
+  - ✅ Support for evidence inclusion/exclusion
+  - ✅ Jinja2 templating for maintainable and extensible reports
 - Test coverage is now at 85.62%, slightly above our target
 - Documentation has been updated for all completed components
 
@@ -67,6 +74,9 @@
 - The CLI ML module supports various output formats (JSON, CSV, text) and visualization types
 - All ML module code has comprehensive unit tests with good coverage
 - ML functionality is fully integrated into the main CLI interface
+- Docker setup includes a dedicated OWASP ZAP service for web scanning
+- HTML report templates provide professional, formatted security reports
+- The reporting module now supports Markdown, HTML, and JSON output formats
 
 ## Sprint 4 (Planned)
 
@@ -88,7 +98,6 @@
 
 **Deferred from Previous Sprints:**
 - [ ] Add Docker containerization support
-- [ ] Enhance reporting module with HTML output
 - [ ] Add interactive CLI mode for easier usage
 - [ ] Configure CI/CD pipeline for automated testing
 - [ ] Add configuration wizard for easier setup

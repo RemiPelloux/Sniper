@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  sniper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    entrypoint: ["python", "-m", "src.cli.scan"]
+    command: ["--help"]
+  
+  # OWASP ZAP service
+  zap:
+    image: owasp/zap2docker-stable
+    volumes:
+      - ./data:/zap/wrk
+    ports:
+      - "8080:8080"
+      - "8090:8090"
+    command: zap-webswing.sh
+    environment:
+      - ZAP_PORT=8080
+    
+
+networks:
+  default:
+    driver: bridge 

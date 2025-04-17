@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Detailed Technical Report - {{ title }}{% endblock %}
+
+{% block content %}
+    <h1>Detailed Technical Report</h1>
+    
+    <section>
+        <h2>Scan Information</h2>
+        <table>
+            <tr>
+                <th>Target</th>
+                <td>{{ metadata.target }}</td>
+            </tr>
+            <tr>
+                <th>Scan Date</th>
+                <td>{{ metadata.timestamp }}</td>
+            </tr>
+            <tr>
+                <th>Duration</th>
+                <td>{{ metadata.scan_duration }}</td>
+            </tr>
+            <tr>
+                <th>Scan Depth</th>
+                <td>{{ metadata.scan_depth | default('Standard') }}</td>
+            </tr>
+            <tr>
+                <th>Tools Used</th>
+                <td>{{ metadata.tools_used | join(', ') }}</td>
+            </tr>
+            <tr>
+                <th>Scan Options</th>
+                <td>
+                    <ul>
+                        {% for key, value in metadata.scan_options.items() %}
+                            <li><strong>{{ key }}:</strong> {{ value }}</li>
+                        {% endfor %}
+                    </ul>
+                </td>
+            </tr>
+        </table>
+    </section>
+    
+    <section>
+        <h2>Summary Statistics</h2>
+        
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total }}</div>
+                <div class="stat-label">Total Findings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.critical }}</div>
+                <div class="stat-label">Critical</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.high }}</div>
+                <div class="stat-label">High</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.medium }}</div>
+                <div class="stat-label">Medium</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.low }}</div>
+                <div class="stat-label">Low</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.info }}</div>
+                <div class="stat-label">Info</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.risk_score }}</div>
+                <div class="stat-label">Risk Score (0-10)</div>
+            </div>
+        </div>
+        
+        <h3>Findings by Type</h3>
+        <table>
+            <tr>
+                <th>Finding Type</th>
+                <th>Count</th>
+            </tr>
+            {% for type, count in stats.by_type.items() %}
+                <tr>
+                    <td>{{ type }}</td>
+                    <td>{{ count }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    </section>
+    
+    <section>
+        <h2>All Findings</h2>
+        
+        {% if stats.total == 0 %}
+            <p>No findings were discovered during this scan.</p>
+        {% else %}
+            <p>The scan discovered {{ stats.total }} findings across all severity levels. All findings are listed below with full technical details.</p>
+            
+            {% if stats.by_severity.critical %}
+                <h3>Critical Severity Findings</h3>
+                {% for finding in findings_by_severity.critical %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            {% endif %}
+            
+            {% if stats.by_severity.high %}
+                <h3>High Severity Findings</h3>
+                {% for finding in findings_by_severity.high %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            {% endif %}
+            
+            {% if stats.by_severity.medium %}
+                <h3>Medium Severity Findings</h3>
+                {% for finding in findings_by_severity.medium %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            {% endif %}
+            
+            {% if stats.by_severity.low %}
+                <h3>Low Severity Findings</h3>
+                {% for finding in findings_by_severity.low %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            {% endif %}
+            
+            {% if stats.by_severity.info %}
+                <h3>Informational Findings</h3>
+                {% for finding in findings_by_severity.info %}
+                    {% include "partials/finding_card.html" %}
+                {% endfor %}
+            {% endif %}
+        {% endif %}
+    </section>
+    
+    <section>
+        <h2>Technical Details</h2>
+        
+        <h3>Scan Methodology</h3>
+        <p>This security assessment was conducted using a combination of automated scanning tools and analysis techniques. The scan methodology included:</p>
+        <ul>
+            <li>Network port scanning and service detection</li>
+            <li>Web application vulnerability testing</li>
+            <li>Technology stack identification</li>
+            <li>Common vulnerability checks</li>
+            <li>Configuration analysis</li>
+        </ul>
+        
+        <h3>Tool-Specific Details</h3>
+        <p>The following tools were used during this assessment:</p>
+        <ul>
+            {% for tool in metadata.tools_used %}
+                <li><strong>{{ tool }}</strong>
+                    {% if tool == 'nmap' %}
+                        - Used for port scanning and service discovery
+                    {% elif tool == 'zap' %}
+                        - Used for web application vulnerability scanning
+                    {% elif tool == 'wappalyzer' %}
+                        - Used for technology stack identification
+                    {% elif tool == 'sublist3r' %}
+                        - Used for subdomain enumeration
+                    {% elif tool == 'dirsearch' %}
+                        - Used for directory and file discovery
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+        
+        {% if metadata.get('scan_logs') %}
+            <h3>Scan Logs</h3>
+            <div class="evidence-code">{{ metadata.scan_logs }}</div>
+        {% endif %}
+    </section>
+    
+    <section>
+        <h2>Remediation Recommendations</h2>
+        
+        {% if stats.by_severity.critical > 0 %}
+            <h3>Critical Issues - Immediate Action Required</h3>
+            <ul>
+                {% for finding in findings_by_severity.critical %}
+                    <li>
+                        <strong>{{ finding.title }}</strong> ({{ finding.location }})
+                        {% if finding.remediation %}
+                            <div>{{ finding.remediation }}</div>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        {% if stats.by_severity.high > 0 %}
+            <h3>High Severity Issues - Urgent Action Required</h3>
+            <ul>
+                {% for finding in findings_by_severity.high %}
+                    <li>
+                        <strong>{{ finding.title }}</strong> ({{ finding.location }})
+                        {% if finding.remediation %}
+                            <div>{{ finding.remediation }}</div>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        {% if stats.by_severity.medium > 0 %}
+            <h3>Medium Severity Issues - Planned Action Required</h3>
+            <ul>
+                {% for finding in findings_by_severity.medium %}
+                    <li>
+                        <strong>{{ finding.title }}</strong> ({{ finding.location }})
+                        {% if finding.remediation %}
+                            <div>{{ finding.remediation }}</div>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        <h3>General Security Recommendations</h3>
+        <ul>
+            <li>Implement regular security assessments to identify vulnerabilities early</li>
+            <li>Maintain up-to-date security patches for all systems and applications</li>
+            <li>Follow security best practices for system configuration and deployment</li>
+            <li>Implement security controls following the principle of least privilege</li>
+            <li>Provide security awareness training for all team members</li>
+        </ul>
+    </section>
+    
+    {% if metadata.get('additional_notes') %}
+        <section>
+            <h2>Additional Notes</h2>
+            <p>{{ metadata.additional_notes }}</p>
+        </section>
+    {% endif %}
+{% endblock %}

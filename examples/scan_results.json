@@ -1,0 +1,123 @@
+{
+  "scan_metadata": {
+    "target": "https://example-vulnerable-site.com",
+    "timestamp": "2023-06-15T10:30:00Z",
+    "scan_duration": "00:15:30",
+    "tools_used": ["nmap", "zap", "wappalyzer", "sublist3r"],
+    "scan_options": {
+      "depth": "full",
+      "ports": "1-1000",
+      "threads": 10
+    }
+  },
+  "findings": [
+    {
+      "title": "SQL Injection Vulnerability",
+      "severity": "critical",
+      "type": "vulnerability",
+      "description": "SQL injection vulnerability found in login form that allows an attacker to bypass authentication and potentially access, modify, or delete data from the database.",
+      "location": "/login.php",
+      "confidence": "high",
+      "evidence": "POST parameter 'username' is vulnerable to SQL injection. When testing with the payload ' OR 1=1 -- -', the application returns a successful login response.",
+      "remediation": "Use prepared statements and parameterized queries instead of direct string concatenation. Implement proper input validation and use an ORM or database abstraction layer that automatically escapes parameters.",
+      "references": [
+        "https://owasp.org/www-community/attacks/SQL_Injection",
+        "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+      ]
+    },
+    {
+      "title": "Cross-Site Scripting (XSS)",
+      "severity": "high",
+      "type": "vulnerability",
+      "description": "Reflected XSS vulnerability in search function allows attackers to inject malicious scripts that execute in the context of other users' browsers.",
+      "location": "/search.php?q=",
+      "confidence": "medium",
+      "evidence": "Parameter 'q' is reflected without proper encoding. When testing with the payload <script>alert('XSS')</script>, the JavaScript code executes in the browser.",
+      "remediation": "Implement proper output encoding for all user-controlled data before inserting it into HTML. Use Content-Security-Policy headers to restrict script execution sources.",
+      "references": [
+        "https://owasp.org/www-community/attacks/xss/",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+      ]
+    },
+    {
+      "title": "Missing HTTP Security Headers",
+      "severity": "medium",
+      "type": "misconfiguration",
+      "description": "Several important security headers are missing from the HTTP responses, which could make the application more vulnerable to various attacks.",
+      "location": "All pages",
+      "confidence": "high",
+      "evidence": "The following headers are missing: Content-Security-Policy, X-XSS-Protection, X-Content-Type-Options, Referrer-Policy, Permissions-Policy",
+      "remediation": "Configure the web server or application to include appropriate security headers in all HTTP responses. Implement a Content Security Policy that restricts resource loading to trusted sources.",
+      "references": [
+        "https://owasp.org/www-project-secure-headers/",
+        "https://securityheaders.com/"
+      ]
+    },
+    {
+      "title": "Insecure Cookies",
+      "severity": "medium",
+      "type": "misconfiguration",
+      "description": "Session cookies are set without the Secure and HttpOnly flags, making them vulnerable to theft through man-in-the-middle attacks and client-side scripts.",
+      "location": "All pages",
+      "confidence": "high",
+      "evidence": "Set-Cookie: PHPSESSID=abcdef123456; path=/",
+      "remediation": "Set the Secure flag to ensure cookies are only sent over HTTPS connections. Set the HttpOnly flag to prevent client-side script access to cookies. Consider implementing the SameSite attribute to prevent CSRF attacks.",
+      "references": [
+        "https://owasp.org/www-community/controls/SecureCookieAttribute",
+        "https://owasp.org/www-community/HttpOnly"
+      ]
+    },
+    {
+      "title": "Open Ports",
+      "severity": "low",
+      "type": "information",
+      "description": "Multiple network services were detected running on the target host.",
+      "location": "Server",
+      "confidence": "high",
+      "evidence": "Ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3306 (MySQL)",
+      "remediation": "Restrict access to necessary services only. Use a firewall to limit access to required ports and consider implementing network segmentation to isolate critical services.",
+      "references": [
+        "https://www.sans.org/security-resources/policies/general/pdf/firewall-security-policy"
+      ]
+    },
+    {
+      "title": "Information Disclosure",
+      "severity": "low",
+      "type": "vulnerability",
+      "description": "Server is revealing version information in HTTP headers, which could help attackers identify vulnerable components.",
+      "location": "HTTP Headers",
+      "confidence": "medium",
+      "evidence": "Server: Apache/2.4.41 (Ubuntu)\nX-Powered-By: PHP/7.4.3",
+      "remediation": "Configure the web server to remove or sanitize version information from HTTP headers. Use security headers like 'Server-Tokens: prod' to minimize information leakage.",
+      "references": [
+        "https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/01-Information_Gathering/02-Fingerprint_Web_Server.html"
+      ]
+    },
+    {
+      "title": "WordPress Installation Detected",
+      "severity": "info",
+      "type": "technology",
+      "description": "WordPress content management system was detected on the target site.",
+      "location": "/",
+      "confidence": "high",
+      "evidence": "WordPress meta tags and script references detected. Version: 5.8.2",
+      "remediation": "Ensure WordPress is updated to the latest version. Remove unnecessary plugins and themes. Consider implementing a Web Application Firewall to protect against common WordPress attacks.",
+      "references": [
+        "https://wordpress.org/support/article/hardening-wordpress/"
+      ]
+    },
+    {
+      "title": "Directory Listing Enabled",
+      "severity": "medium",
+      "type": "misconfiguration",
+      "description": "Directory listing is enabled on the server, allowing attackers to browse directory contents and potentially access sensitive files.",
+      "location": "/uploads/",
+      "confidence": "high",
+      "evidence": "When accessing /uploads/ directory, the server returns a listing of all files instead of a 403 Forbidden or custom error page.",
+      "remediation": "Disable directory listing in the web server configuration. For Apache, use 'Options -Indexes' in your .htaccess or httpd.conf file. For Nginx, remove the 'autoindex on' directive.",
+      "references": [
+        "https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/04-Review_Old_Backup_and_Unreferenced_Files_for_Sensitive_Information.html"
+      ]
+    }
+  ]
+} 

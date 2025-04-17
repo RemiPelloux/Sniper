@@ -1,0 +1,38 @@
+<div class="finding">
+    <button class="collapsible">
+        <div>
+            <span class="severity-badge severity-{{ finding.severity | lower }}">{{ finding.severity | upper }}</span>
+            <strong>{{ finding.title }}</strong> {{ finding.location }}
+        </div>
+        <div>{{ finding.confidence | default('Medium') }} Confidence</div>
+    </button>
+    <div class="content">
+        <div class="finding-details">
+            <p><strong>Description:</strong> {{ finding.description }}</p>
+            <p><strong>Type:</strong> {{ finding.type }}</p>
+            {% if finding.cve %}
+                <p><strong>CVE:</strong> <a href="https://nvd.nist.gov/vuln/detail/{{ finding.cve }}" target="_blank">{{ finding.cve }}</a></p>
+            {% endif %}
+            <p><strong>Location:</strong> {{ finding.location }}</p>
+            <p><strong>Confidence:</strong> {{ finding.confidence | default('Medium') }}</p>
+            
+            {% if finding.remediation %}
+                <p><strong>Remediation:</strong> {{ finding.remediation }}</p>
+            {% endif %}
+            
+            {% if include_evidence and finding.evidence %}
+                <p><strong>Evidence:</strong></p>
+                <div class="evidence-code">{{ finding.evidence }}</div>
+            {% endif %}
+            
+            {% if finding.references %}
+                <p><strong>References:</strong></p>
+                <ul>
+                    {% for ref in finding.references %}
+                        <li><a href="{{ ref }}" target="_blank">{{ ref }}</a></li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+</div> 

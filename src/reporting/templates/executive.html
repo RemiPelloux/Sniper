@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Executive Summary - {{ title }}{% endblock %}
+
+{% block content %}
+    <h1>Executive Summary</h1>
+    
+    <section>
+        <h2>Overview</h2>
+        <p>This executive summary provides a high-level overview of the security assessment performed on {{ metadata.target }}.</p>
+        
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.risk_score }}</div>
+                <div class="stat-label">Overall Risk Score (0-10)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.total }}</div>
+                <div class="stat-label">Total Findings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.by_severity.critical + stats.by_severity.high }}</div>
+                <div class="stat-label">Critical/High Issues</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ metadata.tools_used | length }}</div>
+                <div class="stat-label">Assessment Tools</div>
+            </div>
+        </div>
+        
+        <h3>Assessment Details</h3>
+        <table>
+            <tr>
+                <th>Target</th>
+                <td>{{ metadata.target }}</td>
+            </tr>
+            <tr>
+                <th>Assessment Date</th>
+                <td>{{ metadata.timestamp }}</td>
+            </tr>
+            <tr>
+                <th>Duration</th>
+                <td>{{ metadata.scan_duration }}</td>
+            </tr>
+        </table>
+    </section>
+    
+    <section>
+        <h2>Key Findings</h2>
+        
+        {% if stats.total == 0 %}
+            <p>No security issues were identified during the assessment.</p>
+        {% else %}
+            <p>The security assessment identified several areas of concern:</p>
+            
+            <table>
+                <tr>
+                    <th>Severity</th>
+                    <th>Count</th>
+                    <th>Risk Impact</th>
+                </tr>
+                <tr>
+                    <td><span class="severity-badge severity-critical">CRITICAL</span></td>
+                    <td>{{ stats.by_severity.critical }}</td>
+                    <td>Immediate compromise of systems/data possible</td>
+                </tr>
+                <tr>
+                    <td><span class="severity-badge severity-high">HIGH</span></td>
+                    <td>{{ stats.by_severity.high }}</td>
+                    <td>Significant risk to sensitive systems/data</td>
+                </tr>
+                <tr>
+                    <td><span class="severity-badge severity-medium">MEDIUM</span></td>
+                    <td>{{ stats.by_severity.medium }}</td>
+                    <td>Moderate risk requiring timely remediation</td>
+                </tr>
+                <tr>
+                    <td><span class="severity-badge severity-low">LOW</span></td>
+                    <td>{{ stats.by_severity.low }}</td>
+                    <td>Limited risk, should be addressed as resources permit</td>
+                </tr>
+                <tr>
+                    <td><span class="severity-badge severity-info">INFO</span></td>
+                    <td>{{ stats.by_severity.info }}</td>
+                    <td>Informational items requiring no immediate action</td>
+                </tr>
+            </table>
+            
+            {% if stats.by_severity.critical > 0 or stats.by_severity.high > 0 %}
+                <h3>Critical and High Risk Issues</h3>
+                <table>
+                    <tr>
+                        <th>Issue</th>
+                        <th>Severity</th>
+                        <th>Location</th>
+                    </tr>
+                    {% for finding in findings_by_severity.critical %}
+                        <tr>
+                            <td>{{ finding.title }}</td>
+                            <td><span class="severity-badge severity-critical">CRITICAL</span></td>
+                            <td>{{ finding.location }}</td>
+                        </tr>
+                    {% endfor %}
+                    {% for finding in findings_by_severity.high %}
+                        <tr>
+                            <td>{{ finding.title }}</td>
+                            <td><span class="severity-badge severity-high">HIGH</span></td>
+                            <td>{{ finding.location }}</td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            {% endif %}
+        {% endif %}
+    </section>
+    
+    <section>
+        <h2>Risk Assessment by Category</h2>
+        
+        <table>
+            <tr>
+                <th>Finding Type</th>
+                <th>Count</th>
+            </tr>
+            {% for type, count in stats.by_type.items() %}
+                <tr>
+                    <td>{{ type }}</td>
+                    <td>{{ count }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    </section>
+    
+    <section>
+        <h2>Recommendations</h2>
+        
+        {% if stats.by_severity.critical > 0 %}
+            <h3>Immediate Actions Required</h3>
+            <p>The following critical issues require immediate attention to mitigate significant security risks:</p>
+            <ul>
+                {% for finding in findings_by_severity.critical %}
+                    <li><strong>{{ finding.title }}</strong> - {{ finding.location }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        {% if stats.by_severity.high > 0 %}
+            <h3>High Priority Actions</h3>
+            <p>The following high-risk issues should be addressed as soon as possible:</p>
+            <ul>
+                {% for finding in findings_by_severity.high %}
+                    <li><strong>{{ finding.title }}</strong> - {{ finding.location }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        <h3>Strategic Recommendations</h3>
+        <p>Based on the assessment, we recommend the following strategic security improvements:</p>
+        <ul>
+            {% if stats.by_severity.critical > 0 or stats.by_severity.high > 0 %}
+                <li>Address all critical and high severity issues immediately</li>
+                <li>Schedule remediation of remaining issues within the next 30-90 days</li>
+                <li>Conduct follow-up assessment after remediation to verify fixes</li>
+            {% elif stats.by_severity.medium > 0 %}
+                <li>Address medium severity issues within the next 90 days</li>
+                <li>Implement continuous security monitoring</li>
+            {% else %}
+                <li>Maintain current security posture with regular security assessments</li>
+                <li>Consider implementing additional security controls as part of ongoing improvement</li>
+            {% endif %}
+            <li>Provide security awareness training to development and operations teams</li>
+            <li>Implement a vulnerability management program for ongoing security</li>
+        </ul>
+    </section>
+    
+    <section>
+        <h2>Executive Summary</h2>
+        <p>This security assessment of {{ metadata.target }} revealed 
+        {% if stats.total == 0 %}
+            no security issues, indicating a robust security posture.
+        {% elif stats.risk_score < 3 %}
+            a generally secure environment with minimal security concerns that should be addressed through routine security improvements.
+        {% elif stats.risk_score < 6 %}
+            several security issues that should be addressed as part of a prioritized remediation plan to improve the overall security posture.
+        {% else %}
+            significant security weaknesses that require immediate attention to prevent potential security breaches or data compromise.
+        {% endif %}
+        </p>
+        
+        <p>The overall risk score of {{ stats.risk_score }} out of 10 indicates 
+        {% if stats.risk_score < 3 %}
+            a low risk level.
+        {% elif stats.risk_score < 6 %}
+            a moderate risk level.
+        {% else %}
+            a high risk level.
+        {% endif %}
+        </p>
+        
+        <p>We recommend reviewing the detailed technical report for specific vulnerability information and detailed remediation steps.</p>
+    </section>
+{% endblock %} 
