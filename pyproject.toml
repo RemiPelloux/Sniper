@@ -63,6 +63,10 @@ per-file-ignores = [
     "src/integrations/dirsearch.py: E501",
     "src/integrations/sublist3r.py: E501",
     "src/integrations/owasp_zap.py: E501",
+    "tests/integrations/test_owasp_zap.py: E402", # Keep ignoring the import order issue
+    "src/integrations/wappalyzer.py: E501",       # Ignore line length for wappalyzer src
+    "tests/integrations/test_wappalyzer.py: E501",  # Ignore line length for wappalyzer tests
+    "tests/integrations/test_sublist3r.py: E501",   # Ignore line length for sublist3r tests (comment)
 ]
 
 [tool.mypy]

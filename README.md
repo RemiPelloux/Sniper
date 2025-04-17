@@ -28,18 +28,19 @@ Requires Python 3.11+ and Poetry for dependency management.
 # Install the basic package
 poetry install
 
-# Install with optional dependencies
-poetry install --extras "zap"  # For OWASP ZAP integration
+# Install with optional dependencies (e.g., for ZAP and Wappalyzer)
+poetry install --extras "zap wappalyzer"
 ```
 
 ## Tool Dependencies
 
 Some integrations require external tools to be installed:
 
-- **OWASP ZAP**: Install from [zaproxy.org](https://www.zaproxy.org/download/) and ensure it's in your PATH
-- **Nmap**: Install using your system's package manager
-- **Dirsearch**: Requires Python 3 and installation from GitHub
-- **Sublist3r**: Requires Python 3 and installation from GitHub
+- **OWASP ZAP**: Install from [zaproxy.org](https://www.zaproxy.org/download/) and ensure it's in your PATH.
+- **Wappalyzer**: Requires Firefox and geckodriver. See [Wappalyzer Docs](docs/integrations/wappalyzer.md#prerequisites).
+- **Nmap**: Install using your system's package manager.
+- **Dirsearch**: Requires Python 3 and installation from GitHub.
+- **Sublist3r**: Requires manual installation from GitHub. See [Sublist3r Docs](docs/integrations/sublist3r.md#prerequisites).
 
 ## Usage
 
@@ -55,6 +56,12 @@ poetry run sniper scan -t https://example.com --tools zap
 
 # Run an active ZAP scan
 poetry run sniper scan -t https://example.com --tools zap --options zap:scan_type=active
+
+# Detect technologies with Wappalyzer
+poetry run sniper scan -t https://example.com --tools wappalyzer
+
+# Find subdomains with Sublist3r
+poetry run sniper scan -t example.com --tools sublist3r
 ```
 
 ## Project Structure
@@ -74,6 +81,8 @@ poetry run sniper scan -t https://example.com --tools zap --options zap:scan_typ
 For more detailed information about specific integrations, see:
 
 - [OWASP ZAP Integration](docs/integrations/owasp_zap.md)
+- [Wappalyzer Integration](docs/integrations/wappalyzer.md)
+- [Sublist3r Integration](docs/integrations/sublist3r.md)
 - More documentation coming soon...
 
 ## Contributing

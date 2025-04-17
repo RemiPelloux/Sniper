@@ -248,10 +248,9 @@ def test_sublist3r_parse_success_empty_file(
 ) -> None:
     """Test parsing an empty output file."""
     integration = Sublist3rIntegration(executor=mock_executor)
-    integration._last_target_domain = "example.com"
+    integration._last_target_domain = "empty.com"
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
         output_path = Path(f.name)
-
     parsed = integration.parse_output(output_path)
     assert parsed is None
     assert not output_path.exists()
@@ -261,8 +260,10 @@ def test_sublist3r_parse_success_empty_file(
 def test_sublist3r_parse_file_not_found(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
+    """Test parsing when the output file doesn't exist."""
     integration = Sublist3rIntegration(executor=mock_executor)
-    non_existent_path = Path("non_existent_sublist3r_output.txt")
+    non_existent_path = Path(tempfile.gettempdir()) / "non_existent_sublist3r.txt"
+    assert not non_existent_path.exists()
     parsed = integration.parse_output(non_existent_path)
     assert parsed is None
 
@@ -271,8 +272,11 @@ def test_sublist3r_parse_file_not_found(
 def test_sublist3r_parse_failed_execution_result(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
+    """Test parsing when given an ExecutionResult instead of a Path."""
     integration = Sublist3rIntegration(executor=mock_executor)
-    failed_result = ExecutionResult("cmd", 1, "", "err", False)
+    failed_result = ExecutionResult(
+        command="...", return_code=1, stdout="", stderr="Error", timed_out=False
+    )
     parsed = integration.parse_output(failed_result)
     assert parsed is None
 
@@ -281,14 +285,27 @@ def test_sublist3r_parse_failed_execution_result(
 def test_sublist3r_parse_handles_exception(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
-    """Test that parsing handles exceptions during file reading and cleans up."""
+    """Test that parsing handles exceptions during file reading."""
     integration = Sublist3rIntegration(executor=mock_executor)
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        output_path = Path(f.name)
+    integration._last_target_domain = "exception.com"
+    output_path: Path | None = None
+    try:
+        # Create a dummy file path
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as f:
+            output_path = Path(f.name)
 
-    with patch.object(Path, "open") as mock_open:
-        mock_open.side_effect = OSError("Test read error")
-        parsed = integration.parse_output(output_path)
+        # Ensure the path is set before proceeding
+        assert output_path is not None
 
-    assert parsed is None
-    assert not output_path.exists()  # Ensure cleanup happens even on error
+        # Mock Path.open to raise an exception during parsing
+        with patch.object(Path, "open", side_effect=IOError("Test read error")):
+            with patch.object(Path, "unlink") as mock_unlink:
+                parsed = integration.parse_output(output_path)
+                assert parsed is None
+                mock_unlink.assert_called_once()
+
+    finally:
+        # Ensure cleanup, regardless of whether mock_unlink was called or if an error # noqa: E501
+        # occurred
+        if output_path is not None and output_path.exists():
+            output_path.unlink()
