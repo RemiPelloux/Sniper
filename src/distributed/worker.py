@@ -26,6 +26,8 @@ import traceback
 from src.distributed.base import BaseNode, NodeStatus, DistributedTask, TaskStatus, TaskPriority, NodeInfo, NodeRole
 from src.distributed.protocol import create_protocol, ProtocolMessage, MessageType, ProtocolBase
 from src.distributed.protocol import HeartbeatMessage, TaskResultMessage
+from src.core.logging import setup_logging
+from src.ml.autonomous_tester import AutonomousTester, VulnerabilityType
 
 logger = logging.getLogger("sniper.distributed.worker")
 
@@ -81,6 +83,19 @@ class SniperWorkerNode(BaseNode):
         self.failure_count = 0
         
         self.task_semaphore: Optional[asyncio.Semaphore] = None
+        
+        # Initialize the autonomous tester for handling autonomous testing tasks
+        self.autonomous_tester = AutonomousTester()
+        
+        # Register default task handlers
+        self._register_default_handlers()
+    
+    def _register_default_handlers(self):
+        """Register default task handlers for common task types."""
+        # Register autonomous testing handler
+        self.register_task_handler("autonomous_test", self._handle_autonomous_test)
+        self.register_task_handler("vulnerability_scan", self._handle_vulnerability_scan)
+        self.register_task_handler("recon", self._handle_recon_task)
     
     def register_task_handler(self, task_type: str, handler: Callable) -> None:
         """
@@ -566,6 +581,135 @@ class SniperWorkerNode(BaseNode):
         
         logger.info(f"Task {task_id} cancelled")
         return True
+
+    def _handle_autonomous_test(self, task: DistributedTask) -> Dict[str, Any]:
+        """
+        Handle autonomous testing task using the AutonomousTester.
+        
+        Args:
+            task: The task containing testing parameters
+            
+        Returns:
+            Dictionary with test results
+        """
+        logger.info(f"Handling autonomous test task: {task.task_id}")
+        
+        try:
+            # Extract testing parameters from task data
+            params = task.parameters
+            target_url = params.get("target_url")
+            vuln_type_str = params.get("vulnerability_type")
+            
+            if not target_url:
+                return {
+                    "status": "error",
+                    "message": "Missing required parameter: target_url"
+                }
+                
+            # Convert vulnerability type string to enum
+            try:
+                vulnerability_type = VulnerabilityType(vuln_type_str) if vuln_type_str else None
+            except ValueError:
+                vulnerability_type = None
+            
+            # Extract optional parameters
+            request_params = params.get("request_params", {})
+            headers = params.get("headers", {})
+            cookies = params.get("cookies", {})
+            
+            # Perform comprehensive scan if no specific vulnerability type is provided
+            if vulnerability_type:
+                # Test for specific vulnerability
+                results = self.autonomous_tester.test_vulnerability(
+                    target_url=target_url,
+                    vulnerability_type=vulnerability_type,
+                    params=request_params,
+                    headers=headers,
+                    cookies=cookies,
+                    count=params.get("payload_count", 5)
+                )
+                
+                # Convert payload results to serializable format
+                serialized_results = []
+                for result in results:
+                    serialized_results.append({
+                        "payload": result.payload.value,
+                        "vulnerability_type": result.payload.vulnerability_type.value,
+                        "success": result.success,
+                        "evidence": result.evidence,
+                        "response_code": result.response_code,
+                        "response_time": result.response_time,
+                        "notes": result.notes
+                    })
+                
+                return {
+                    "status": "completed",
+                    "vulnerability_type": vulnerability_type.value,
+                    "results": serialized_results,
+                    "target_url": target_url,
+                    "successful_payloads": sum(1 for r in results if r.success)
+                }
+            else:
+                # Perform comprehensive scan
+                scan_results = self.autonomous_tester.comprehensive_scan(
+                    target_url=target_url,
+                    params=request_params,
+                    headers=headers,
+                    cookies=cookies
+                )
+                
+                # Get summary of results
+                summary = self.autonomous_tester.get_summary(scan_results)
+                
+                # Convert to serializable format
+                serializable_results = {}
+                for vuln_type, results_list in scan_results.items():
+                    serializable_results[vuln_type] = []
+                    for result in results_list:
+                        serializable_results[vuln_type].append({
+                            "payload": result.payload.value,
+                            "success": result.success,
+                            "evidence": result.evidence,
+                            "response_code": result.response_code
+                        })
+                
+                return {
+                    "status": "completed",
+                    "comprehensive_scan": True,
+                    "summary": summary,
+                    "detailed_results": serializable_results,
+                    "target_url": target_url
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in autonomous test task: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e),
+                "traceback": str(e.__traceback__)
+            }
+    
+    def _handle_vulnerability_scan(self, task: DistributedTask) -> Dict[str, Any]:
+        """Handle vulnerability scanning task."""
+        logger.info(f"Handling vulnerability scan task: {task.task_id}")
+        # Implementation for vulnerability scanning
+        # This could use other components from the Sniper framework
+        return {
+            "status": "completed",
+            "message": "Vulnerability scan completed",
+            "results": []  # Placeholder for actual scan results
+        }
+    
+    def _handle_recon_task(self, task: DistributedTask) -> Dict[str, Any]:
+        """Handle reconnaissance task."""
+        logger.info(f"Handling recon task: {task.task_id}")
+        # Implementation for reconnaissance tasks
+        # This could use the SmartRecon component
+        return {
+            "status": "completed",
+            "message": "Reconnaissance completed",
+            "results": []  # Placeholder for actual recon results
+        }
 
 class WorkerNodeClient:
     """

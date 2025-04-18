@@ -1,0 +1,147 @@
+{
+  "task_id": "scan-20231014-192534",
+  "target_url": "https://example-vulnerable-site.com",
+  "date_created": "2023-10-14T19:25:34Z",
+  "execution_time": 127.85,
+  "num_requests": 437,
+  "vulnerabilities": [
+    {
+      "type": "SQL Injection",
+      "severity": "Critical",
+      "confidence": 92,
+      "location": "https://example-vulnerable-site.com/search?q=test",
+      "description": "Application is vulnerable to SQL injection attacks through the 'q' parameter in the search function. A boolean-based blind SQL injection was confirmed with payload: q=test' OR '1'='1.",
+      "remediation": "Implement prepared statements with parameterized queries. Never concatenate user input directly into SQL queries."
+    },
+    {
+      "type": "Cross-Site Scripting (XSS)",
+      "severity": "High",
+      "confidence": 97,
+      "location": "https://example-vulnerable-site.com/feedback?message=test",
+      "description": "Reflected XSS vulnerability in the feedback form allows execution of arbitrary JavaScript. Confirmed with payload: <script>alert('XSS')</script>",
+      "remediation": "Implement proper output encoding and use Content-Security-Policy (CSP) headers."
+    },
+    {
+      "type": "Insecure Direct Object Reference",
+      "severity": "Medium",
+      "confidence": 87,
+      "location": "https://example-vulnerable-site.com/profile/123",
+      "description": "The application allows accessing user profiles by directly changing the ID in the URL, without proper authorization checks.",
+      "remediation": "Implement proper access control checks. Verify the user has permission to access the requested resource."
+    },
+    {
+      "type": "Sensitive Data Exposure",
+      "severity": "Medium",
+      "confidence": 89,
+      "location": "https://example-vulnerable-site.com/api/users",
+      "description": "API endpoint leaks sensitive user information including email addresses and partial password hashes.",
+      "remediation": "Limit the data returned by the API to only what's necessary. Apply proper authentication and authorization."
+    },
+    {
+      "type": "Security Misconfiguration",
+      "severity": "Low",
+      "confidence": 95,
+      "location": "https://example-vulnerable-site.com",
+      "description": "Server exposes detailed error messages that reveal implementation details. HTTP headers missing security-related configurations.",
+      "remediation": "Implement proper error handling. Configure security headers: X-Content-Type-Options, X-Frame-Options, etc."
+    },
+    {
+      "type": "Cross-Site Request Forgery",
+      "severity": "Medium",
+      "confidence": 85,
+      "location": "https://example-vulnerable-site.com/account/update",
+      "description": "Account update functionality is vulnerable to CSRF attacks. No CSRF tokens or other protections were observed.",
+      "remediation": "Implement anti-CSRF tokens for all state-changing operations."
+    },
+    {
+      "type": "Open Redirect",
+      "severity": "Low",
+      "confidence": 90,
+      "location": "https://example-vulnerable-site.com/redirect?url=https://attacker.com",
+      "description": "The redirect function accepts arbitrary URLs and redirects users without validation.",
+      "remediation": "Implement a whitelist of allowed redirect destinations or use relative URLs."
+    },
+    {
+      "type": "Broken Authentication",
+      "severity": "High",
+      "confidence": 88,
+      "location": "https://example-vulnerable-site.com/login",
+      "description": "Weak password policy allows easy-to-guess passwords. No brute force protection mechanisms observed.",
+      "remediation": "Implement strong password policies. Add rate limiting and account lockout mechanisms."
+    },
+    {
+      "type": "Server Information Disclosure",
+      "severity": "Info",
+      "confidence": 100,
+      "location": "https://example-vulnerable-site.com",
+      "description": "Server response headers reveal software versions and technology stack information.",
+      "remediation": "Configure servers to not display version information in HTTP headers."
+    },
+    {
+      "type": "Cookie Without Secure Flag",
+      "severity": "Low",
+      "confidence": 100,
+      "location": "https://example-vulnerable-site.com",
+      "description": "Session cookies are set without the secure flag, allowing transmission over unencrypted connections.",
+      "remediation": "Set the 'Secure' flag on all cookies containing sensitive information."
+    }
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://example-vulnerable-site.com",
+      "status_code": 200,
+      "response_time": 0.235,
+      "headers": {
+        "host": "example-vulnerable-site.com",
+        "user-agent": "Sniper Security Tool v1.0",
+        "accept": "*/*"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://example-vulnerable-site.com/search?q=test",
+      "status_code": 200,
+      "response_time": 0.178,
+      "headers": {
+        "host": "example-vulnerable-site.com",
+        "user-agent": "Sniper Security Tool v1.0",
+        "accept": "*/*"
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://example-vulnerable-site.com/login",
+      "status_code": 302,
+      "response_time": 0.342,
+      "headers": {
+        "host": "example-vulnerable-site.com",
+        "user-agent": "Sniper Security Tool v1.0",
+        "content-type": "application/x-www-form-urlencoded",
+        "accept": "*/*"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://example-vulnerable-site.com/profile/123",
+      "status_code": 200,
+      "response_time": 0.156,
+      "headers": {
+        "host": "example-vulnerable-site.com",
+        "user-agent": "Sniper Security Tool v1.0",
+        "accept": "*/*"
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://example-vulnerable-site.com/api/users",
+      "status_code": 200,
+      "response_time": 0.289,
+      "headers": {
+        "host": "example-vulnerable-site.com",
+        "user-agent": "Sniper Security Tool v1.0",
+        "accept": "*/*"
+      }
+    }
+  ]
+} 

@@ -45,6 +45,7 @@ import re
 from datetime import datetime
 from ipaddress import ip_address
 from typing import Any, Dict, List, Optional, Tuple, Union
+from urllib.parse import urlparse
 
 import joblib
 import numpy as np
@@ -130,112 +131,102 @@ class SmartRecon:
 
     def extract_target_features(self, target: Union[str, Dict[str, Any]]) -> np.ndarray:
         """
-        Extract features from a target for use in tool selection.
-
+        Extract a feature vector from a target for model prediction.
+        
         Args:
-            target: The target domain, IP address, or target info dictionary
-
+            target: The target URL, IP, domain or a dictionary with target details
+            
         Returns:
-            Numpy array of features extracted from the target
+            A numpy array of features
         """
+        if isinstance(target, str):
+            # Basic features from the target string
+            target_str = target
+            target_dict = {"url": target}
+        else:
+            target_str = target.get("url", "")
+            target_dict = target
+            
+        # Initialize feature dictionary
         feature_dict = {}
         
-        # Handle dictionary input
-        if isinstance(target, dict):
-            # Extract hostname/IP from dictionary
-            hostname = target.get("host", "")
-            if not hostname:
-                logger.warning("Target dictionary missing 'host' field")
-                return np.array([])
-                
-            # Check if target is an IP or domain
-            is_ip = self._is_ip_address(hostname)
-            feature_dict["is_ip"] = 1 if is_ip else 0
+        # Process the URL/domain/IP
+        hostname_target = target_str
+        if hostname_target.startswith(("http://", "https://")):
+            parsed_url = urlparse(hostname_target)
+            hostname_target = parsed_url.netloc
             
-            # Add port information if available
-            if "port" in target:
-                feature_dict["has_port"] = 1
-                feature_dict["port"] = target["port"]
-                # Common port indicators
-                feature_dict["is_web_port"] = 1 if target["port"] in [80, 443, 8080, 8443] else 0
-                feature_dict["is_db_port"] = 1 if target["port"] in [3306, 5432, 1433, 1521, 27017, 6379] else 0
-                feature_dict["is_mail_port"] = 1 if target["port"] in [25, 465, 587, 110, 143, 993] else 0
-            else:
-                feature_dict["has_port"] = 0
-                
-            # Add protocol if available
-            if "protocol" in target:
-                protocol = target["protocol"].lower()
-                feature_dict["protocol_https"] = 1 if protocol == "https" else 0
-                feature_dict["protocol_http"] = 1 if protocol == "http" else 0
-                feature_dict["protocol_ssh"] = 1 if protocol == "ssh" else 0
-                feature_dict["protocol_ftp"] = 1 if protocol == "ftp" else 0
+            # Protocol features
+            feature_dict["is_https"] = 1 if parsed_url.scheme == "https" else 0
             
-            # Add service information if available
-            if "services" in target and isinstance(target["services"], list):
-                services = [s.lower() for s in target["services"]]
-                feature_dict["has_web_service"] = 1 if any(s in ["http", "https", "www"] for s in services) else 0
-                feature_dict["has_db_service"] = 1 if any(s in ["mysql", "postgresql", "mongodb", "redis"] for s in services) else 0
-                feature_dict["has_mail_service"] = 1 if any(s in ["smtp", "pop3", "imap"] for s in services) else 0
-                feature_dict["service_count"] = len(target["services"])
+            # Add path-related features
+            path = parsed_url.path
+            feature_dict["has_path"] = 1 if path and path != "/" else 0
+            feature_dict["path_length"] = len(path) if path else 0
+            feature_dict["path_depth"] = path.count("/") if path else 0
             
-            # Add target type info
-            target_type = target.get("type", "").lower()
-            feature_dict["is_webapp"] = 1 if target_type in ["web", "webapp", "website"] else 0
-            feature_dict["is_api"] = 1 if target_type in ["api", "rest", "graphql"] else 0
-            feature_dict["is_mobile_backend"] = 1 if target_type in ["mobile_api", "mobile_backend"] else 0
-            
-            # Process hostname part like a string target
-            hostname_target = hostname
-        else:
-            # If target is a string, use it directly
-            hostname_target = target
-            # Check if target is an IP or domain
-            is_ip = self._is_ip_address(hostname_target)
-            feature_dict["is_ip"] = 1 if is_ip else 0
+            # Query parameters
+            query = parsed_url.query
+            feature_dict["has_query"] = 1 if query else 0
+            feature_dict["query_length"] = len(query) if query else 0
+            feature_dict["query_params_count"] = query.count("&") + 1 if query else 0
         
-        # Process IP or domain specific features
-        if feature_dict.get("is_ip", self._is_ip_address(hostname_target)):
-            # Extract IP-specific features
-            try:
-                ip = ip_address(hostname_target)
-                feature_dict["is_private"] = 1 if ip.is_private else 0
-                feature_dict["is_global"] = 1 if ip.is_global else 0
-                feature_dict["is_multicast"] = 1 if ip.is_multicast else 0
-                feature_dict["ip_version"] = ip.version
-            except ValueError:
-                logger.warning(f"Failed to parse IP address: {hostname_target}")
+        # IP address features
+        is_ip = self._is_ip_address(hostname_target)
+        feature_dict["is_ip"] = 1 if is_ip else 0
+        
+        if is_ip:
+            # Private IP feature
+            is_private = self._is_private_ip(hostname_target)
+            feature_dict["is_private_ip"] = 1 if is_private else 0
+            
+            # IP range features (useful for understanding the target's network)
+            octets = hostname_target.split(".")
+            if len(octets) == 4:
+                try:
+                    feature_dict["first_octet"] = int(octets[0]) / 255
+                    feature_dict["second_octet"] = int(octets[1]) / 255
+                except (ValueError, IndexError):
+                    feature_dict["first_octet"] = 0
+                    feature_dict["second_octet"] = 0
         else:
-            # Extract domain-specific features
+            feature_dict["is_private_ip"] = 0
+            feature_dict["first_octet"] = 0
+            feature_dict["second_octet"] = 0
+            
+            # Domain length (more entropy in longer domain names)
+            feature_dict["domain_length"] = len(hostname_target)
+            
+            # Domain entropy (randomness, might suggest algorithmically generated domains)
             try:
-                domain_parts = hostname_target.split(".")
-                feature_dict["is_subdomain"] = 1 if len(domain_parts) > 2 else 0
-                feature_dict["domain_length"] = len(hostname_target)
-                feature_dict["num_segments"] = len(domain_parts)
-                
-                # Handle TLD encoding - instead of storing string, convert to a numerical representation
-                tld = self._extract_tld(hostname_target)
-                # Common TLDs get specific flags
-                feature_dict["tld_com"] = 1 if tld == "com" else 0
-                feature_dict["tld_org"] = 1 if tld == "org" else 0
-                feature_dict["tld_net"] = 1 if tld == "net" else 0
-                feature_dict["tld_edu"] = 1 if tld == "edu" else 0
-                feature_dict["tld_gov"] = 1 if tld == "gov" else 0
-                feature_dict["tld_io"] = 1 if tld == "io" else 0
-                feature_dict["tld_co"] = 1 if tld == "co" else 0
-                # Remove direct tld assignment to avoid string in feature vector
-
-                # Check for keywords in domain that might indicate purpose
-                keywords = [
-                    "api", "dev", "test", "staging", "prod", "admin", 
-                    "secure", "login", "auth", "payment", "portal", "app",
-                    "mobile", "static", "cdn", "media", "img", "assets",
-                    "docs", "support", "help", "service", "status"
-                ]
-                for keyword in keywords:
-                    feature_dict[f"has_{keyword}"] = 1 if keyword in hostname_target.lower() else 0
-            except Exception as e:
-                logger.warning(f"Error extracting domain features: {e}")
+                feature_dict["domain_entropy"] = self._calculate_entropy(hostname_target) / 5.0
+            except:
+                feature_dict["domain_entropy"] = 0.0
+            
+            # Subdomain features
+            subdomain_count = hostname_target.count(".") - 1 if hostname_target.count(".") > 0 else 0
+            feature_dict["subdomain_count"] = min(subdomain_count, 5) / 5  # normalized
+            
+            # Handle TLD encoding - convert strings to numerical features
+            tld = self._extract_tld(hostname_target)
+            # Common TLDs get specific binary flags
+            feature_dict["tld_com"] = 1 if tld == "com" else 0
+            feature_dict["tld_org"] = 1 if tld == "org" else 0
+            feature_dict["tld_net"] = 1 if tld == "net" else 0
+            feature_dict["tld_edu"] = 1 if tld == "edu" else 0
+            feature_dict["tld_gov"] = 1 if tld == "gov" else 0
+            feature_dict["tld_io"] = 1 if tld == "io" else 0
+            feature_dict["tld_co"] = 1 if tld == "co" else 0
+            # Add a numerical representation of TLD length as an additional feature
+            feature_dict["tld_length"] = len(tld) if tld else 0
+            
+            # Add a hash-based encoding of the TLD for less common TLDs
+            if tld and not any(feature_dict.get(f"tld_{t}") for t in ["com", "org", "net", "edu", "gov", "io", "co"]):
+                # Simple hash function to convert TLD to a number between 0 and 1
+                tld_hash = sum(ord(c) for c in tld) % 100 / 100.0
+                feature_dict["tld_hash"] = tld_hash
+            else:
+                feature_dict["tld_hash"] = 0.0
         
         # Convert dictionary to numpy array - ensure all values are numeric
         feature_values = []
@@ -936,7 +927,6 @@ class SmartRecon:
                 url = finding.get("url", "")
                 if url:
                     try:
-                        from urllib.parse import urlparse
                         path = urlparse(url).path
                         if path and path not in priority_paths:
                             priority_paths.append(path)
@@ -1815,3 +1805,21 @@ class SmartRecon:
         if len(parts) > 1:
             return parts[-1]
         return ""
+
+    def _calculate_entropy(self, s: str) -> float:
+        """
+        Calculate the entropy of a string.
+        
+        Args:
+            s: The input string
+            
+        Returns:
+            The entropy of the string
+        """
+        # Calculate the frequency of each character
+        freq = {c: s.count(c) / len(s) for c in set(s)}
+        
+        # Calculate the entropy using the formula: -sum(p * log2(p))
+        entropy = -sum(p * math.log2(p) for p in freq.values())
+        
+        return entropy

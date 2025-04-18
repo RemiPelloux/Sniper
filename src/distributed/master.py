@@ -17,9 +17,11 @@ import logging
 import threading
 import time
 import uuid
+import random
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple, Union, Any, Callable
 
 from src.core.logging import setup_logging
@@ -49,11 +51,21 @@ from src.distributed.protocol import (
     RegisterMessage,
     TaskResultMessage,
     TaskStatusMessage,
+    NodeStatusMessage,
+    TaskAssignmentMessage,
+    TaskCancelMessage,
     create_protocol,
 )
+from src.ml.autonomous_tester import VulnerabilityType
 
 logger = logging.getLogger("sniper.distributed.master")
 
+class TaskDistributionStrategy(str, Enum):
+    """Strategy to use for distributing tasks to worker nodes."""
+    ROUND_ROBIN = "round_robin"
+    LEAST_LOADED = "least_loaded"
+    CAPABILITY_BASED = "capability_based"
+    RANDOM = "random"
 
 class SniperMasterNode(MasterNode):
     """
@@ -67,7 +79,7 @@ class SniperMasterNode(MasterNode):
         host: str = "0.0.0.0",
         port: int = 5555,
         protocol_type: str = "rest",
-        distribution_strategy: DistributionStrategy = DistributionStrategy.SMART,
+        distribution_strategy: TaskDistributionStrategy = TaskDistributionStrategy.CAPABILITY_BASED,
         worker_timeout: int = 60,
         cleanup_interval: int = 30,
         task_retry_limit: int = 3,
@@ -127,27 +139,26 @@ class SniperMasterNode(MasterNode):
             MessageType.HEARTBEAT: self._handle_heartbeat,
             MessageType.TASK_STATUS: self._handle_task_status,
             MessageType.TASK_RESULT: self._handle_task_result,
+            MessageType.NODE_STATUS: self._handle_node_status,
         }
 
     def _create_distribution_algorithm(
-        self, strategy: DistributionStrategy
+        self, strategy: TaskDistributionStrategy
     ) -> DistributionAlgorithm:
         """Create the distribution algorithm based on the specified strategy."""
-        if strategy == DistributionStrategy.ROUND_ROBIN:
+        if strategy == TaskDistributionStrategy.ROUND_ROBIN:
             return RoundRobinDistribution()
-        elif strategy == DistributionStrategy.PRIORITY_BASED:
-            return PriorityBasedDistribution()
-        elif strategy == DistributionStrategy.CAPABILITY_BASED:
+        elif strategy == TaskDistributionStrategy.LEAST_LOADED:
+            return LeastLoadedDistribution()
+        elif strategy == TaskDistributionStrategy.CAPABILITY_BASED:
             return CapabilityBasedDistribution()
-        elif strategy == DistributionStrategy.LOAD_BALANCED:
-            return LoadBalancedDistribution()
-        elif strategy == DistributionStrategy.SMART:
-            return SmartDistribution()
+        elif strategy == TaskDistributionStrategy.RANDOM:
+            return RandomDistribution()
         else:
             logger.warning(
-                f"Unknown distribution strategy: {strategy}, using SMART as default"
+                f"Unknown distribution strategy: {strategy}, using CAPABILITY_BASED as default"
             )
-            return SmartDistribution()
+            return CapabilityBasedDistribution()
 
     def start(self):
         """Start the master node server and maintenance threads."""
@@ -549,7 +560,7 @@ class SniperMasterNode(MasterNode):
                     "total": len(self.tasks),
                     "pending": len(self.pending_tasks),
                     "completed": len(self.completed_tasks),
-                    "distribution_strategy": self.distribution_strategy.name
+                    "distribution_strategy": self.distribution_strategy.value
                 },
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
@@ -896,6 +907,153 @@ class SniperMasterNode(MasterNode):
         except ValueError:
             logger.warning(f"Attempted to remove task {task.id} from worker {task.assigned_node}'s list, but it wasn't found.")
 
+    def _handle_node_status(self, message: NodeStatusMessage):
+        """Handle node status update from worker node."""
+        node_id = message.payload.get("node_id")
+        status = message.payload.get("status")
+        
+        if node_id in self.workers:
+            # Update node status
+            self.workers[node_id].status = NodeStatus(status)
+            self.workers[node_id].last_updated = datetime.now()
+            
+            logger.info(f"Node {node_id} status updated to {status}")
+            
+            return ProtocolMessage(
+                message_id=f"ns-confirm-{int(time.time())}",
+                message_type=MessageType.NODE_STATUS_CONFIRM,
+                payload={"status": "received"}
+            )
+        else:
+            return ProtocolMessage(
+                message_id=f"ns-error-{int(time.time())}",
+                message_type=MessageType.ERROR,
+                payload={"error": "Node not registered", "action": "register"}
+            )
+
+    # Add methods to distribute autonomous testing tasks
+    
+    async def submit_autonomous_test(self, 
+                                     target_url: str, 
+                                     vulnerability_type: Optional[Union[str, VulnerabilityType]] = None,
+                                     request_params: Dict[str, Any] = None,
+                                     headers: Dict[str, str] = None,
+                                     cookies: Dict[str, str] = None,
+                                     payload_count: int = 5,
+                                     priority: TaskPriority = TaskPriority.MEDIUM) -> str:
+        """
+        Submit an autonomous testing task to be distributed to worker nodes.
+        
+        Args:
+            target_url: The URL to test
+            vulnerability_type: Optional specific vulnerability type to test
+            request_params: Optional parameters for the request
+            headers: Optional HTTP headers
+            cookies: Optional cookies
+            payload_count: Number of payloads to test
+            priority: Task priority
+            
+        Returns:
+            The task ID of the submitted task
+        """
+        # Create a unique task ID
+        task_id = f"autotest-{int(time.time())}-{random.randint(1000, 9999)}"
+        
+        # Convert vulnerability type enum to string if needed
+        vuln_type_str = None
+        if vulnerability_type:
+            if isinstance(vulnerability_type, VulnerabilityType):
+                vuln_type_str = vulnerability_type.value
+            else:
+                vuln_type_str = vulnerability_type
+        
+        # Prepare task parameters
+        task_params = {
+            "target_url": target_url,
+            "vulnerability_type": vuln_type_str,
+            "request_params": request_params or {},
+            "headers": headers or {},
+            "cookies": cookies or {},
+            "payload_count": payload_count
+        }
+        
+        # Create the task
+        task = DistributedTask(
+            task_id=task_id,
+            task_type="autonomous_test",
+            parameters=task_params,
+            status=TaskStatus.PENDING,
+            priority=priority,
+            created_at=datetime.now(),
+            last_updated=datetime.now()
+        )
+        
+        # Store the task
+        self.tasks[task_id] = task
+        
+        logger.info(f"Submitted autonomous testing task {task_id} for {target_url}")
+        
+        # Trigger task distribution
+        asyncio.create_task(self._distribute_tasks())
+        
+        return task_id
+    
+    async def submit_comprehensive_scan(self, 
+                                        target_url: str,
+                                        request_params: Dict[str, Any] = None,
+                                        headers: Dict[str, str] = None,
+                                        cookies: Dict[str, str] = None,
+                                        priority: TaskPriority = TaskPriority.HIGH) -> str:
+        """
+        Submit a comprehensive scan task that checks for multiple vulnerability types.
+        
+        Args:
+            target_url: The URL to test
+            request_params: Optional parameters for the request
+            headers: Optional HTTP headers
+            cookies: Optional cookies
+            priority: Task priority
+            
+        Returns:
+            The task ID of the submitted task
+        """
+        # This is similar to submit_autonomous_test but without specifying a vulnerability type
+        return await self.submit_autonomous_test(
+            target_url=target_url,
+            vulnerability_type=None,  # None indicates comprehensive scan
+            request_params=request_params,
+            headers=headers,
+            cookies=cookies,
+            priority=priority
+        )
+    
+    async def get_task_result(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the result of a completed task.
+        
+        Args:
+            task_id: The task ID to get results for
+            
+        Returns:
+            The task result or None if not available
+        """
+        if task_id in self.completed_tasks:
+            return self.completed_tasks[task_id].results
+        return None
+    
+    async def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
+        """
+        Get the status of a task.
+        
+        Args:
+            task_id: The task ID to get status for
+            
+        Returns:
+            The task status or None if task not found
+        """
+        if task_id in self.tasks:
+            return self.tasks[task_id].status
+        return None
 
 class MasterNodeServer:
     """
@@ -941,12 +1099,12 @@ class MasterNodeServer:
 
         # Create the distribution strategy enum
         try:
-            dist_strategy = DistributionStrategy[distribution_strategy.upper()]
+            dist_strategy = TaskDistributionStrategy[distribution_strategy.upper()]
         except (KeyError, AttributeError):
             logger.warning(
-                f"Invalid distribution strategy: {distribution_strategy}, using SMART as default"
+                f"Invalid distribution strategy: {distribution_strategy}, using CAPABILITY_BASED as default"
             )
-            dist_strategy = DistributionStrategy.SMART
+            dist_strategy = TaskDistributionStrategy.CAPABILITY_BASED
 
         # Create the master node
         self.master_node = SniperMasterNode(
