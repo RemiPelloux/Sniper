@@ -1,0 +1,18 @@
+wpscan:
+  binary: wpscan
+  category: vulnerability_scanning
+  check_command: wpscan --version
+  description: WordPress security scanner
+  documentation: https://github.com/wpscanteam/wpscan#readme
+  execution_time: medium
+  install:
+    docker: docker pull wpscanteam/wpscan
+    gem: gem install wpscan
+  name: wpscan
+  recommendation_score: 80
+  target_types:
+  - url
+  - webapp
+  update:
+    gem: gem update wpscan
+  website: https://wpscan.com/

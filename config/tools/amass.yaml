@@ -1,0 +1,20 @@
+amass:
+  binary: amass
+  category: reconnaissance
+  check_command: amass -version
+  description: In-depth attack surface mapping and asset discovery
+  documentation: https://github.com/OWASP/Amass/blob/master/doc/user_guide.md
+  execution_time: slow
+  install:
+    apt: apt-get install -y amass
+    binary: https://github.com/OWASP/Amass/releases/latest/download/amass_Linux_amd64.zip
+    brew: brew install amass
+    go: go install -v github.com/OWASP/Amass/v3/...@master
+  name: amass
+  recommendation_score: 90
+  target_types:
+  - domain
+  update:
+    brew: brew upgrade amass
+    go: go install -v github.com/OWASP/Amass/v3/...@master
+  website: https://github.com/OWASP/Amass

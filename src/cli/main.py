@@ -6,7 +6,7 @@ import typer
 from src import __version__
 
 # Import subcommand apps
-from src.cli import ml, report, scan, tools
+from src.cli import ml, report, scan, tools, custom_tools
 from src.core.logging import setup_logging
 
 # from importlib import metadata # Removed unused import
@@ -42,6 +42,7 @@ app.add_typer(scan.app)
 app.add_typer(report.app)
 app.add_typer(tools.app)
 app.add_typer(ml.ml)
+app.add_typer(custom_tools.custom_tools, name="custom-tools")
 
 
 # Separate callback for version handling

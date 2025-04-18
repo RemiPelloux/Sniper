@@ -1,0 +1,16 @@
+httprobe:
+  binary: httprobe
+  category: utility
+  check_command: httprobe -h
+  description: Take a list of domains and probe for working HTTP and HTTPS servers
+  documentation: https://github.com/tomnomnom/httprobe#readme
+  execution_time: fast
+  install:
+    go: go install github.com/tomnomnom/httprobe@latest
+  name: httprobe
+  recommendation_score: 82
+  target_types:
+  - domain
+  update:
+    go: go install github.com/tomnomnom/httprobe@latest
+  website: https://github.com/tomnomnom/httprobe

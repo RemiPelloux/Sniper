@@ -1,0 +1,19 @@
+xsstrike:
+  binary: xsstrike.py
+  category: exploitation
+  check_command: python3 -c 'import xsstrike' || echo $?
+  description: Advanced XSS detection and exploitation tool
+  documentation: https://github.com/s0md3v/XSStrike/wiki
+  execution_time: medium
+  install:
+    manual: git clone https://github.com/s0md3v/XSStrike.git && cd XSStrike && pip
+      install -r requirements.txt
+    pip: pip install xsstrike
+  name: xsstrike
+  recommendation_score: 87
+  target_types:
+  - url
+  - webapp
+  update:
+    manual: cd XSStrike && git pull && pip install -r requirements.txt
+  website: https://github.com/s0md3v/XSStrike

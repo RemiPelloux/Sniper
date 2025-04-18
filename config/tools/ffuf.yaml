@@ -1,0 +1,18 @@
+ffuf:
+  binary: ffuf
+  category: reconnaissance
+  check_command: ffuf -V
+  description: Fast web fuzzer for content discovery and parameter testing
+  documentation: https://github.com/ffuf/ffuf#readme
+  execution_time: medium
+  install:
+    binary: https://github.com/ffuf/ffuf/releases/latest
+    go: go install github.com/ffuf/ffuf@latest
+  name: ffuf
+  recommendation_score: 91
+  target_types:
+  - url
+  - webapp
+  update:
+    go: go install github.com/ffuf/ffuf@latest
+  website: https://github.com/ffuf/ffuf

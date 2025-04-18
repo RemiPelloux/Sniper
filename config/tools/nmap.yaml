@@ -1,0 +1,23 @@
+nmap:
+  binary: nmap
+  category: reconnaissance
+  check_command: nmap --version
+  description: Network port scanner and security reconnaissance tool
+  documentation: https://nmap.org/book/man.html
+  execution_time: medium
+  install:
+    apt: apt-get install -y nmap
+    binary: https://nmap.org/dist/nmap-7.93-setup.exe
+    brew: brew install nmap
+    yum: yum install -y nmap
+  name: nmap
+  recommendation_score: 95
+  target_types:
+  - ip
+  - domain
+  - network
+  update:
+    apt: apt-get update && apt-get install -y --only-upgrade nmap
+    brew: brew upgrade nmap
+    yum: yum update -y nmap
+  website: https://nmap.org

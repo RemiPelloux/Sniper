@@ -1,0 +1,17 @@
+sublist3r:
+  binary: sublist3r
+  category: reconnaissance
+  check_command: sublist3r -h
+  description: Subdomain enumeration tool using multiple sources
+  documentation: https://github.com/aboul3la/Sublist3r#readme
+  execution_time: medium
+  install:
+    apt: apt-get install -y sublist3r
+    pip: pip install sublist3r
+  name: sublist3r
+  recommendation_score: 85
+  target_types:
+  - domain
+  update:
+    pip: pip install --upgrade sublist3r
+  website: https://github.com/aboul3la/Sublist3r

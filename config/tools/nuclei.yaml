@@ -1,0 +1,19 @@
+nuclei:
+  binary: nuclei
+  category: vulnerability_scanning
+  check_command: nuclei -version
+  description: Fast and customizable vulnerability scanner
+  documentation: https://nuclei.projectdiscovery.io/
+  execution_time: medium
+  install:
+    binary: https://github.com/projectdiscovery/nuclei/releases/latest
+    go: go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+  name: nuclei
+  recommendation_score: 95
+  target_types:
+  - domain
+  - url
+  - webapp
+  update:
+    go: go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+  website: https://github.com/projectdiscovery/nuclei

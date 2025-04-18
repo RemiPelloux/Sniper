@@ -1,0 +1,20 @@
+nikto:
+  binary: nikto
+  category: vulnerability_scanning
+  check_command: nikto -Version
+  description: Web server scanner for dangerous files and vulnerabilities
+  documentation: https://github.com/sullo/nikto/wiki
+  execution_time: medium
+  install:
+    apt: apt-get install -y nikto
+    brew: brew install nikto
+    docker: docker pull secfigo/nikto
+  name: nikto
+  recommendation_score: 82
+  target_types:
+  - url
+  - webapp
+  update:
+    apt: apt-get update && apt-get install -y --only-upgrade nikto
+    brew: brew upgrade nikto
+  website: https://github.com/sullo/nikto

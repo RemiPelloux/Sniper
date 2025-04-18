@@ -1,0 +1,13 @@
+trufflehog:
+  binary: trufflehog
+  category: reconnaissance
+  check_command: trufflehog --version
+  description: Find leaked secrets in git repositories
+  execution_time: medium
+  install:
+    brew: brew install trufflehog
+    pip: pip install trufflehog
+  name: trufflehog
+  recommendation_score: 50
+  target_types:
+  - generic

@@ -1,0 +1,18 @@
+httpx:
+  binary: httpx
+  category: reconnaissance
+  check_command: httpx -version
+  description: Fast and multi-purpose HTTP toolkit
+  documentation: https://github.com/projectdiscovery/httpx#readme
+  execution_time: fast
+  install:
+    binary: https://github.com/projectdiscovery/httpx/releases/latest
+    go: go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+  name: httpx
+  recommendation_score: 90
+  target_types:
+  - url
+  - domain
+  update:
+    go: go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+  website: https://github.com/projectdiscovery/httpx

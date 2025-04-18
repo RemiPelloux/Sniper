@@ -12,267 +12,274 @@ import platform
 import shutil
 import subprocess
 import sys
-from typing import Dict, List, Optional, Any, Tuple, Union
+from typing import Dict, List, Optional, Any, Tuple, Union, Set
 import pkg_resources
 import requests
 import yaml
+import importlib.util
+from enum import Enum
+from pathlib import Path
 
 logger = logging.getLogger("sniper.tools.manager")
 
-# Default locations
-DEFAULT_TOOLS_CONFIG = os.path.join(os.path.dirname(__file__), "../../config/tools.yaml")
-DEFAULT_CUSTOM_TOOLS_CONFIG = os.path.join(os.path.dirname(__file__), "../../config/custom_tools.yaml")
-
-
-class ToolCategory:
-    """Tool categories for organization and filtering."""
+class ToolCategory(Enum):
+    """
+    Enum representing different categories of security tools.
+    """
     RECONNAISSANCE = "reconnaissance"
     VULNERABILITY_SCANNING = "vulnerability_scanning"
     EXPLOITATION = "exploitation"
     POST_EXPLOITATION = "post_exploitation"
-    REPORTING = "reporting"
-    UTILITY = "utility"
-    
-    @classmethod
-    def all(cls) -> List[str]:
-        """Get all defined categories."""
-        return [
-            cls.RECONNAISSANCE,
-            cls.VULNERABILITY_SCANNING,
-            cls.EXPLOITATION,
-            cls.POST_EXPLOITATION,
-            cls.REPORTING,
-            cls.UTILITY
-        ]
+    MISCELLANEOUS = "miscellaneous"
 
 
-class ToolInstallMethod:
-    """Supported installation methods for tools."""
+class ToolInstallMethod(Enum):
+    """
+    Enum representing different methods for installing tools.
+    """
     APT = "apt"
-    YUM = "yum"
     BREW = "brew"
     PIP = "pip"
-    GEM = "gem"
     NPM = "npm"
-    GO = "go"
-    CARGO = "cargo"
-    BINARY = "binary"
-    DOCKER = "docker"
+    GIT = "git"
     MANUAL = "manual"
     
-    @classmethod
-    def get_package_managers(cls) -> List[str]:
-        """Get all package manager-based install methods."""
-        return [
-            cls.APT, cls.YUM, cls.BREW, 
-            cls.PIP, cls.GEM, cls.NPM, 
-            cls.GO, cls.CARGO
-        ]
-
 
 class ToolManager:
     """
     Manages security tools for the Sniper Security Platform.
     
-    This class handles:
-    - Loading tool definitions
-    - Checking tool availability
-    - Installing and updating tools
-    - Adding and removing tools
-    - Providing tool information
+    This class is responsible for loading, adding, removing, and retrieving tools
+    used by the platform. It also provides functionality to check if tools are installed
+    and to install them if needed.
+    
+    Attributes:
+        tools (Dict): Dictionary of tools loaded from configuration files
+        _os_type (str): The operating system type (Linux, Darwin, Windows)
+        _package_managers (List[str]): List of available package managers on the system
     """
     
-    def __init__(self, tools_config_path: str = DEFAULT_TOOLS_CONFIG,
-                 custom_tools_config_path: str = DEFAULT_CUSTOM_TOOLS_CONFIG):
+    def __init__(self, tools_dir: Optional[str] = None, custom_tools_dir: Optional[str] = None) -> None:
         """
-        Initialize the Tool Manager.
+        Initialize the ToolManager.
         
         Args:
-            tools_config_path: Path to the main tools configuration file
-            custom_tools_config_path: Path to the custom tools configuration file
+            tools_dir (Optional[str]): Path to the directory containing tool configuration files
+            custom_tools_dir (Optional[str]): Path to the directory containing custom tool configuration files
         """
-        self.tools_config_path = tools_config_path
-        self.custom_tools_config_path = custom_tools_config_path
         self.tools = {}
-        self.custom_tools = {}
-        self.platform = self._detect_platform()
         
-        # Load tool definitions
-        self._load_tools()
-    
-    def _detect_platform(self) -> Dict[str, str]:
-        """
-        Detect the current platform and available package managers.
+        # Detect OS type
+        self._os_type = platform.system()
         
-        Returns:
-            Dictionary with platform information
-        """
-        system = platform.system().lower()
-        info = {
-            "system": system,
-            "package_managers": []
-        }
+        # Detect package managers
+        self._package_managers = []
+        self._detect_package_managers()
         
-        # Check for common package managers
-        if system == "linux":
-            distro = platform.freedesktop_os_release()["ID"].lower() if hasattr(platform, "freedesktop_os_release") else ""
-            info["distro"] = distro
+        # Set default paths if none provided
+        if not tools_dir:
+            tools_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "tools")
+        if not custom_tools_dir:
+            custom_tools_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "custom_tools")
             
-            # Check for APT (Debian/Ubuntu)
-            if shutil.which("apt") or shutil.which("apt-get"):
-                info["package_managers"].append(ToolInstallMethod.APT)
-            
-            # Check for YUM/DNF (RedHat/CentOS/Fedora)
-            if shutil.which("yum") or shutil.which("dnf"):
-                info["package_managers"].append(ToolInstallMethod.YUM)
+        # Ensure directories exist
+        Path(tools_dir).mkdir(exist_ok=True, parents=True)
+        Path(custom_tools_dir).mkdir(exist_ok=True, parents=True)
+        
+        # Store the directories
+        self.tools_dir = tools_dir
+        self.custom_tools_dir = custom_tools_dir
+        
+        # Load tools
+        self._load_tools_from_directory(tools_dir)
+        self._load_tools_from_directory(custom_tools_dir)
+        
+    def _detect_package_managers(self) -> None:
+        """
+        Detect available package managers based on the operating system.
+        """
+        if self._os_type == "Linux":
+            # Check for apt (Debian/Ubuntu)
+            if shutil.which("apt"):
+                self._package_managers.append("apt")
                 
-        elif system == "darwin":
-            info["distro"] = "macos"
+        elif self._os_type == "Darwin":  # macOS
             # Check for Homebrew
             if shutil.which("brew"):
-                info["package_managers"].append(ToolInstallMethod.BREW)
+                self._package_managers.append("brew")
                 
-        # Check for language-specific package managers
-        pm_commands = {
-            ToolInstallMethod.PIP: "pip",
-            ToolInstallMethod.GEM: "gem",
-            ToolInstallMethod.NPM: "npm",
-            ToolInstallMethod.GO: "go",
-            ToolInstallMethod.CARGO: "cargo",
-            ToolInstallMethod.DOCKER: "docker"
-        }
-        
-        for pm, cmd in pm_commands.items():
-            if shutil.which(cmd):
-                info["package_managers"].append(pm)
-                
-        return info
-    
-    def _load_tools(self) -> None:
-        """Load built-in and custom tool definitions."""
-        # Load built-in tools
-        if os.path.exists(self.tools_config_path):
-            try:
-                with open(self.tools_config_path, 'r') as f:
-                    self.tools = yaml.safe_load(f)
-                logger.info(f"Loaded {len(self.tools)} tools from configuration")
-            except Exception as e:
-                logger.error(f"Error loading tools configuration: {e}")
-                self.tools = {}
-        else:
-            logger.warning(f"Tools configuration file not found at {self.tools_config_path}")
-            self.tools = {}
+        # Python's pip should be available on all platforms
+        if shutil.which("pip") or shutil.which("pip3"):
+            self._package_managers.append("pip")
             
-        # Load custom tools
-        if os.path.exists(self.custom_tools_config_path):
-            try:
-                with open(self.custom_tools_config_path, 'r') as f:
-                    self.custom_tools = yaml.safe_load(f)
-                logger.info(f"Loaded {len(self.custom_tools)} custom tools")
-            except Exception as e:
-                logger.error(f"Error loading custom tools configuration: {e}")
-                self.custom_tools = {}
-        else:
-            # Create the custom tools file if it doesn't exist
-            try:
-                os.makedirs(os.path.dirname(self.custom_tools_config_path), exist_ok=True)
-                with open(self.custom_tools_config_path, 'w') as f:
-                    yaml.dump({}, f)
-                logger.info(f"Created empty custom tools configuration at {self.custom_tools_config_path}")
-                self.custom_tools = {}
-            except Exception as e:
-                logger.error(f"Error creating custom tools configuration: {e}")
-                self.custom_tools = {}
-    
-    def save_custom_tools(self) -> bool:
+        # Check for npm
+        if shutil.which("npm"):
+            self._package_managers.append("npm")
+            
+        logger.info(f"Detected package managers: {', '.join(self._package_managers)}")
+
+    def _load_tools_from_directory(self, directory_path: str) -> None:
         """
-        Save the custom tools configuration to file.
+        Load tools from all YAML files in the specified directory.
         
-        Returns:
-            True if successful, False otherwise
+        Args:
+            directory_path (str): Path to the directory containing tool configuration files
         """
         try:
-            os.makedirs(os.path.dirname(self.custom_tools_config_path), exist_ok=True)
-            with open(self.custom_tools_config_path, 'w') as f:
-                yaml.dump(self.custom_tools, f)
-            logger.info(f"Saved custom tools configuration to {self.custom_tools_config_path}")
-            return True
+            directory = Path(directory_path)
+            if not directory.exists():
+                logger.warning(f"Tool directory does not exist: {directory_path}")
+                return
+                
+            # Load each YAML file in the directory
+            for file_path in directory.glob("*.yaml"):
+                try:
+                    with open(file_path, 'r') as file:
+                        tool_data = yaml.safe_load(file)
+                        
+                    if not tool_data:
+                        logger.warning(f"Empty tool configuration file: {file_path}")
+                        continue
+                        
+                    # Process each tool in the file
+                    for tool_name, tool_config in tool_data.items():
+                        self.tools[tool_name] = tool_config
+                        logger.debug(f"Loaded tool: {tool_name}")
+                        
+                except Exception as e:
+                    logger.error(f"Error loading tool from {file_path}: {str(e)}")
+                    
+            logger.info(f"Loaded {len(self.tools)} tools from {directory_path}")
+                
         except Exception as e:
-            logger.error(f"Error saving custom tools configuration: {e}")
+            logger.error(f"Error loading tools from directory {directory_path}: {str(e)}")
+            
+    def get_tool(self, name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a tool by name.
+        
+        Args:
+            name (str): The name of the tool to retrieve
+            
+        Returns:
+            Optional[Dict[str, Any]]: The tool configuration or None if not found
+        """
+        return self.tools.get(name)
+        
+    def get_tools_by_category(self, category: ToolCategory) -> Dict[str, Dict[str, Any]]:
+        """
+        Get all tools in a specific category.
+        
+        Args:
+            category (ToolCategory): The category to filter by
+            
+        Returns:
+            Dict[str, Dict[str, Any]]: Dictionary of tools in the specified category
+        """
+        category_value = category.value if isinstance(category, ToolCategory) else category
+        return {name: config for name, config in self.tools.items() 
+                if "category" in config and config["category"] == category_value}
+                
+    def get_tool_categories(self) -> Set[str]:
+        """
+        Get all unique tool categories in the loaded tools.
+        
+        Returns:
+            Set[str]: Set of unique tool categories
+        """
+        return {config.get("category", "miscellaneous") for config in self.tools.values()}
+        
+    def add_tool(self, name: str, config: Dict[str, Any], custom: bool = True) -> bool:
+        """
+        Add a new tool to the manager.
+        
+        Args:
+            name (str): The name of the tool
+            config (Dict[str, Any]): The tool configuration
+            custom (bool): Whether this is a custom tool (default: True)
+            
+        Returns:
+            bool: True if the tool was added successfully, False otherwise
+        """
+        if name in self.tools:
+            logger.warning(f"Tool '{name}' already exists. Updating configuration.")
+            
+        self.tools[name] = config
+        
+        # Save the tool to a file if it's a custom tool
+        if custom:
+            return self._save_custom_tool(name, config)
+        return True
+        
+    def _save_custom_tool(self, name: str, config: Dict[str, Any]) -> bool:
+        """
+        Save a custom tool configuration to a file.
+        
+        Args:
+            name (str): The name of the tool
+            config (Dict[str, Any]): The tool configuration
+            
+        Returns:
+            bool: True if the tool was saved successfully, False otherwise
+        """
+        try:
+            # Create a sanitized filename
+            safe_name = name.lower().replace(' ', '_').replace('-', '_')
+            file_path = os.path.join(self.custom_tools_dir, f"{safe_name}.yaml")
+            
+            # Create the directory if it doesn't exist
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            # Save the tool configuration
+            with open(file_path, 'w') as file:
+                yaml.dump({name: config}, file, default_flow_style=False)
+                
+            logger.info(f"Saved custom tool '{name}' to {file_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving custom tool '{name}': {str(e)}")
             return False
-    
+            
+    def remove_tool(self, name: str) -> bool:
+        """
+        Remove a tool from the manager.
+        
+        Args:
+            name (str): The name of the tool to remove
+            
+        Returns:
+            bool: True if the tool was removed successfully, False otherwise
+        """
+        if name not in self.tools:
+            logger.warning(f"Tool '{name}' does not exist.")
+            return False
+            
+        # Check if it's a custom tool and remove the file
+        safe_name = name.lower().replace(' ', '_').replace('-', '_')
+        custom_file_path = os.path.join(self.custom_tools_dir, f"{safe_name}.yaml")
+        
+        if os.path.exists(custom_file_path):
+            try:
+                os.remove(custom_file_path)
+                logger.info(f"Removed custom tool file: {custom_file_path}")
+            except Exception as e:
+                logger.error(f"Error removing custom tool file '{custom_file_path}': {str(e)}")
+                return False
+                
+        # Remove from the in-memory dictionary
+        del self.tools[name]
+        logger.info(f"Removed tool '{name}'")
+        return True
+        
     def get_all_tools(self) -> Dict[str, Dict[str, Any]]:
         """
-        Get all tools (built-in and custom).
+        Get all loaded tools.
         
         Returns:
-            Dictionary of all tools
+            Dict[str, Dict[str, Any]]: Dictionary of all tools
         """
-        # Combine built-in and custom tools, with custom tools taking precedence
-        return {**self.tools, **self.custom_tools}
-    
-    def get_tool(self, tool_name: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific tool by name.
-        
-        Args:
-            tool_name: Name of the tool
-            
-        Returns:
-            Tool information dictionary or None if not found
-        """
-        # Check custom tools first
-        if tool_name in self.custom_tools:
-            return self.custom_tools[tool_name]
-        
-        # Then check built-in tools
-        if tool_name in self.tools:
-            return self.tools[tool_name]
-        
-        return None
-    
-    def add_tool(self, tool_info: Dict[str, Any]) -> bool:
-        """
-        Add a new custom tool or update an existing one.
-        
-        Args:
-            tool_info: Dictionary containing tool information
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        required_fields = ["name", "category", "description"]
-        
-        # Validate required fields
-        for field in required_fields:
-            if field not in tool_info:
-                logger.error(f"Missing required field '{field}' for tool")
-                return False
-        
-        # Add the tool to custom tools
-        tool_name = tool_info["name"]
-        self.custom_tools[tool_name] = tool_info
-        
-        # Save custom tools configuration
-        return self.save_custom_tools()
-    
-    def remove_tool(self, tool_name: str) -> bool:
-        """
-        Remove a custom tool.
-        
-        Args:
-            tool_name: Name of the tool to remove
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        # Can only remove custom tools
-        if tool_name in self.custom_tools:
-            del self.custom_tools[tool_name]
-            return self.save_custom_tools()
-        else:
-            logger.error(f"Cannot remove built-in tool '{tool_name}'. Only custom tools can be removed.")
-            return False
+        return self.tools.copy()
     
     def check_tool_availability(self, tool_name: str) -> bool:
         """
@@ -341,115 +348,175 @@ class ToolManager:
                 
             if self.check_tool_availability(name):
                 available_tools[name] = info
-        
+                
         return available_tools
-    
-    def install_tool(self, tool_name: str, method: Optional[str] = None) -> bool:
+        
+    def install_tool(self, tool_name: str) -> bool:
         """
-        Install a tool.
+        Install a tool by name.
         
         Args:
             tool_name: Name of the tool to install
-            method: Optional installation method override
             
         Returns:
-            True if installation was successful, False otherwise
+            True if installation succeeded, False otherwise
         """
         tool_info = self.get_tool(tool_name)
         if not tool_info:
-            logger.error(f"Tool '{tool_name}' not found")
+            logger.error(f"Tool '{tool_name}' not found in configuration")
             return False
-        
-        # If already installed, skip
+            
         if self.check_tool_availability(tool_name):
             logger.info(f"Tool '{tool_name}' is already installed")
             return True
-        
-        # Get installation methods
-        install_methods = tool_info.get("install", {})
-        if not install_methods:
-            logger.error(f"No installation methods defined for tool '{tool_name}'")
+            
+        if "installation" not in tool_info:
+            logger.error(f"No installation information for tool '{tool_name}'")
             return False
+            
+        installation = tool_info["installation"]
+        method = installation.get("method", "").lower()
         
-        # If method is specified, use that
-        if method and method in install_methods:
-            return self._run_install_method(tool_name, method, install_methods[method])
-        
-        # Try to find a compatible installation method
-        for pm in self.platform["package_managers"]:
-            if pm in install_methods:
-                return self._run_install_method(tool_name, pm, install_methods[pm])
-        
-        # Try binary installation if available
-        if "binary" in install_methods:
-            return self._run_install_method(tool_name, "binary", install_methods["binary"])
-        
-        # Try manual installation if available
-        if "manual" in install_methods:
-            instructions = install_methods["manual"]
-            logger.info(f"Manual installation required for tool '{tool_name}'")
-            logger.info(f"Instructions: {instructions}")
+        # Install based on method
+        if method == "apt" and "apt" in self._package_managers:
+            return self._install_apt(installation.get("package", tool_name))
+        elif method == "brew" and "brew" in self._package_managers:
+            return self._install_brew(installation.get("package", tool_name))
+        elif method == "pip" and "pip" in self._package_managers:
+            return self._install_pip(installation.get("package", tool_name))
+        elif method == "npm" and "npm" in self._package_managers:
+            return self._install_npm(installation.get("package", tool_name))
+        elif method == "git":
+            return self._install_git(installation.get("repository"), installation.get("commands", []))
+        elif method == "binary":
+            return self._install_binary(installation.get("url") or installation.get("path"))
+        else:
+            logger.error(f"Unsupported installation method '{method}' for tool '{tool_name}'")
             return False
-        
-        logger.error(f"No compatible installation method found for tool '{tool_name}'")
-        return False
     
-    def _run_install_method(self, tool_name: str, method: str, command: str) -> bool:
-        """
-        Run an installation command.
-        
-        Args:
-            tool_name: Name of the tool being installed
-            method: Installation method
-            command: Command to run
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        logger.info(f"Installing tool '{tool_name}' using {method}: {command}")
-        
+    def _install_apt(self, package: str) -> bool:
+        """Install a package using apt-get."""
         try:
-            if method == "binary":
-                # Binary installation might have special handling
-                return self._install_binary(command)
-            
-            # For package managers
+            cmd = ["apt-get", "install", "-y", package]
+            logger.info(f"Installing {package} with apt-get")
             result = subprocess.run(
-                command,
-                shell=True,
-                stdout=subprocess.PIPE,
+                cmd, 
+                stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE,
-                timeout=300  # 5 minutes timeout
+                check=True
             )
-            
-            if result.returncode == 0:
-                logger.info(f"Successfully installed tool '{tool_name}'")
-                return True
-            else:
-                logger.error(f"Error installing tool '{tool_name}': {result.stderr.decode()}")
-                return False
-            
-        except subprocess.TimeoutExpired:
-            logger.error(f"Installation timeout for tool '{tool_name}'")
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error installing {package} with apt-get: {e}")
             return False
         except Exception as e:
-            logger.error(f"Error during installation of tool '{tool_name}': {e}")
+            logger.error(f"Unexpected error installing {package}: {e}")
             return False
-    
-    def _install_binary(self, url_or_path: str) -> bool:
-        """
-        Install a binary from URL or path.
-        
-        Args:
-            url_or_path: URL or path to the binary
             
-        Returns:
-            True if successful, False otherwise
-        """
+    def _install_brew(self, package: str) -> bool:
+        """Install a package using Homebrew."""
+        try:
+            cmd = ["brew", "install", package]
+            logger.info(f"Installing {package} with Homebrew")
+            result = subprocess.run(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                check=True
+            )
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error installing {package} with Homebrew: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error installing {package}: {e}")
+            return False
+            
+    def _install_pip(self, package: str) -> bool:
+        """Install a package using pip."""
+        try:
+            cmd = ["pip", "install", package]
+            logger.info(f"Installing {package} with pip")
+            result = subprocess.run(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                check=True
+            )
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error installing {package} with pip: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error installing {package}: {e}")
+            return False
+            
+    def _install_npm(self, package: str) -> bool:
+        """Install a package using npm."""
+        try:
+            cmd = ["npm", "install", "-g", package]
+            logger.info(f"Installing {package} with npm")
+            result = subprocess.run(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                check=True
+            )
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error installing {package} with npm: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error installing {package}: {e}")
+            return False
+            
+    def _install_git(self, repository: str, commands: List[str]) -> bool:
+        """Install a tool from a git repository."""
+        if not repository:
+            logger.error("No repository URL provided")
+            return False
+            
+        try:
+            # Create a temporary directory
+            import tempfile
+            temp_dir = tempfile.mkdtemp()
+            
+            # Clone the repository
+            cmd = ["git", "clone", repository, temp_dir]
+            logger.info(f"Cloning {repository}")
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Run installation commands
+            for command in commands:
+                cmd = f"cd {temp_dir} && {command}"
+                logger.info(f"Running: {cmd}")
+                subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+            # Clean up
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error installing from git: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error installing from git: {e}")
+            return False
+            
+    def _install_binary(self, url_or_path: str) -> bool:
+        """Install a binary from a URL or local path."""
+        if not url_or_path:
+            logger.error("No URL or path provided for binary installation")
+            return False
+            
+        # Determine if it's a URL or local path
         if url_or_path.startswith(("http://", "https://")):
-            # Download the binary
+            # Download from URL
             try:
-                response = requests.get(url_or_path, timeout=60)
+                logger.info(f"Downloading binary from {url_or_path}")
+                response = requests.get(url_or_path, timeout=30)
                 if response.status_code != 200:
                     logger.error(f"Failed to download binary: {response.status_code}")
                     return False
@@ -501,100 +568,4 @@ class ToolManager:
             # In a real implementation, this would check version info
             update_status[name] = False
             
-        return update_status
-    
-    def update_tool(self, tool_name: str) -> bool:
-        """
-        Update a specific tool.
-        
-        Args:
-            tool_name: Name of the tool to update
-            
-        Returns:
-            True if update was successful, False otherwise
-        """
-        tool_info = self.get_tool(tool_name)
-        if not tool_info:
-            logger.error(f"Tool '{tool_name}' not found")
-            return False
-        
-        # Get update methods
-        update_methods = tool_info.get("update", {})
-        if not update_methods:
-            logger.warning(f"No update methods defined for tool '{tool_name}'")
-            # Fall back to reinstallation
-            return self.install_tool(tool_name)
-        
-        # Try to find a compatible update method
-        for pm in self.platform["package_managers"]:
-            if pm in update_methods:
-                return self._run_update_method(tool_name, pm, update_methods[pm])
-        
-        # Fall back to reinstallation
-        logger.info(f"No specific update method found for tool '{tool_name}', attempting reinstall")
-        return self.install_tool(tool_name)
-    
-    def _run_update_method(self, tool_name: str, method: str, command: str) -> bool:
-        """
-        Run an update command.
-        
-        Args:
-            tool_name: Name of the tool being updated
-            method: Update method
-            command: Command to run
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        logger.info(f"Updating tool '{tool_name}' using {method}: {command}")
-        
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=300  # 5 minutes timeout
-            )
-            
-            if result.returncode == 0:
-                logger.info(f"Successfully updated tool '{tool_name}'")
-                return True
-            else:
-                logger.error(f"Error updating tool '{tool_name}': {result.stderr.decode()}")
-                return False
-            
-        except subprocess.TimeoutExpired:
-            logger.error(f"Update timeout for tool '{tool_name}'")
-            return False
-        except Exception as e:
-            logger.error(f"Error during update of tool '{tool_name}': {e}")
-            return False
-    
-    def get_tool_names_by_category(self, category: str) -> List[str]:
-        """
-        Get names of all tools in a specific category.
-        
-        Args:
-            category: Category to filter by
-            
-        Returns:
-            List of tool names in the category
-        """
-        tools = self.get_all_tools()
-        return [name for name, info in tools.items() if info.get("category") == category]
-    
-    def get_installation_status(self) -> Dict[str, bool]:
-        """
-        Get installation status for all tools.
-        
-        Returns:
-            Dictionary mapping tool names to installation status
-        """
-        all_tools = self.get_all_tools()
-        status = {}
-        
-        for name in all_tools:
-            status[name] = self.check_tool_availability(name)
-            
-        return status 
+        return update_status 

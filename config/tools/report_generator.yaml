@@ -1,0 +1,16 @@
+report-generator:
+  category: reporting
+  check_command: python -c 'from src.reporting import generator; print("OK")'
+  description: Sniper's built-in vulnerability report generator
+  documentation: https://github.com/your-username/sniper/docs/reporting.md
+  execution_time: fast
+  install:
+    pip: pip install -e .
+  name: report-generator
+  python_package: sniper.reporting
+  recommendation_score: 95
+  target_types:
+  - report
+  update:
+    pip: pip install -e .
+  website: https://github.com/your-username/sniper

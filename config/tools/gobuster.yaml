@@ -1,0 +1,21 @@
+gobuster:
+  binary: gobuster
+  category: reconnaissance
+  check_command: gobuster version
+  description: Directory/file, DNS and VHost busting tool
+  documentation: https://github.com/OJ/gobuster#readme
+  execution_time: medium
+  install:
+    apt: apt-get install -y gobuster
+    brew: brew install gobuster
+    go: go install github.com/OJ/gobuster/v3@latest
+  name: gobuster
+  recommendation_score: 87
+  target_types:
+  - url
+  - domain
+  update:
+    apt: apt-get update && apt-get install -y --only-upgrade gobuster
+    brew: brew upgrade gobuster
+    go: go install github.com/OJ/gobuster/v3@latest
+  website: https://github.com/OJ/gobuster

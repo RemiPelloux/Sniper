@@ -1,0 +1,21 @@
+sqlmap:
+  binary: sqlmap
+  category: vulnerability_scanning
+  check_command: sqlmap --version
+  description: Automated SQL injection and database takeover tool
+  documentation: https://github.com/sqlmapproject/sqlmap/wiki
+  execution_time: medium
+  install:
+    apt: apt-get install -y sqlmap
+    brew: brew install sqlmap
+    pip: pip install sqlmap
+  name: sqlmap
+  recommendation_score: 89
+  target_types:
+  - url
+  - webapp
+  update:
+    apt: apt-get update && apt-get install -y --only-upgrade sqlmap
+    brew: brew upgrade sqlmap
+    pip: pip install --upgrade sqlmap
+  website: https://sqlmap.org/

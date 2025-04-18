@@ -1,0 +1,23 @@
+metasploit:
+  binary: msfconsole
+  category: exploitation
+  check_command: msfconsole -v
+  description: Advanced open-source platform for developing, testing, and executing
+    exploits
+  documentation: https://docs.metasploit.com/
+  execution_time: medium
+  install:
+    apt: apt-get install -y metasploit-framework
+    brew: brew install metasploit
+    docker: docker pull metasploitframework/metasploit-framework
+  name: metasploit
+  recommendation_score: 90
+  target_types:
+  - ip
+  - domain
+  - webapp
+  - service
+  update:
+    apt: apt-get update && apt-get install -y --only-upgrade metasploit-framework
+    brew: brew upgrade metasploit
+  website: https://www.metasploit.com/

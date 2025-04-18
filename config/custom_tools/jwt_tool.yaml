@@ -1,0 +1,19 @@
+jwt_tool:
+  name: jwt_tool
+  category: exploitation
+  description: "A toolkit for testing, tweaking and cracking JSON Web Tokens"
+  binary: jwt_tool.py
+  check_command: "python3 -c 'import jwt_tool' 2>/dev/null || python3 -c 'import sys; sys.exit(1)'"
+  install:
+    pip: "pip install jwt-tool"
+    git: 
+      repository: "https://github.com/ticarpi/jwt_tool"
+      commands:
+        - "pip install -r requirements.txt"
+  update:
+    pip: "pip install --upgrade jwt-tool"
+  website: "https://github.com/ticarpi/jwt_tool"
+  documentation: "https://github.com/ticarpi/jwt_tool/wiki"
+  execution_time: "fast"
+  target_types: ["webapp", "api"]
+  recommendation_score: 88 

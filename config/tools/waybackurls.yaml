@@ -1,0 +1,16 @@
+waybackurls:
+  binary: waybackurls
+  category: utility
+  check_command: waybackurls -h
+  description: Fetch URLs from the Wayback Machine for a specific domain
+  documentation: https://github.com/tomnomnom/waybackurls#readme
+  execution_time: medium
+  install:
+    go: go install github.com/tomnomnom/waybackurls@latest
+  name: waybackurls
+  recommendation_score: 80
+  target_types:
+  - domain
+  update:
+    go: go install github.com/tomnomnom/waybackurls@latest
+  website: https://github.com/tomnomnom/waybackurls

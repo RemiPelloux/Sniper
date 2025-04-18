@@ -1,0 +1,19 @@
+sslyze:
+  binary: sslyze
+  category: vulnerability_scanning
+  check_command: sslyze --version
+  description: SSL/TLS server scanning tool
+  documentation: https://nabla-c0d3.github.io/sslyze/documentation/
+  execution_time: fast
+  install:
+    brew: brew install sslyze
+    pip: pip install sslyze
+  name: sslyze
+  recommendation_score: 85
+  target_types:
+  - domain
+  - url
+  update:
+    brew: brew upgrade sslyze
+    pip: pip install --upgrade sslyze
+  website: https://github.com/nabla-c0d3/sslyze

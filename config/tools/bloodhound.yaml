@@ -1,0 +1,19 @@
+bloodhound:
+  binary: bloodhound
+  category: post_exploitation
+  check_command: which bloodhound
+  description: Active Directory attack path visualization tool
+  documentation: https://bloodhound.readthedocs.io/en/latest/
+  execution_time: medium
+  install:
+    apt: apt-get install -y bloodhound
+    npm: npm install -g bloodhound
+  name: bloodhound
+  recommendation_score: 85
+  target_types:
+  - domain
+  - network
+  update:
+    apt: apt-get update && apt-get install -y --only-upgrade bloodhound
+    npm: npm update -g bloodhound
+  website: https://github.com/BloodHoundAD/BloodHound

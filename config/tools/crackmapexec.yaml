@@ -1,0 +1,19 @@
+crackmapexec:
+  binary: crackmapexec
+  category: post_exploitation
+  check_command: crackmapexec -h
+  description: Post-exploitation tool for Windows/Active Directory environments
+  documentation: https://github.com/byt3bl33d3r/CrackMapExec/wiki
+  execution_time: fast
+  install:
+    apt: apt-get install -y crackmapexec
+    docker: docker pull byt3bl33d3r/crackmapexec
+    pip: pip install crackmapexec
+  name: crackmapexec
+  recommendation_score: 88
+  target_types:
+  - ip
+  - network
+  update:
+    pip: pip install --upgrade crackmapexec
+  website: https://github.com/byt3bl33d3r/CrackMapExec

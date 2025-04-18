@@ -1,0 +1,17 @@
+semgrep:
+  name: semgrep
+  category: vulnerability_scanning
+  description: "Lightweight static analysis for many languages. Find security vulnerabilities in code"
+  binary: semgrep
+  check_command: "semgrep --version"
+  install:
+    pip: "pip install semgrep"
+    brew: "brew install semgrep"
+  update:
+    pip: "pip install --upgrade semgrep"
+    brew: "brew upgrade semgrep"
+  website: "https://semgrep.dev/"
+  documentation: "https://semgrep.dev/docs/"
+  execution_time: "medium"
+  target_types: ["code", "repository"]
+  recommendation_score: 94 

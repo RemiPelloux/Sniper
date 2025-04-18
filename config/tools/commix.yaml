@@ -1,0 +1,18 @@
+commix:
+  binary: commix
+  category: exploitation
+  check_command: commix --version
+  description: Command injection exploitation tool
+  documentation: https://github.com/commixproject/commix/wiki
+  execution_time: medium
+  install:
+    manual: git clone https://github.com/commixproject/commix.git /usr/local/commix
+      && ln -s /usr/local/commix/commix.py /usr/local/bin/commix && chmod +x /usr/local/bin/commix
+  name: commix
+  recommendation_score: 84
+  target_types:
+  - url
+  - webapp
+  update:
+    manual: cd /usr/local/commix && git pull
+  website: https://github.com/commixproject/commix

@@ -1,0 +1,21 @@
+zap:
+  binary: zap.sh
+  category: vulnerability_scanning
+  check_command: which zap.sh
+  description: OWASP Zed Attack Proxy for web app scanning
+  documentation: https://www.zaproxy.org/docs/
+  execution_time: slow
+  install:
+    apt: apt-get install -y zaproxy
+    brew: brew install --cask owasp-zap
+    docker: docker pull owasp/zap2docker-stable
+  name: zap
+  recommendation_score: 90
+  target_types:
+  - url
+  - webapp
+  update:
+    apt: apt-get update && apt-get install -y --only-upgrade zaproxy
+    brew: brew upgrade --cask owasp-zap
+    docker: docker pull owasp/zap2docker-stable
+  website: https://www.zaproxy.org/

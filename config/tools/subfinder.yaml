@@ -1,0 +1,17 @@
+subfinder:
+  binary: subfinder
+  category: reconnaissance
+  check_command: subfinder -version
+  description: Fast passive subdomain enumeration tool
+  documentation: https://github.com/projectdiscovery/subfinder#readme
+  execution_time: medium
+  install:
+    binary: https://github.com/projectdiscovery/subfinder/releases/latest
+    go: go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+  name: subfinder
+  recommendation_score: 88
+  target_types:
+  - domain
+  update:
+    go: go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+  website: https://github.com/projectdiscovery/subfinder

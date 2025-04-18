@@ -1,0 +1,22 @@
+searchsploit:
+  binary: searchsploit
+  category: utility
+  check_command: searchsploit -h
+  description: Command line search tool for Exploit-DB
+  documentation: https://www.exploit-db.com/documentation/SearchSploit.pdf
+  execution_time: fast
+  install:
+    apt: apt-get install -y exploitdb
+    brew: brew install exploitdb
+    manual: git clone https://github.com/offensive-security/exploitdb.git /opt/exploitdb
+      && ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit
+  name: searchsploit
+  recommendation_score: 85
+  target_types:
+  - service
+  - software
+  update:
+    apt: apt-get update && apt-get install -y --only-upgrade exploitdb
+    brew: brew upgrade exploitdb
+    manual: cd /opt/exploitdb && git pull
+  website: https://www.exploit-db.com/searchsploit

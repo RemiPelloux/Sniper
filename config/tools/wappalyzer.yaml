@@ -1,0 +1,18 @@
+wappalyzer:
+  binary: wappalyzer
+  category: reconnaissance
+  check_command: which wappalyzer
+  description: Web technology fingerprinting tool
+  documentation: https://www.wappalyzer.com/docs/dev/cli/
+  execution_time: fast
+  install:
+    docker: docker pull wappalyzer/cli
+    npm: npm install -g wappalyzer
+  name: wappalyzer
+  recommendation_score: 92
+  target_types:
+  - url
+  - webapp
+  update:
+    npm: npm update -g wappalyzer
+  website: https://www.wappalyzer.com/
