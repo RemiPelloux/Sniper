@@ -1118,6 +1118,7 @@ class SmartRecon:
         # For now, we'll hardcode a representative set of tools
         
         available_tools = [
+            # Existing reconnaissance tools
             {
                 "name": "nmap",
                 "category": "reconnaissance",
@@ -1351,6 +1352,164 @@ class SmartRecon:
                 "thoroughness": "medium",
                 "target_types": ["api"],
                 "output_formats": ["json"]
+            },
+            # Additional reconnaissance tools
+            {
+                "name": "dnsenum",
+                "category": "reconnaissance",
+                "description": "DNS enumeration tool for domain analysis",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["domain"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "massdns",
+                "category": "reconnaissance",
+                "description": "High-performance DNS resolver for subdomain enumeration",
+                "execution_time": "fast",
+                "thoroughness": "high",
+                "target_types": ["domain"],
+                "output_formats": ["text", "json"]
+            },
+            {
+                "name": "masscan",
+                "category": "reconnaissance",
+                "description": "Fast port scanner for large IP ranges",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["ip", "network"],
+                "output_formats": ["text", "json"]
+            },
+            {
+                "name": "waybackurls",
+                "category": "reconnaissance",
+                "description": "Fetch URLs from Wayback Machine for a domain",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["domain"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "gau",
+                "category": "reconnaissance",
+                "description": "Get All URLs from multiple sources",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["domain"],
+                "output_formats": ["text"]
+            },
+            
+            # Additional vulnerability scanning tools
+            {
+                "name": "sslscan",
+                "category": "vulnerability_scanning",
+                "description": "SSL/TLS scanner for checking configurations and vulnerabilities",
+                "execution_time": "fast",
+                "thoroughness": "high",
+                "target_types": ["ip", "domain"],
+                "output_formats": ["text", "json"]
+            },
+            {
+                "name": "wpscan",
+                "category": "vulnerability_scanning",
+                "description": "WordPress vulnerability scanner",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "droopescan",
+                "category": "vulnerability_scanning",
+                "description": "CMS scanner (Drupal, Joomla, WordPress, etc.)",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["text", "json"]
+            },
+            {
+                "name": "cmseek",
+                "category": "vulnerability_scanning",
+                "description": "CMS detection and exploitation tool",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["text", "json"]
+            },
+            
+            # Advanced exploitation tools
+            {
+                "name": "commix",
+                "category": "exploitation",
+                "description": "Command injection exploitation tool",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["text", "json"]
+            },
+            {
+                "name": "xsshunter",
+                "category": "exploitation",
+                "description": "XSS payload generator and discovery tool",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "nosqlmap",
+                "category": "exploitation",
+                "description": "NoSQL database exploitation tool",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "jwt_tool",
+                "category": "exploitation",
+                "description": "JWT testing and exploitation tool",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp", "api"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "ssrf-sheriff",
+                "category": "exploitation",
+                "description": "SSRF detection and exploitation tool",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp", "api"],
+                "output_formats": ["text", "json"]
+            },
+            {
+                "name": "graphql-voyager",
+                "category": "exploitation",
+                "description": "GraphQL API exploration and analysis tool",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["api"],
+                "output_formats": ["text", "json"]
+            },
+            {
+                "name": "crlfuzz",
+                "category": "exploitation",
+                "description": "CRLF injection scanner",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "csrf-poc-generator",
+                "category": "exploitation",
+                "description": "CSRF proof-of-concept generator",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["html"]
             }
         ]
         
