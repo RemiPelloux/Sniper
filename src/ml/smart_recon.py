@@ -76,9 +76,9 @@ class SmartRecon:
         os.makedirs(self.model_dir, exist_ok=True)
 
         # Initialize models
-        self.tool_selector = None
-        self.pattern_recognizer = None
-        self.vectorizer = TfidfVectorizer(max_features=100)
+        self.tool_selector_model = None
+        self.pattern_recognizer_model = None
+        self.clustering_model = None
         self.scaler = StandardScaler()
 
         # Tool efficiency metrics
@@ -102,78 +102,158 @@ class SmartRecon:
 
         if os.path.exists(tool_selector_path):
             try:
-                self.tool_selector = joblib.load(tool_selector_path)
+                self.tool_selector_model = joblib.load(tool_selector_path)
                 logger.info("Loaded tool selector model")
             except Exception as e:
                 logger.error(f"Error loading tool selector model: {e}")
 
         if os.path.exists(pattern_recognizer_path):
             try:
-                self.pattern_recognizer = joblib.load(pattern_recognizer_path)
+                self.pattern_recognizer_model = joblib.load(pattern_recognizer_path)
                 logger.info("Loaded pattern recognizer model")
             except Exception as e:
                 logger.error(f"Error loading pattern recognizer model: {e}")
 
     def save_models(self):
         """Save trained models to disk."""
-        if self.tool_selector:
+        if self.tool_selector_model:
             tool_selector_path = os.path.join(self.model_dir, "tool_selector.joblib")
-            joblib.dump(self.tool_selector, tool_selector_path)
+            joblib.dump(self.tool_selector_model, tool_selector_path)
             logger.info(f"Saved tool selector model to {tool_selector_path}")
 
-        if self.pattern_recognizer:
+        if self.pattern_recognizer_model:
             pattern_recognizer_path = os.path.join(
                 self.model_dir, "pattern_recognizer.joblib"
             )
-            joblib.dump(self.pattern_recognizer, pattern_recognizer_path)
+            joblib.dump(self.pattern_recognizer_model, pattern_recognizer_path)
             logger.info(f"Saved pattern recognizer model to {pattern_recognizer_path}")
 
-    def extract_target_features(self, target: str) -> Dict[str, Any]:
+    def extract_target_features(self, target: Union[str, Dict[str, Any]]) -> np.ndarray:
         """
         Extract features from a target for use in tool selection.
 
         Args:
-            target: The target domain or IP address
+            target: The target domain, IP address, or target info dictionary
 
         Returns:
-            Dictionary of features extracted from the target
+            Numpy array of features extracted from the target
         """
-        features = {}
-
-        # Check if target is an IP or domain
-        is_ip = self._is_ip_address(target)
-        features["is_ip"] = 1 if is_ip else 0
-
-        if is_ip:
+        feature_dict = {}
+        
+        # Handle dictionary input
+        if isinstance(target, dict):
+            # Extract hostname/IP from dictionary
+            hostname = target.get("host", "")
+            if not hostname:
+                logger.warning("Target dictionary missing 'host' field")
+                return np.array([])
+                
+            # Check if target is an IP or domain
+            is_ip = self._is_ip_address(hostname)
+            feature_dict["is_ip"] = 1 if is_ip else 0
+            
+            # Add port information if available
+            if "port" in target:
+                feature_dict["has_port"] = 1
+                feature_dict["port"] = target["port"]
+                # Common port indicators
+                feature_dict["is_web_port"] = 1 if target["port"] in [80, 443, 8080, 8443] else 0
+                feature_dict["is_db_port"] = 1 if target["port"] in [3306, 5432, 1433, 1521, 27017, 6379] else 0
+                feature_dict["is_mail_port"] = 1 if target["port"] in [25, 465, 587, 110, 143, 993] else 0
+            else:
+                feature_dict["has_port"] = 0
+                
+            # Add protocol if available
+            if "protocol" in target:
+                protocol = target["protocol"].lower()
+                feature_dict["protocol_https"] = 1 if protocol == "https" else 0
+                feature_dict["protocol_http"] = 1 if protocol == "http" else 0
+                feature_dict["protocol_ssh"] = 1 if protocol == "ssh" else 0
+                feature_dict["protocol_ftp"] = 1 if protocol == "ftp" else 0
+            
+            # Add service information if available
+            if "services" in target and isinstance(target["services"], list):
+                services = [s.lower() for s in target["services"]]
+                feature_dict["has_web_service"] = 1 if any(s in ["http", "https", "www"] for s in services) else 0
+                feature_dict["has_db_service"] = 1 if any(s in ["mysql", "postgresql", "mongodb", "redis"] for s in services) else 0
+                feature_dict["has_mail_service"] = 1 if any(s in ["smtp", "pop3", "imap"] for s in services) else 0
+                feature_dict["service_count"] = len(target["services"])
+            
+            # Add target type info
+            target_type = target.get("type", "").lower()
+            feature_dict["is_webapp"] = 1 if target_type in ["web", "webapp", "website"] else 0
+            feature_dict["is_api"] = 1 if target_type in ["api", "rest", "graphql"] else 0
+            feature_dict["is_mobile_backend"] = 1 if target_type in ["mobile_api", "mobile_backend"] else 0
+            
+            # Process hostname part like a string target
+            hostname_target = hostname
+        else:
+            # If target is a string, use it directly
+            hostname_target = target
+            # Check if target is an IP or domain
+            is_ip = self._is_ip_address(hostname_target)
+            feature_dict["is_ip"] = 1 if is_ip else 0
+        
+        # Process IP or domain specific features
+        if feature_dict.get("is_ip", self._is_ip_address(hostname_target)):
             # Extract IP-specific features
-            ip = ip_address(target)
-            features["is_private"] = 1 if ip.is_private else 0
-            features["is_global"] = 1 if ip.is_global else 0
-            features["is_multicast"] = 1 if ip.is_multicast else 0
-            features["ip_version"] = ip.version
+            try:
+                ip = ip_address(hostname_target)
+                feature_dict["is_private"] = 1 if ip.is_private else 0
+                feature_dict["is_global"] = 1 if ip.is_global else 0
+                feature_dict["is_multicast"] = 1 if ip.is_multicast else 0
+                feature_dict["ip_version"] = ip.version
+            except ValueError:
+                logger.warning(f"Failed to parse IP address: {hostname_target}")
         else:
             # Extract domain-specific features
-            domain_parts = target.split(".")
-            features["is_subdomain"] = 1 if len(domain_parts) > 2 else 0
-            features["domain_length"] = len(target)
-            features["num_segments"] = len(domain_parts)
-            features["tld"] = domain_parts[-1]
+            try:
+                domain_parts = hostname_target.split(".")
+                feature_dict["is_subdomain"] = 1 if len(domain_parts) > 2 else 0
+                feature_dict["domain_length"] = len(hostname_target)
+                feature_dict["num_segments"] = len(domain_parts)
+                
+                # Handle TLD encoding - instead of storing string, convert to a numerical representation
+                tld = self._extract_tld(hostname_target)
+                # Common TLDs get specific flags
+                feature_dict["tld_com"] = 1 if tld == "com" else 0
+                feature_dict["tld_org"] = 1 if tld == "org" else 0
+                feature_dict["tld_net"] = 1 if tld == "net" else 0
+                feature_dict["tld_edu"] = 1 if tld == "edu" else 0
+                feature_dict["tld_gov"] = 1 if tld == "gov" else 0
+                feature_dict["tld_io"] = 1 if tld == "io" else 0
+                feature_dict["tld_co"] = 1 if tld == "co" else 0
+                # Remove direct tld assignment to avoid string in feature vector
 
-            # Check for keywords in domain that might indicate purpose
-            keywords = [
-                "api",
-                "dev",
-                "test",
-                "staging",
-                "prod",
-                "admin",
-                "secure",
-                "login",
-            ]
-            for keyword in keywords:
-                features[f"has_{keyword}"] = 1 if keyword in target.lower() else 0
-
-        return features
+                # Check for keywords in domain that might indicate purpose
+                keywords = [
+                    "api", "dev", "test", "staging", "prod", "admin", 
+                    "secure", "login", "auth", "payment", "portal", "app",
+                    "mobile", "static", "cdn", "media", "img", "assets",
+                    "docs", "support", "help", "service", "status"
+                ]
+                for keyword in keywords:
+                    feature_dict[f"has_{keyword}"] = 1 if keyword in hostname_target.lower() else 0
+            except Exception as e:
+                logger.warning(f"Error extracting domain features: {e}")
+        
+        # Convert dictionary to numpy array - ensure all values are numeric
+        feature_values = []
+        for key, val in feature_dict.items():
+            if isinstance(val, (int, float)):
+                feature_values.append(val)
+            elif isinstance(val, bool):
+                feature_values.append(1 if val else 0)
+            elif isinstance(val, str):
+                # Skip string values as they can't be converted to float for the model
+                logger.debug(f"Skipping string feature '{key}': {val}")
+                continue
+            else:
+                # Skip non-numeric values
+                logger.debug(f"Skipping non-numeric feature '{key}': {val}")
+                continue
+            
+        return np.array(feature_values, dtype=np.float64)
 
     def extract_finding_features(self, findings: List[Dict]) -> np.ndarray:
         """
@@ -248,10 +328,34 @@ class SmartRecon:
         return tool_map.get(tool.lower(), 0)
 
     def _is_ip_address(self, target: str) -> bool:
-        """Check if the target is an IP address."""
+        """
+        Check if a target is an IP address.
+
+        Args:
+            target: The target string to check
+
+        Returns:
+            Whether the target is an IP address
+        """
         try:
             ip_address(target)
             return True
+        except ValueError:
+            return False
+    
+    def _is_private_ip(self, ip_str: str) -> bool:
+        """
+        Check if an IP address is private.
+        
+        Args:
+            ip_str: The IP address string
+            
+        Returns:
+            Whether the IP is private
+        """
+        try:
+            ip = ip_address(ip_str)
+            return ip.is_private
         except ValueError:
             return False
 
@@ -266,6 +370,7 @@ class SmartRecon:
             tool_effectiveness: List of dictionaries with tool effectiveness metrics
                 for each target
         """
+        logger.info(f"Starting train_tool_selector with {len(targets)} targets")
         if (
             not targets
             or not tool_effectiveness
@@ -277,23 +382,37 @@ class SmartRecon:
         # Extract features from targets
         X = []
         y = []
-
+        
+        logger.info(f"Processing {len(targets)} targets for feature extraction")
         for idx, target in enumerate(targets):
             # Extract target features
-            target_features = list(self.extract_target_features(target).values())
-            X.append(target_features)
+            target_features = self.extract_target_features(target)
+            logger.info(f"Extracted features for target {idx}: shape={target_features.shape}")
+            
+            if len(target_features) > 0:
+                X.append(target_features)
 
-            # Get the most effective tool for this target
-            effectiveness = tool_effectiveness[idx]
-            best_tool = max(effectiveness.items(), key=lambda x: x[1])
-            y.append(self._encode_tool(best_tool[0]))
+                # Get the most effective tool for this target
+                effectiveness = tool_effectiveness[idx]
+                logger.info(f"Tool effectiveness for target {idx}: {effectiveness}")
+                best_tool = max(effectiveness.items(), key=lambda x: x[1])
+                y.append(self._encode_tool(best_tool[0]))
 
+        logger.info(f"Collected {len(X)} feature vectors and {len(y)} labels")
+        if not X or not y:
+            logger.error("No valid features extracted for tool selector training")
+            return
+            
         # Train the model
-        self.tool_selector = RandomForestClassifier(n_estimators=100, random_state=42)
-        self.tool_selector.fit(X, y)
+        logger.info("Creating RandomForestClassifier")
+        self.tool_selector_model = RandomForestClassifier(n_estimators=100, random_state=42)
+        
+        logger.info(f"Fitting model with {len(X)} samples")
+        self.tool_selector_model.fit(X, y)
         logger.info("Trained tool selector model")
 
         # Save the model
+        logger.info("Saving trained model")
         self.save_models()
 
     def train_pattern_recognizer(
@@ -337,10 +456,10 @@ class SmartRecon:
             return
 
         # Train the model
-        self.pattern_recognizer = RandomForestClassifier(
+        self.pattern_recognizer_model = RandomForestClassifier(
             n_estimators=100, random_state=42
         )
-        self.pattern_recognizer.fit(X, labels[: len(X)])
+        self.pattern_recognizer_model.fit(X, labels[: len(X)])
         logger.info("Trained pattern recognizer model")
 
         # Save the model
@@ -391,18 +510,17 @@ class SmartRecon:
         """
         # Extract features from target
         features = self.extract_target_features(target)
-        feature_values = list(features.values())
 
         # If tool selector is not trained, use heuristics
-        if self.tool_selector is None:
-            return self._select_tools_heuristic(features)
+        if self.tool_selector_model is None:
+            return self._select_tools_heuristic(target)
 
         try:
             # Predict the best tool based on the model
-            tool_code = self.tool_selector.predict([feature_values])[0]
+            tool_code = self.tool_selector_model.predict([features])[0]
 
             # Get probabilities for all tools
-            probabilities = self.tool_selector.predict_proba([feature_values])[0]
+            probabilities = self.tool_selector_model.predict_proba([features])[0]
             sorted_indices = np.argsort(probabilities)[::-1]  # Sort in descending order
 
             # Map tool codes back to tool names
@@ -431,26 +549,40 @@ class SmartRecon:
 
         except Exception as e:
             logger.error(f"Error selecting tools with model: {e}")
-            return self._select_tools_heuristic(features)
+            return self._select_tools_heuristic(target)
 
-    def _select_tools_heuristic(self, features: Dict[str, Any]) -> List[str]:
+    def _select_tools_heuristic(self, target: Union[str, Dict[str, Any]]) -> List[str]:
         """
         Select tools based on heuristics when no model is available.
 
         Args:
-            features: Target features dictionary
+            target: Target string or dictionary
 
         Returns:
             List of recommended tools
         """
         selected_tools = []
-
+        
+        # Convert string target to dictionary if needed
+        if isinstance(target, str):
+            is_ip = self._is_ip_address(target)
+            target_dict = {"host": target, "is_ip": is_ip}
+        else:
+            target_dict = target
+            is_ip = self._is_ip_address(target_dict.get("host", ""))
+            
         # For IP addresses
-        if features.get("is_ip", 0) == 1:
+        if is_ip or target_dict.get("is_ip", False):
             selected_tools.append("nmap")  # Always use nmap for IPs
 
-            # If it's a public IP, also use ZAP
-            if features.get("is_private", 0) == 0:
+            # Only add ZAP for web-related protocols/ports
+            protocol = target_dict.get("protocol", "").lower()
+            port = target_dict.get("port", 0)
+            web_port = port in [80, 443, 8080, 8443]
+            web_protocol = protocol in ["http", "https"]
+            
+            # If it's a public IP with web services, also use ZAP
+            if (not target_dict.get("is_private", False)) and (web_port or web_protocol):
                 selected_tools.append("zap")
 
         # For domains
@@ -462,7 +594,8 @@ class SmartRecon:
             selected_tools.append("sublist3r")
 
             # If domain might have a web interface
-            if "api" not in features and "has_admin" in features:
+            has_web = target_dict.get("protocol", "").lower() in ["http", "https"]
+            if has_web or any(s in ["http", "https"] for s in target_dict.get("services", [])):
                 selected_tools.append("dirsearch")
                 selected_tools.append("zap")
 
@@ -498,12 +631,12 @@ class SmartRecon:
         ]
 
         # If pattern recognizer is not trained, use heuristics
-        if self.pattern_recognizer is None:
+        if self.pattern_recognizer_model is None:
             return self._recognize_patterns_heuristic(findings, group_features)
 
         try:
             # Predict if this is a vulnerability pattern
-            probability = self.pattern_recognizer.predict_proba([group_features])[0][1]
+            probability = self.pattern_recognizer_model.predict_proba([group_features])[0][1]
 
             # Identify specific patterns if probability is high enough
             patterns = []
@@ -740,76 +873,108 @@ class SmartRecon:
             "wappalyzer": {"timeout": 30},
         }
 
-        # Optimizations based on target features
-        target_features = self.extract_target_features(target)
-
-        # For IP targets
-        if target_features.get("is_ip", 0) == 1:
-            # Expand port range for nmap
-            scan_params["nmap"]["port_range"] = "1-65535"
-
-            # If private IP, adjust parameters
-            if target_features.get("is_private", 0) == 1:
-                scan_params["nmap"]["scan_type"] = "TCP Connect"
-
-        # For domain targets
+        # Convert to dictionary if string
+        if isinstance(target, str):
+            is_ip = self._is_ip_address(target)
+            target_dict = {
+                "host": target,
+                "is_ip": is_ip
+            }
         else:
-            # If likely a large domain (many segments)
-            if target_features.get("num_segments", 0) > 3:
-                scan_params["dirsearch"]["wordlist"] = "large"
-                scan_params["sublist3r"]["threads"] = 10
+            # Target is already a dictionary
+            target_dict = target
+            is_ip = self._is_ip_address(target_dict.get("host", ""))
 
-            # If likely a development domain
-            if (
-                target_features.get("has_dev", 0) == 1
-                or target_features.get("has_test", 0) == 1
-            ):
+        # Determine scan depth based on target
+        scan_depth = "deep"
+        
+        # For IP targets
+        if is_ip:
+            # Deep scan for private IPs, standard for public
+            if not self._is_private_ip(target_dict.get("host", "")):
+                scan_depth = "standard"
+                
+            # Adjust nmap scan parameters for IP ranges
+            if "-" in target_dict.get("host", "") or "/" in target_dict.get("host", ""):
+                scan_params["nmap"]["port_range"] = "20-25,53,80,443,3306,8080"
+                scan_params["nmap"]["scan_type"] = "SYN"
+        
+        # For web targets
+        else:
+            protocol = target_dict.get("protocol", "").lower()
+            if protocol == "https":
+                # HTTPS sites get deeper scans by default
+                scan_depth = "deep"
                 scan_params["zap"]["spider_depth"] = 5
-                scan_params["dirsearch"]["extensions"] = "php,html,js,bak,txt,sql,zip"
+            else:
+                scan_depth = "standard"
+                
+            # Adjust directory scanning based on server type if known
+            server_type = target_dict.get("server", "").lower()
+            if "apache" in server_type:
+                scan_params["dirsearch"]["extensions"] += ",txt,bak,old"
+            elif "nginx" in server_type:
+                scan_params["dirsearch"]["extensions"] += ",conf,json"
+            elif "iis" in server_type:
+                scan_params["dirsearch"]["extensions"] += ",asp,aspx,config"
 
-        # Further optimization based on previous findings
-        if previous_findings:
-            # Analyze previous findings
-            pattern_results = self.recognize_patterns(previous_findings)
-            patterns = pattern_results.get("patterns", [])
-
-            # Adjust scan based on patterns
-            for pattern in patterns:
-                pattern_name = pattern.get("name", "")
-
-                if "SQL Injection" in pattern_name:
-                    # Focus on web parameters
-                    scan_params["zap"]["active_scan"] = True
-                    scan_params["zap"]["scan_policy"] = "sql-injection"
-
-                elif "Cross-Site Scripting" in pattern_name:
-                    # Focus on XSS vulnerabilities
-                    scan_params["zap"]["active_scan"] = True
-                    scan_params["zap"]["scan_policy"] = "xss"
-
-                elif "Authentication Bypass" in pattern_name:
-                    # Focus on auth endpoints
-                    scan_params["dirsearch"]["wordlist"] = "auth-focused"
-                    scan_params["dirsearch"]["extensions"] = "php,jsp,asp,aspx"
-
-                elif "Information Disclosure" in pattern_name:
-                    # Look for sensitive files
-                    scan_params["dirsearch"]["wordlist"] = "sensitive-files"
-                    scan_params["dirsearch"][
-                        "extensions"
-                    ] = "bak,old,txt,sql,conf,config,xml"
-
-        return {
-            "recommended_tools": recommended_tools,
-            "scan_parameters": {
-                tool: params
-                for tool, params in scan_params.items()
-                if tool in recommended_tools
-            },
-            "priority": (
-                "high" if previous_findings and len(previous_findings) > 5 else "medium"
-            ),
+        # Build optimization strategy
+        strategy = {
+            "tools": recommended_tools,
+            "scan_depth": scan_depth,
+            "scan_params": scan_params,
         }
+
+        # Optimize based on previous findings if available
+        if previous_findings:
+            # Extract useful paths from previous findings
+            priority_paths = []
+            vulnerability_types = []
+            
+            for finding in previous_findings:
+                # Extract paths from URLs if available
+                url = finding.get("url", "")
+                if url:
+                    try:
+                        from urllib.parse import urlparse
+                        path = urlparse(url).path
+                        if path and path not in priority_paths:
+                            priority_paths.append(path)
+                    except Exception:
+                        pass
+                
+                # Track vulnerability types
+                vuln_type = finding.get("type", "").lower()
+                if vuln_type and vuln_type not in vulnerability_types:
+                    vulnerability_types.append(vuln_type)
+            
+            strategy["priority_paths"] = priority_paths
+            
+            # Allocate time to tools based on previous findings
+            time_allocation = {}
+            
+            if "xss" in vulnerability_types or "sqli" in vulnerability_types:
+                # Web vulnerabilities - focus on zap
+                time_allocation["zap"] = 50
+                time_allocation["dirsearch"] = 30
+                time_allocation["wappalyzer"] = 10
+                time_allocation["nmap"] = 10
+            elif any(t in vulnerability_types for t in ["port", "service", "banner"]):
+                # Infrastructure vulnerabilities - focus on nmap
+                time_allocation["nmap"] = 50
+                time_allocation["zap"] = 30
+                time_allocation["wappalyzer"] = 10
+                time_allocation["dirsearch"] = 10
+            else:
+                # Balanced allocation
+                time_allocation["zap"] = 40
+                time_allocation["nmap"] = 25
+                time_allocation["dirsearch"] = 20
+                time_allocation["wappalyzer"] = 15
+                
+            strategy["time_allocation"] = time_allocation
+            
+        return strategy
 
     def generate_statistics(self, findings_history: List[Dict]) -> Dict[str, Any]:
         """
@@ -941,3 +1106,553 @@ class SmartRecon:
             return cve_match.group(0)
 
         return None
+
+    def load_available_tools(self) -> List[Dict[str, Any]]:
+        """
+        Load all available tools and their metadata for recommendations.
+        
+        Returns:
+            List of tool dictionaries with metadata
+        """
+        # This would typically load from a database or configuration file
+        # For now, we'll hardcode a representative set of tools
+        
+        available_tools = [
+            {
+                "name": "nmap",
+                "category": "reconnaissance",
+                "description": "Network port scanner",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["ip", "domain", "network"],
+                "output_formats": ["xml", "json", "text"]
+            },
+            {
+                "name": "whois",
+                "category": "reconnaissance",
+                "description": "Domain registration information lookup",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["domain"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "dig",
+                "category": "reconnaissance",
+                "description": "DNS lookup utility",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["domain"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "sublist3r",
+                "category": "reconnaissance",
+                "description": "Subdomain enumeration tool",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["domain"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "amass",
+                "category": "reconnaissance",
+                "description": "In-depth subdomain enumeration",
+                "execution_time": "slow",
+                "thoroughness": "high",
+                "target_types": ["domain"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "subfinder",
+                "category": "reconnaissance",
+                "description": "Fast subdomain discovery tool",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["domain"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "wappalyzer",
+                "category": "reconnaissance",
+                "description": "Web technology fingerprinting",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["json"]
+            },
+            {
+                "name": "whatweb",
+                "category": "reconnaissance",
+                "description": "Web scanner to identify technologies",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "gobuster",
+                "category": "reconnaissance",
+                "description": "Directory/file & DNS busting tool",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp", "domain"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "ffuf",
+                "category": "reconnaissance",
+                "description": "Fast web fuzzer",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "shodan",
+                "category": "reconnaissance",
+                "description": "Search engine for Internet-connected devices",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["ip", "domain"],
+                "output_formats": ["json"]
+            },
+            {
+                "name": "censys",
+                "category": "reconnaissance",
+                "description": "Search engine for Internet-connected devices and certificates",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["ip", "domain"],
+                "output_formats": ["json"]
+            },
+            {
+                "name": "ripe",
+                "category": "reconnaissance",
+                "description": "Regional Internet registry database lookup",
+                "execution_time": "fast",
+                "thoroughness": "low",
+                "target_types": ["ip", "asn"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "swagger-scan",
+                "category": "reconnaissance",
+                "description": "API documentation scanner",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["api", "url"],
+                "output_formats": ["json"]
+            },
+            {
+                "name": "nuclei",
+                "category": "vulnerability_scanning",
+                "description": "Template-based vulnerability scanner",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["ip", "domain", "url", "webapp"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "nikto",
+                "category": "vulnerability_scanning",
+                "description": "Web server scanner",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["xml", "json", "text"]
+            },
+            {
+                "name": "zap",
+                "category": "vulnerability_scanning",
+                "description": "OWASP Zed Attack Proxy for web app scanning",
+                "execution_time": "slow",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["xml", "json", "html"]
+            },
+            {
+                "name": "burp-scanner",
+                "category": "vulnerability_scanning",
+                "description": "Burp Suite Professional scanner",
+                "execution_time": "slow",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp", "api"],
+                "output_formats": ["xml", "html"]
+            },
+            {
+                "name": "sqlmap",
+                "category": "vulnerability_scanning",
+                "description": "Automated SQL injection detection and exploitation",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "xsstrike",
+                "category": "vulnerability_scanning",
+                "description": "Advanced XSS detection suite",
+                "execution_time": "medium",
+                "thoroughness": "high", 
+                "target_types": ["url", "webapp"],
+                "output_formats": ["json", "text"]
+            },
+            {
+                "name": "hydra",
+                "category": "vulnerability_scanning",
+                "description": "Online password cracking tool",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["service", "webapp"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "medusa",
+                "category": "vulnerability_scanning",
+                "description": "Parallel login brute-forcer",
+                "execution_time": "medium",
+                "thoroughness": "medium",
+                "target_types": ["service"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "patator",
+                "category": "vulnerability_scanning",
+                "description": "Multi-purpose brute-forcer",
+                "execution_time": "medium", 
+                "thoroughness": "high",
+                "target_types": ["service", "webapp"],
+                "output_formats": ["text"]
+            },
+            {
+                "name": "metasploit",
+                "category": "exploitation",
+                "description": "Exploitation framework",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["ip", "service", "webapp"],
+                "output_formats": ["text", "json"]
+            },
+            {
+                "name": "burp-intruder",
+                "category": "exploitation",
+                "description": "Burp Suite Intruder for targeted attacks",
+                "execution_time": "medium",
+                "thoroughness": "high",
+                "target_types": ["url", "webapp", "api"],
+                "output_formats": ["text", "html"]
+            },
+            {
+                "name": "postman",
+                "category": "exploitation",
+                "description": "API testing tool",
+                "execution_time": "fast",
+                "thoroughness": "medium",
+                "target_types": ["api"],
+                "output_formats": ["json"]
+            }
+        ]
+        
+        return available_tools
+
+    def recommend_tools(self, target: Union[str, Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """
+        Recommend tools for a given target based on its features and optional context.
+
+        Args:
+            target: The target domain, IP address, or target info dictionary
+            context: Optional context dict with keys like 'assessment_phase', 'assessment_type',
+                    'previous_findings', and 'max_recommendations'
+
+        Returns:
+            List of dictionaries containing tool recommendations with their confidence scores,
+            parameters, and reasons
+        """
+        # Extract features from the target
+        features = self.extract_target_features(target)
+
+        # Process context if provided
+        top_n = 3  # Default value
+        assessment_phase = None
+        assessment_type = "standard"
+        previous_findings = []
+
+        if context:
+            top_n = context.get("max_recommendations", top_n)
+            assessment_phase = context.get("assessment_phase")
+            assessment_type = context.get("assessment_type", assessment_type)
+            previous_findings = context.get("previous_findings", previous_findings)
+            
+        # If tool selector model is not loaded, try to load it
+        if not self.tool_selector_model:
+            # Try to load models if they exist
+            try:
+                self._load_models()
+            except Exception as e:
+                logger.warning(f"Could not load tool selector model: {e}")
+                # Continue without model, will use heuristics
+
+        # Get tools either using the model or heuristics
+        tools = self.select_tools(target)
+
+        # Load all available tools for phase filtering and prioritization
+        available_tools = self.load_available_tools()
+        
+        # Filter tools by assessment phase if specified
+        phase_filtered_tools = tools
+        if assessment_phase:
+            phase_tools = [
+                tool["name"] for tool in available_tools 
+                if assessment_phase.lower() in tool.get("phases", [])
+            ]
+            phase_filtered_tools = [tool for tool in tools if tool in phase_tools]
+            
+            # If no tools match the phase, fall back to original list
+            if not phase_filtered_tools:
+                phase_filtered_tools = tools
+                
+        # Phase-specific prioritization
+        # This ensures different top recommendations for different phases
+        phase_priority = {
+            "reconnaissance": ["sublist3r", "nmap", "wappalyzer", "gobuster", "whois", "dig"],
+            "vulnerability_scanning": ["zap", "nikto", "wpscan", "testssl", "feroxbuster"],
+            "exploitation": ["sqlmap", "hydra", "metasploit", "burpsuite", "netcat"]
+        }
+        
+        # If we have a specific phase, prioritize tools specifically designed for that phase
+        if assessment_phase and assessment_phase in phase_priority:
+            priority_order = phase_priority[assessment_phase]
+            
+            # Sort phase_filtered_tools based on the priority order
+            def priority_key(tool_name):
+                try:
+                    # Lower index = higher priority
+                    return priority_order.index(tool_name)
+                except ValueError:
+                    # Tools not in the priority list go last
+                    return len(priority_order)
+                    
+            phase_filtered_tools = sorted(phase_filtered_tools, key=priority_key)
+
+        # Generate recommendations with confidence scores
+        recommendations = []
+        for i, tool_name in enumerate(phase_filtered_tools):
+            # Assign confidence scores based on position in the prioritized list
+            # First tool gets highest confidence, diminishing for later positions
+            confidence = max(0.95 - (i * 0.1), 0.5)
+            
+            # Generate reasons for this recommendation
+            reasons = self._generate_recommendation_reasons(
+                tool_name, target, assessment_phase, assessment_type
+            )
+            
+            # Generate recommended parameters
+            params = self._generate_recommended_params(tool_name, target)
+            
+            recommendations.append({
+                "tool_name": tool_name,
+                "confidence": confidence,
+                "parameters": params,
+                "reasons": reasons
+            })
+        
+        # Sort by confidence score and limit to top_n
+        recommendations.sort(key=lambda x: x["confidence"], reverse=True)
+        return recommendations[:top_n]
+
+    def _generate_recommendation_reasons(
+        self, tool_name: str, target: Union[str, Dict[str, Any]], 
+        assessment_phase: Optional[str] = None, assessment_type: Optional[str] = None
+    ) -> List[str]:
+        """
+        Generate reasons for recommending a specific tool based on the target and context.
+        
+        Args:
+            tool_name: Name of the tool
+            target: The target information
+            assessment_phase: Phase of the assessment (reconnaissance, vulnerability_scanning, exploitation)
+            assessment_type: Type of assessment (quick, standard, thorough)
+            
+        Returns:
+            List of reasons for recommending this tool
+        """
+        reasons = []
+        
+        # Convert string target to dict format if needed
+        if isinstance(target, str):
+            target_info = {"host": target}
+        else:
+            target_info = target
+            
+        hostname = target_info.get("host", "")
+        is_ip = self._is_ip_address(hostname)
+        protocol = target_info.get("protocol", "").lower()
+        services = target_info.get("services", [])
+        
+        # Common tools
+        if tool_name == "nmap":
+            reasons.append("Comprehensive port and service scanning")
+            if is_ip:
+                reasons.append("Effective for IP-based targets")
+            if assessment_phase == "reconnaissance":
+                reasons.append("Essential for initial reconnaissance")
+                
+        elif tool_name == "gobuster" or tool_name == "dirsearch":
+            if "http" in services or "https" in services or protocol in ["http", "https"]:
+                reasons.append("Directory and file discovery for web applications")
+                if assessment_phase == "reconnaissance":
+                    reasons.append("Useful for identifying hidden directories and files")
+                
+        elif tool_name == "wpscan":
+            if "http" in services or "https" in services or protocol in ["http", "https"]:
+                reasons.append("Specialized scanner for WordPress installations")
+                
+        elif tool_name == "sqlmap":
+            if "http" in services or "https" in services or protocol in ["http", "https"]:
+                reasons.append("Automated SQL injection detection and exploitation")
+                if assessment_phase == "exploitation":
+                    reasons.append("Suitable for the exploitation phase")
+                
+        elif tool_name == "nikto":
+            if "http" in services or "https" in services or protocol in ["http", "https"]:
+                reasons.append("Comprehensive web server scanning")
+                
+        elif tool_name == "sublist3r":
+            if not is_ip:
+                reasons.append("Subdomain discovery for domain targets")
+                if assessment_phase == "reconnaissance":
+                    reasons.append("Essential for expanding the attack surface")
+                
+        elif tool_name == "dig" or tool_name == "whois":
+            if not is_ip:
+                reasons.append("Domain information gathering")
+                
+        elif tool_name == "testssl":
+            if "https" in services or protocol == "https":
+                reasons.append("SSL/TLS configuration and vulnerability analysis")
+                
+        elif tool_name == "hydra":
+            reasons.append("Brute force authentication testing")
+            if any(service in services for service in ["ssh", "ftp", "telnet"]):
+                reasons.append(f"Suitable for the detected services: {', '.join(services)}")
+                
+        elif tool_name == "zap" or tool_name == "owasp-zap":
+            if "http" in services or "https" in services or protocol in ["http", "https"]:
+                reasons.append("Comprehensive web application security scanner")
+                if assessment_type == "thorough":
+                    reasons.append("Thorough scanning capabilities")
+                
+        # Add a recommendation based on assessment type if applicable
+        if assessment_type == "thorough" and any([
+            tool_name == "nmap" and "--script vuln" in str(self._generate_recommended_params(tool_name, target)),
+            tool_name in ["zap", "owasp-zap", "nikto", "sqlmap"]
+        ]):
+            reasons.append("Well-suited for thorough assessment")
+        elif assessment_type == "quick" and any([
+            tool_name == "nmap" and "-F" in str(self._generate_recommended_params(tool_name, target)),
+            tool_name in ["whatweb", "wafw00f"]
+        ]):
+            reasons.append("Fast execution time for quick assessments")
+            
+        # If no specific reasons, add a generic one
+        if not reasons:
+            reasons.append("General-purpose tool for security assessment")
+            
+        return reasons
+    
+    def _generate_recommended_params(self, tool_name: str, target: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Generate recommended parameters for a specific tool based on the target.
+        
+        Args:
+            tool_name: Name of the tool
+            target: The target information
+            
+        Returns:
+            Dictionary of recommended parameters for the tool
+        """
+        # Convert string target to dict format if needed
+        if isinstance(target, str):
+            target_info = {"host": target}
+        else:
+            target_info = target
+            
+        # Get hostname
+        hostname = target_info.get("host", "")
+        
+        # Default parameters for common tools
+        if tool_name == "nmap":
+            return {
+                "target": hostname,
+                "arguments": "-sV -sC -p-" if self._is_ip_address(hostname) else "-sV -sC"
+            }
+        elif tool_name == "gobuster":
+            return {
+                "target": f"http://{hostname}" if "://" not in hostname else hostname,
+                "wordlist": "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt",
+                "extensions": "php,html,txt"
+            }
+        elif tool_name == "wpscan":
+            return {
+                "target": f"http://{hostname}" if "://" not in hostname else hostname,
+                "enumerate": "u,t,p"
+            }
+        elif tool_name == "sqlmap":
+            return {
+                "target": f"http://{hostname}" if "://" not in hostname else hostname,
+                "forms": True,
+                "batch": True
+            }
+        elif tool_name == "nikto":
+            return {
+                "target": f"http://{hostname}" if "://" not in hostname else hostname
+            }
+        elif tool_name == "sublist3r":
+            return {
+                "domain": hostname.split("://")[-1] if "://" in hostname else hostname
+            }
+        elif tool_name == "dig":
+            return {
+                "domain": hostname.split("://")[-1] if "://" in hostname else hostname,
+                "query_type": "ANY"
+            }
+        elif tool_name == "whois":
+            return {
+                "domain": hostname.split("://")[-1] if "://" in hostname else hostname
+            }
+        elif tool_name == "testssl":
+            return {
+                "target": f"https://{hostname}" if "://" not in hostname else hostname
+            }
+        elif tool_name == "hydra":
+            return {
+                "target": hostname,
+                "service": "ssh" if target_info.get("port") == 22 else "http-post-form",
+                "wordlist": "/usr/share/wordlists/rockyou.txt"
+            }
+        else:
+            # Generic parameters for other tools
+            return {
+                "target": hostname
+            }
+
+    def _extract_tld(self, domain: str) -> str:
+        """
+        Extract the top-level domain from a domain name.
+        
+        Args:
+            domain: The domain name
+            
+        Returns:
+            The TLD (e.g., com, org, co.uk) or empty string if none
+        """
+        # Handle special cases
+        if domain == "localhost" or domain.startswith("localhost."):
+            return ""
+            
+        # Split by dot and take the last part
+        parts = domain.split(".")
+        if len(parts) > 1:
+            return parts[-1]
+        return ""

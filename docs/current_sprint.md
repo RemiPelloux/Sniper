@@ -168,8 +168,6 @@ Status: **In Progress** (April 2024)
 - [ ] Add auto-scaling capabilities based on scan load
 - [ ] Implement fault tolerance and recovery mechanisms
 
-
-
 #### Deep Learning Models
 - [ ] Implement neural networks for vulnerability detection
 - [ ] Create embedding models for semantic analysis of findings
@@ -184,6 +182,10 @@ Status: **In Progress** (April 2024)
 - [ ] Create Git repository integration
 - [ ] Implement webhooks for custom integrations
 
+#### ML Module Enhancements
+- [x] Improve tool recommendation system to prioritize different tools based on assessment phase
+- [ ] Enhance feature extraction for more accurate target profiling
+- [ ] Implement advanced exploitation pattern recognition
 
 #### Mobile Companion App
 - [ ] Design mobile app architecture
@@ -192,7 +194,6 @@ Status: **In Progress** (April 2024)
 - [ ] Add simplified report viewing
 - [ ] Implement scan control capabilities
 - [ ] Add offline report access
-
 
 ### Development Focus:
 - Building a scalable distributed architecture to handle enterprise-level scanning loads
