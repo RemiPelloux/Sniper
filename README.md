@@ -14,6 +14,11 @@ A comprehensive security scanning tool that integrates multiple security tools f
 - Unified reporting system with multiple output formats
 - Flexible configuration management
 - Modular architecture for easy extension
+- Distributed scanning architecture:
+  - Master-worker model for parallel scanning
+  - Auto-scaling capabilities based on workload
+  - Fault tolerance and recovery mechanisms
+  - Support for multiple deployment environments (local, Docker, Kubernetes)
 
 ## Installation
 
@@ -114,6 +119,23 @@ docker compose run --rm sniper scan --target example.com --depth deep
 Generate an HTML report:
 ```bash
 docker compose run --rm sniper scan --target example.com --output html,json
+```
+
+### Distributed Scanning
+
+Start a master node:
+```bash
+docker compose run --rm sniper distributed master --auto-scaling --min-nodes 2 --max-nodes 5
+```
+
+Start a worker node:
+```bash
+docker compose run --rm sniper distributed worker --master-host <master-ip> --master-port 5000
+```
+
+Check distributed system status:
+```bash
+docker compose run --rm sniper distributed status
 ```
 
 ## Development

@@ -201,8 +201,8 @@ class TestMasterNode:
             mock_algo = MagicMock()
             # Adjust expected distribution based on active workers
             mock_algo.distribute.return_value = {
-                "worker-1": [sample_tasks[0]],
-                "worker-2": [sample_tasks[1], sample_tasks[2]]
+                "worker-1": [sample_tasks[0].id],  # Use task.id instead of task object
+                "worker-2": [sample_tasks[1].id, sample_tasks[2].id]  # Use task.id instead of task object
             }
             master_node.distribution_algorithm = mock_algo # Set the mocked algo directly
             # mock_create_algo.return_value = mock_algo # No need to mock creation if we set it

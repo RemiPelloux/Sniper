@@ -225,22 +225,42 @@ nikto:
   target_types: ["url", "webapp"]
   recommendation_score: 82
 
-wpscan:
-  name: wpscan
+WPScan:
+  name: WPScan
   category: vulnerability_scanning
-  description: "WordPress security scanner"
+  description: WordPress Security Scanner
   binary: wpscan
-  check_command: "wpscan --version"
+  check_cmd: "wpscan --version"
   install:
-    gem: "gem install wpscan"
+    debian: "apt-get install -y wpscan"
+    fedora: "gem install wpscan"
+    arch: "pacman -S wpscan"
+    brew: "brew install wpscan"
     docker: "docker pull wpscanteam/wpscan"
+    pip: ~
+    gem: "gem install wpscan"
+    git: "git clone https://github.com/wpscanteam/wpscan.git && cd wpscan && gem install bundler && bundle install && gem build wpscan.gemspec && gem install wpscan-*.gem"
   update:
+    debian: "apt-get update && apt-get upgrade -y wpscan"
+    fedora: "gem update wpscan"
+    arch: "pacman -Syu wpscan"
+    brew: "brew upgrade wpscan"
+    docker: "docker pull wpscanteam/wpscan"
+    pip: ~
     gem: "gem update wpscan"
-  website: "https://wpscan.com/"
-  documentation: "https://github.com/wpscanteam/wpscan#readme"
-  execution_time: "medium"
-  target_types: ["url", "webapp"]
-  recommendation_score: 80
+    git: "cd wpscan && git pull && gem build wpscan.gemspec && gem install wpscan-*.gem"
+  website: "https://wpscan.org/"
+  documentation: "https://github.com/wpscanteam/wpscan"
+  api_key:
+    required: true
+    env_var: "WPSCAN_API_TOKEN"
+    url: "https://wpscan.com/api"
+    description: "API token for WPScan to access vulnerability database"
+    usage: "--api-token $WPSCAN_API_TOKEN"
+  execution_time: 600
+  target_types:
+    - wordpress
+  recommendation_score: 90
 
 sslyze:
   name: sslyze

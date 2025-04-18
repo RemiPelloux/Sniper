@@ -161,8 +161,66 @@ class SniperMasterNode(MasterNode):
             )
             return CapabilityBasedDistribution()
 
+    def initialize_auto_scaling(
+        self,
+        min_nodes: int = 1,
+        max_nodes: int = 10, 
+        scaling_policy: str = "queue_depth",
+        provider: str = "docker",
+        provider_config: Dict[str, Any] = None
+    ):
+        """
+        Initialize the auto-scaling system for worker nodes.
+        
+        Args:
+            min_nodes: Minimum number of worker nodes to maintain
+            max_nodes: Maximum number of worker nodes allowed
+            scaling_policy: Policy to use for scaling decisions
+            provider: Provider to use for creating worker nodes
+            provider_config: Configuration for the provider
+        
+        Returns:
+            True if initialization was successful, False otherwise
+        """
+        try:
+            # Import auto-scaling module
+            from src.distributed.auto_scaling import (
+                AutoScaler,
+                ScalingConfig,
+                ScalingPolicy,
+                WorkerProvider
+            )
+            
+            # Create scaling configuration
+            config = ScalingConfig(
+                min_nodes=min_nodes,
+                max_nodes=max_nodes,
+                scaling_policy=ScalingPolicy(scaling_policy),
+                provider=WorkerProvider(provider),
+                check_interval=60  # Check every minute
+            )
+            
+            # Create auto-scaler
+            self.auto_scaler = AutoScaler(
+                master_node=self,
+                config=config,
+                provider_config=provider_config or {}
+            )
+            
+            logger.info(f"Auto-scaling initialized with {provider} provider, {min_nodes}-{max_nodes} nodes")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Failed to initialize auto-scaling: {e}", exc_info=True)
+            return False
+
     def start(self):
-        """Start the master node server and maintenance threads."""
+        """
+        Start the master node server and maintenance threads.
+        
+        Returns:
+            True if startup was successful, False otherwise
+        """
         if self.running:
             logger.warning("Master node is already running")
             return True
@@ -183,6 +241,12 @@ class SniperMasterNode(MasterNode):
                 )
             logger.info(f"Master node server started successfully on {self.host}:{self.port}")
             self.status = NodeStatus.ACTIVE
+            
+            # Start auto-scaler if configured
+            if hasattr(self, 'auto_scaler'):
+                logger.info("Starting auto-scaler")
+                self.auto_scaler.start()
+            
             return True
         except Exception as e:
             self.running = False
@@ -190,13 +254,23 @@ class SniperMasterNode(MasterNode):
             raise
 
     def stop(self):
-        """Stop the master node server and cleanup resources."""
+        """
+        Stop the master node server and cleanup resources.
+        
+        Returns:
+            True if shutdown was successful, False otherwise
+        """
         if not self.running:
             logger.warning("Master node is not running")
             return False
 
         logger.info("Stopping Sniper Master Node")
         self.running = False
+
+        # Stop auto-scaler if running
+        if hasattr(self, 'auto_scaler'):
+            logger.info("Stopping auto-scaler")
+            self.auto_scaler.stop()
 
         # Stop the server
         if self.server:
@@ -324,102 +398,219 @@ class SniperMasterNode(MasterNode):
                 logger.info(f"Removed stale worker {worker_id}")
 
     def _handle_worker_failure(self, worker_id: str):
-        """Handle tasks assigned to a failed worker."""
+        """
+        Handle tasks assigned to a failed worker.
+        
+        This method implements robust fault tolerance for worker node failures by:
+        1. Identifying all tasks assigned to the failed worker
+        2. Reassigning tasks based on their priority and retry count
+        3. Implementing recovery strategies for different failure scenarios
+        4. Providing detailed logging for all recovery actions
+        5. Tracking failure statistics for future optimization
+        """
         with self.task_lock:
             reassigned_tasks = 0
+            failed_tasks = 0
+            logger.warning(f"Handling worker failure for worker {worker_id}")
+            
+            # Track failure statistics
+            failure_time = datetime.now(timezone.utc)
+            failed_task_ids = []
+            
+            # Process all tasks assigned to the failed worker
             for task_id, task in list(self.tasks.items()):
                 if task.assigned_node == worker_id:
-                    logger.info(
-                        f"Reassigning task {task_id} from failed worker {worker_id}"
-                    )
+                    # Log the task that was impacted
+                    logger.info(f"Task {task_id} affected by worker {worker_id} failure")
+                    failed_task_ids.append(task_id)
+                    
+                    # Clear worker assignment and update status
                     task.assigned_node = None
                     task.status = TaskStatus.PENDING
                     task.retries += 1
-
+                    
+                    # Track partial results if any exist
+                    if hasattr(task, 'partial_results') and task.partial_results:
+                        logger.info(f"Task {task_id} has partial results that will be merged on completion")
+                    
+                    # Determine if we should retry or fail the task
                     if task.retries <= self.task_retry_limit:
-                        self.pending_tasks.append(task)
+                        # High priority tasks get immediately requeued at the front
+                        if task.priority == TaskPriority.HIGH:
+                            self.pending_tasks.insert(0, task)
+                        else:
+                            self.pending_tasks.append(task)
+                        
+                        logger.info(f"Requeued task {task_id} for retry (attempt {task.retries}/{self.task_retry_limit})")
                         reassigned_tasks += 1
                     else:
-                        logger.warning(
-                            f"Task {task_id} exceeded retry limit, marking as failed"
-                        )
+                        # Task has exceeded retry limit
+                        logger.warning(f"Task {task_id} exceeded retry limit ({self.task_retry_limit}), marking as failed")
                         task.status = TaskStatus.FAILED
                         task.end_time = datetime.now(timezone.utc)
+                        task.failure_reason = f"Exceeded retry limit after worker {worker_id} failure"
+                        
+                        # Store in completed_tasks for tracking
                         self.completed_tasks[task_id] = task
                         del self.tasks[task_id]
-
-            if reassigned_tasks > 0:
-                logger.info(
-                    f"Reassigned {reassigned_tasks} tasks from failed worker {worker_id}"
-                )
+                        failed_tasks += 1
+            
+            # Log overall recovery statistics
+            if reassigned_tasks > 0 or failed_tasks > 0:
+                logger.info(f"Worker {worker_id} failure recovery: reassigned {reassigned_tasks} tasks, failed {failed_tasks} tasks")
+                
+                # Record failure for analysis
+                worker_failures = getattr(self, 'worker_failures', {})
+                if worker_id not in worker_failures:
+                    worker_failures[worker_id] = []
+                
+                worker_failures[worker_id].append({
+                    'time': failure_time,
+                    'affected_tasks': len(failed_task_ids),
+                    'reassigned_tasks': reassigned_tasks,
+                    'failed_tasks': failed_tasks,
+                    'task_ids': failed_task_ids
+                })
+                
+                # Update failure stats
+                self.worker_failures = worker_failures
+            
+            # Check if we need to initiate auto-scaling to compensate for the lost worker
+            if reassigned_tasks > 0 and hasattr(self, 'auto_scaler'):
+                logger.info(f"Notifying auto-scaler about worker {worker_id} failure")
+                if hasattr(self.auto_scaler, 'handle_worker_failure'):
+                    self.auto_scaler.handle_worker_failure(worker_id, reassigned_tasks)
 
     def _cleanup_tasks(self):
-        """Clean up stale tasks that have been running too long."""
+        """
+        Clean up stale tasks that have been running too long or are stuck in an inconsistent state.
+        
+        This method implements comprehensive task monitoring and recovery by:
+        1. Detecting and recovering from tasks that have been running too long
+        2. Identifying tasks stuck in transitional states
+        3. Implementing escalating recovery strategies based on task priority and retry count
+        4. Providing detailed logs for all recovery actions
+        """
         with self.task_lock:
             current_time = datetime.now(timezone.utc)
+            recovered_tasks = 0
+            
+            # Process all active tasks
             for task_id, task in list(self.tasks.items()):
-                # If a task has been running for more than 30 minutes, consider it stale
-                if (
-                    task.status == TaskStatus.RUNNING
-                    and task.start_time
-                    and (current_time - task.start_time).total_seconds() > 1800
-                ):
-                    logger.warning(
-                        f"Task {task_id} has been running too long, marking for retry"
-                    )
+                # Case 1: Running tasks that have exceeded their time limit
+                if (task.status == TaskStatus.RUNNING and task.start_time and
+                    (current_time - task.start_time).total_seconds() > task.timeout):
+                    
+                    logger.warning(f"Task {task_id} timed out after running for {(current_time - task.start_time).total_seconds():.1f} seconds (limit: {task.timeout}s)")
+                    
+                    # Track the worker that was handling this task
+                    problem_worker_id = task.assigned_node
+                    
+                    # Reset task for retry
                     task.assigned_node = None
                     task.status = TaskStatus.PENDING
                     task.retries += 1
-
+                    
+                    # Determine next steps based on retry count
                     if task.retries <= self.task_retry_limit:
-                        self.pending_tasks.append(task)
+                        # Re-queue with priority based on retries
+                        if task.retries > self.task_retry_limit / 2:
+                            # For tasks that have been retried multiple times, 
+                            # place them at the front of the queue
+                            self.pending_tasks.insert(0, task)
+                            logger.info(f"Task {task_id} prioritized for immediate retry (attempt {task.retries})")
+                        else:
+                            self.pending_tasks.append(task)
+                            logger.info(f"Task {task_id} queued for retry (attempt {task.retries})")
+                        
+                        recovered_tasks += 1
+                        
+                        # Record worker performance issue
+                        if problem_worker_id:
+                            self._record_worker_issue(problem_worker_id, "task_timeout", task_id)
                     else:
-                        logger.warning(
-                            f"Task {task_id} exceeded retry limit, marking as failed"
-                        )
+                        # Task exceeded retry limit
+                        logger.warning(f"Task {task_id} exceeded retry limit, marking as failed")
                         task.status = TaskStatus.FAILED
-                        task.end_time = datetime.now(timezone.utc)
+                        task.end_time = current_time
+                        task.failure_reason = "Exceeded timeout and retry limits"
+                        
+                        # Move to completed (failed) tasks
                         self.completed_tasks[task_id] = task
                         del self.tasks[task_id]
+                
+                # Case 2: Tasks stuck in ASSIGNED state for too long
+                elif (task.status == TaskStatus.ASSIGNED and task.assigned_at and
+                     (current_time - task.assigned_at).total_seconds() > 300):  # 5 minute limit
+                    
+                    logger.warning(f"Task {task_id} stuck in ASSIGNED state for {(current_time - task.assigned_at).total_seconds():.1f} seconds")
+                    
+                    # Record the problematic worker
+                    problem_worker_id = task.assigned_node
+                    
+                    # Reset and requeue
+                    task.assigned_node = None
+                    task.status = TaskStatus.PENDING
+                    task.retries += 1
+                    
+                    if task.retries <= self.task_retry_limit:
+                        self.pending_tasks.append(task)
+                        logger.info(f"Requeued task {task_id} that was stuck in ASSIGNED state")
+                        recovered_tasks += 1
+                        
+                        # Record worker issue
+                        if problem_worker_id:
+                            self._record_worker_issue(problem_worker_id, "task_stuck", task_id)
+                    else:
+                        # Handle exceeded retry limit
+                        logger.warning(f"Task {task_id} exceeded retry limit after being stuck, marking as failed")
+                        task.status = TaskStatus.FAILED
+                        task.end_time = current_time
+                        task.failure_reason = "Exceeded retry limit after being stuck in ASSIGNED state"
+                        
+                        self.completed_tasks[task_id] = task
+                        del self.tasks[task_id]
+            
+            # Log recovery statistics
+            if recovered_tasks > 0:
+                logger.info(f"Task cleanup recovered {recovered_tasks} tasks")
 
-    def _distribute_pending_tasks(self):
-        """Distribute pending tasks to available workers."""
-        with self.task_lock:
-            if not self.pending_tasks:
-                return 0
-
-            with self.worker_lock:
-                # Get available workers
-                available_workers = {
-                    worker_id: worker_info
-                    for worker_id, worker_info in self.workers.items()
-                    if worker_info.status in [NodeStatus.CONNECTED, NodeStatus.ACTIVE]
-                }
-
-                if not available_workers:
-                    logger.debug("No available workers to distribute tasks")
-                    return 0
-
-                # Get worker metrics for distribution
-                metrics = self.get_worker_metrics()
-
-                # Distribute tasks using the selected algorithm
-                distribution_map = self.distribution_algorithm.distribute(
-                    tasks=self.pending_tasks,
-                    workers=available_workers,
-                    worker_metrics=metrics
-                )
-
-                # Send tasks to assigned workers
-                distributed_count = 0
-                for worker_id, tasks in distribution_map.items():
-                    for task in tasks:
-                        self._send_task_to_worker(task, worker_id)
-                        distributed_count += 1
-                        task.status = TaskStatus.ASSIGNED
-                        self.pending_tasks.remove(task)
-
-                return distributed_count
+    def _record_worker_issue(self, worker_id: str, issue_type: str, task_id: str):
+        """
+        Record worker issues for tracking and possible worker penalties.
+        
+        Args:
+            worker_id: ID of the problematic worker
+            issue_type: Type of issue (e.g., 'task_timeout', 'task_stuck')
+            task_id: ID of the affected task
+        """
+        # Initialize worker issues tracking if it doesn't exist
+        worker_issues = getattr(self, 'worker_issues', {})
+        if worker_id not in worker_issues:
+            worker_issues[worker_id] = []
+        
+        # Record the issue
+        worker_issues[worker_id].append({
+            'time': datetime.now(timezone.utc),
+            'issue_type': issue_type,
+            'task_id': task_id
+        })
+        
+        # Update worker issues
+        self.worker_issues = worker_issues
+        
+        # Check if worker has too many issues and should be penalized
+        if len(worker_issues[worker_id]) >= 3:
+            recent_issues = [i for i in worker_issues[worker_id] 
+                            if (datetime.now(timezone.utc) - i['time']).total_seconds() < 1800]  # last 30 minutes
+            
+            if len(recent_issues) >= 3:
+                logger.warning(f"Worker {worker_id} has {len(recent_issues)} issues in the last 30 minutes, considering penalization")
+                
+                # Penalize by reducing priority in task distribution
+                if worker_id in self.worker_metrics:
+                    self.worker_metrics[worker_id].penalty_score = len(recent_issues)
+                    logger.info(f"Applied penalty score of {len(recent_issues)} to worker {worker_id}")
 
     def register_worker(self, worker_info: NodeInfo) -> bool:
         """
@@ -529,6 +720,55 @@ class SniperMasterNode(MasterNode):
             Number of tasks distributed
         """
         return self._distribute_pending_tasks()
+        
+    def _distribute_pending_tasks(self) -> int:
+        """
+        Distribute pending tasks to available workers based on the selected distribution algorithm.
+        
+        Returns:
+            Number of tasks distributed
+        """
+        with self.task_lock, self.worker_lock:
+            # Get available active workers
+            active_workers = {
+                worker_id: info
+                for worker_id, info in self.workers.items()
+                if info.status in [NodeStatus.ACTIVE, NodeStatus.IDLE]
+            }
+            
+            if not active_workers:
+                logger.warning("No active workers available for task distribution")
+                return 0
+                
+            if not self.pending_tasks:
+                logger.debug("No pending tasks to distribute")
+                return 0
+                
+            # Use the distribution algorithm to assign tasks to workers
+            task_distribution = self.distribution_algorithm.distribute(
+                self.pending_tasks,
+                active_workers,
+                self.worker_metrics
+            )
+            
+            total_assigned = 0
+            
+            # Send tasks to assigned workers
+            for worker_id, tasks in task_distribution.items():
+                for task in self.pending_tasks:
+                    if task.id in tasks:
+                        success = self._send_task_to_worker(task, worker_id)
+                        if success:
+                            total_assigned += 1
+            
+            # Remove assigned tasks from pending list
+            self.pending_tasks = [
+                task for task in self.pending_tasks
+                if task.status == TaskStatus.PENDING
+            ]
+            
+            logger.info(f"Distributed {total_assigned} tasks to {len(active_workers)} active workers")
+            return total_assigned
 
     def process_result(self, task_id: str, result: Dict[str, Any]) -> bool:
         """
@@ -1145,9 +1385,7 @@ class SniperMasterNode(MasterNode):
         return None
 
 class MasterNodeServer:
-    """
-    Server wrapper for the Sniper Master Node, handling configuration and startup.
-    """
+    """Command-line wrapper for the Sniper Master Node."""
 
     def __init__(
         self,
@@ -1158,57 +1396,107 @@ class MasterNodeServer:
         distribution_strategy: str = "smart",
         worker_timeout: int = 60,
         result_callback=None,
+        auto_scaling: bool = False,
+        min_nodes: int = 1,
+        max_nodes: int = 10,
+        scaling_policy: str = "queue_depth",
+        scaling_provider: str = "docker",
+        provider_config_path: Optional[str] = None,
     ):
         """
         Initialize the master node server.
-        
+
         Args:
-            config_path: Path to configuration file
-            host: Host to bind to
-            port: Port to listen on (default: 5000)
-            protocol_type: Communication protocol type
+            config_path: Path to the master node configuration file
+            host: Host address to bind the server to
+            port: Port to listen on
+            protocol_type: Protocol to use for communication
             distribution_strategy: Strategy for distributing tasks
             worker_timeout: Seconds after which a worker is considered offline
-            result_callback: Optional callback function to process task results
+            result_callback: Optional callback function to process results
+            auto_scaling: Whether to enable auto-scaling
+            min_nodes: Minimum number of worker nodes when auto-scaling
+            max_nodes: Maximum number of worker nodes when auto-scaling
+            scaling_policy: Policy to use for scaling decisions
+            scaling_provider: Provider to use for creating worker nodes
+            provider_config_path: Path to provider configuration file
         """
         # Set up logging
-        setup_logging(force_setup=True)
-        
-        # Store server configuration
-        self.host = host
-        self.port = port
-        self.protocol_type = protocol_type
-        self.distribution_strategy = distribution_strategy
-        self.worker_timeout = worker_timeout
+        setup_logging()
 
-        # Load configuration from file if provided
+        # Parse configuration
+        config = {}
         if config_path:
-            # In a real implementation, this would load config from file
-            pass
+            try:
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+            except Exception as e:
+                logger.error(f"Error loading config from {config_path}: {e}")
+                raise
 
-        # Create the distribution strategy enum
-        try:
-            dist_strategy = TaskDistributionStrategy[distribution_strategy.upper()]
-        except (KeyError, AttributeError):
-            logger.warning(
-                f"Invalid distribution strategy: {distribution_strategy}, using CAPABILITY_BASED as default"
-            )
-            dist_strategy = TaskDistributionStrategy.CAPABILITY_BASED
-
-        # Create the master node
-        self.master_node = SniperMasterNode(
-            host=host,
-            port=port,
-            protocol_type=protocol_type,
-            distribution_strategy=dist_strategy,
-            worker_timeout=worker_timeout,
-            result_callback=result_callback,
+        # Override with command-line arguments
+        self.host = host or config.get("host", "0.0.0.0")
+        self.port = port or config.get("port", 5000)
+        self.protocol_type = protocol_type or config.get("protocol_type", "rest")
+        self.distribution_strategy = distribution_strategy or config.get(
+            "distribution_strategy", "smart"
         )
+        self.worker_timeout = worker_timeout or config.get("worker_timeout", 60)
+        
+        # Auto-scaling configuration
+        self.auto_scaling = auto_scaling or config.get("auto_scaling", False)
+        self.min_nodes = min_nodes or config.get("min_nodes", 1)
+        self.max_nodes = max_nodes or config.get("max_nodes", 10)
+        self.scaling_policy = scaling_policy or config.get("scaling_policy", "queue_depth")
+        self.scaling_provider = scaling_provider or config.get("scaling_provider", "docker")
+        
+        # Load provider configuration if specified
+        self.provider_config = None
+        if provider_config_path:
+            try:
+                with open(provider_config_path, "r") as f:
+                    self.provider_config = json.load(f)
+            except Exception as e:
+                logger.error(f"Error loading provider config from {provider_config_path}: {e}")
+                self.provider_config = {}
+        else:
+            self.provider_config = config.get("provider_config", {})
+
+        # Create master node
+        try:
+            self.master_node = SniperMasterNode(
+                host=self.host,
+                port=self.port,
+                protocol_type=self.protocol_type,
+                distribution_strategy=self.distribution_strategy,
+                worker_timeout=self.worker_timeout,
+                result_callback=result_callback,
+            )
+            
+            # Initialize auto-scaling if enabled
+            if self.auto_scaling:
+                logger.info(f"Initializing auto-scaling with {self.scaling_provider} provider")
+                success = self.master_node.initialize_auto_scaling(
+                    min_nodes=self.min_nodes,
+                    max_nodes=self.max_nodes,
+                    scaling_policy=self.scaling_policy,
+                    provider=self.scaling_provider,
+                    provider_config=self.provider_config
+                )
+                
+                if not success:
+                    logger.warning("Failed to initialize auto-scaling, continuing without it")
+                else:
+                    logger.info(f"Auto-scaling initialized with {self.min_nodes}-{self.max_nodes} nodes")
+                
+        except Exception as e:
+            logger.error(f"Error creating master node: {e}")
+            raise
 
     def start(self):
         """Start the master node server."""
-        self.master_node.start()
+        return self.master_node.start()
 
     def stop(self):
         """Stop the master node server."""
-        self.master_node.stop()
+        return self.master_node.stop()

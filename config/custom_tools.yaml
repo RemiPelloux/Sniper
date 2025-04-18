@@ -1,1 +1,56 @@
-{}
+{
+  "tools": {
+    "Qualys": {
+      "name": "Qualys",
+      "category": "vulnerability_scanning",
+      "description": "Cloud-based security and compliance solution",
+      "binary": "qualys-cli",
+      "check_cmd": "qualys-cli --version",
+      "api_key": {
+        "required": true,
+        "env_var": "QUALYS_API_KEY",
+        "url": "https://www.qualys.com/platform-identification/",
+        "description": "API credentials for Qualys platform access",
+        "username_env_var": "QUALYS_USERNAME",
+        "password_env_var": "QUALYS_PASSWORD"
+      },
+      "execution_time": 900,
+      "target_types": ["network", "webapp", "cloud"],
+      "recommendation_score": 85
+    },
+    "VirusTotal": {
+      "name": "VirusTotal",
+      "category": "threat_intelligence",
+      "description": "File and URL analysis for malware detection",
+      "binary": "vt",
+      "check_cmd": "vt --version",
+      "api_key": {
+        "required": true,
+        "env_var": "VIRUSTOTAL_API_KEY",
+        "url": "https://www.virustotal.com/gui/my-apikey",
+        "description": "API key for VirusTotal services",
+        "usage": "--apikey $VIRUSTOTAL_API_KEY"
+      },
+      "execution_time": 120,
+      "target_types": ["file", "url"],
+      "recommendation_score": 90
+    },
+    "Shodan": {
+      "name": "Shodan",
+      "category": "reconnaissance",
+      "description": "Search engine for Internet-connected devices",
+      "binary": "shodan",
+      "check_cmd": "shodan --version",
+      "api_key": {
+        "required": true,
+        "env_var": "SHODAN_API_KEY",
+        "url": "https://account.shodan.io/",
+        "description": "API key for Shodan search engine",
+        "usage": "shodan init $SHODAN_API_KEY"
+      },
+      "execution_time": 300,
+      "target_types": ["ip", "domain", "network"],
+      "recommendation_score": 88
+    }
+  }
+}
