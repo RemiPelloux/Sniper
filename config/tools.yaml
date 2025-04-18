@@ -1,0 +1,421 @@
+# Sniper Security Tool - Tools Configuration
+# This file defines all the security tools available in the Sniper platform
+
+# Reconnaissance Tools
+nmap:
+  name: nmap
+  category: reconnaissance
+  description: "Network port scanner and security reconnaissance tool"
+  binary: nmap
+  check_command: "nmap --version"
+  install:
+    apt: "apt-get install -y nmap"
+    yum: "yum install -y nmap"
+    brew: "brew install nmap"
+    binary: "https://nmap.org/dist/nmap-7.93-setup.exe"
+  update:
+    apt: "apt-get update && apt-get install -y --only-upgrade nmap"
+    yum: "yum update -y nmap"
+    brew: "brew upgrade nmap"
+  website: "https://nmap.org"
+  documentation: "https://nmap.org/book/man.html"
+  execution_time: "medium"
+  target_types: ["ip", "domain", "network"]
+  recommendation_score: 95
+
+amass:
+  name: amass
+  category: reconnaissance
+  description: "In-depth attack surface mapping and asset discovery"
+  binary: amass
+  check_command: "amass -version"
+  install:
+    apt: "apt-get install -y amass"
+    brew: "brew install amass"
+    go: "go install -v github.com/OWASP/Amass/v3/...@master"
+    binary: "https://github.com/OWASP/Amass/releases/latest/download/amass_Linux_amd64.zip"
+  update:
+    go: "go install -v github.com/OWASP/Amass/v3/...@master"
+    brew: "brew upgrade amass"
+  website: "https://github.com/OWASP/Amass"
+  documentation: "https://github.com/OWASP/Amass/blob/master/doc/user_guide.md"
+  execution_time: "slow"
+  target_types: ["domain"]
+  recommendation_score: 90
+
+subfinder:
+  name: subfinder
+  category: reconnaissance
+  description: "Fast passive subdomain enumeration tool"
+  binary: subfinder
+  check_command: "subfinder -version"
+  install:
+    go: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+    binary: "https://github.com/projectdiscovery/subfinder/releases/latest"
+  update:
+    go: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+  website: "https://github.com/projectdiscovery/subfinder"
+  documentation: "https://github.com/projectdiscovery/subfinder#readme"
+  execution_time: "medium"
+  target_types: ["domain"]
+  recommendation_score: 88
+
+sublist3r:
+  name: sublist3r
+  category: reconnaissance
+  description: "Subdomain enumeration tool using multiple sources"
+  binary: sublist3r
+  check_command: "sublist3r -h"
+  install:
+    pip: "pip install sublist3r"
+    apt: "apt-get install -y sublist3r"
+  update:
+    pip: "pip install --upgrade sublist3r"
+  website: "https://github.com/aboul3la/Sublist3r"
+  documentation: "https://github.com/aboul3la/Sublist3r#readme"
+  execution_time: "medium"
+  target_types: ["domain"]
+  recommendation_score: 85
+
+wappalyzer:
+  name: wappalyzer
+  category: reconnaissance
+  description: "Web technology fingerprinting tool"
+  binary: wappalyzer
+  check_command: "which wappalyzer"
+  install:
+    npm: "npm install -g wappalyzer"
+    docker: "docker pull wappalyzer/cli"
+  update:
+    npm: "npm update -g wappalyzer"
+  website: "https://www.wappalyzer.com/"
+  documentation: "https://www.wappalyzer.com/docs/dev/cli/"
+  execution_time: "fast"
+  target_types: ["url", "webapp"]
+  recommendation_score: 92
+  
+httpx:
+  name: httpx
+  category: reconnaissance
+  description: "Fast and multi-purpose HTTP toolkit"
+  binary: httpx
+  check_command: "httpx -version"
+  install:
+    go: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
+    binary: "https://github.com/projectdiscovery/httpx/releases/latest"
+  update:
+    go: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
+  website: "https://github.com/projectdiscovery/httpx"
+  documentation: "https://github.com/projectdiscovery/httpx#readme"
+  execution_time: "fast"
+  target_types: ["url", "domain"]
+  recommendation_score: 90
+
+ffuf:
+  name: ffuf
+  category: reconnaissance
+  description: "Fast web fuzzer for content discovery and parameter testing"
+  binary: ffuf
+  check_command: "ffuf -V"
+  install:
+    go: "go install github.com/ffuf/ffuf@latest"
+    binary: "https://github.com/ffuf/ffuf/releases/latest"
+  update:
+    go: "go install github.com/ffuf/ffuf@latest"
+  website: "https://github.com/ffuf/ffuf"
+  documentation: "https://github.com/ffuf/ffuf#readme"
+  execution_time: "medium"
+  target_types: ["url", "webapp"]
+  recommendation_score: 91
+
+gobuster:
+  name: gobuster
+  category: reconnaissance
+  description: "Directory/file, DNS and VHost busting tool"
+  binary: gobuster
+  check_command: "gobuster version"
+  install:
+    go: "go install github.com/OJ/gobuster/v3@latest"
+    apt: "apt-get install -y gobuster"
+    brew: "brew install gobuster"
+  update:
+    go: "go install github.com/OJ/gobuster/v3@latest"
+    apt: "apt-get update && apt-get install -y --only-upgrade gobuster"
+    brew: "brew upgrade gobuster"
+  website: "https://github.com/OJ/gobuster"
+  documentation: "https://github.com/OJ/gobuster#readme"
+  execution_time: "medium"
+  target_types: ["url", "domain"]
+  recommendation_score: 87
+
+# Vulnerability Scanning Tools
+nuclei:
+  name: nuclei
+  category: vulnerability_scanning
+  description: "Fast and customizable vulnerability scanner"
+  binary: nuclei
+  check_command: "nuclei -version"
+  install:
+    go: "go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest"
+    binary: "https://github.com/projectdiscovery/nuclei/releases/latest"
+  update:
+    go: "go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest"
+  website: "https://github.com/projectdiscovery/nuclei"
+  documentation: "https://nuclei.projectdiscovery.io/"
+  execution_time: "medium"
+  target_types: ["domain", "url", "webapp"]
+  recommendation_score: 95
+
+zap:
+  name: zap
+  category: vulnerability_scanning
+  description: "OWASP Zed Attack Proxy for web app scanning"
+  binary: zap.sh
+  check_command: "which zap.sh"
+  install:
+    apt: "apt-get install -y zaproxy"
+    brew: "brew install --cask owasp-zap"
+    docker: "docker pull owasp/zap2docker-stable"
+  update:
+    apt: "apt-get update && apt-get install -y --only-upgrade zaproxy"
+    brew: "brew upgrade --cask owasp-zap"
+    docker: "docker pull owasp/zap2docker-stable"
+  website: "https://www.zaproxy.org/"
+  documentation: "https://www.zaproxy.org/docs/"
+  execution_time: "slow"
+  target_types: ["url", "webapp"]
+  recommendation_score: 90
+
+sqlmap:
+  name: sqlmap
+  category: vulnerability_scanning
+  description: "Automated SQL injection and database takeover tool"
+  binary: sqlmap
+  check_command: "sqlmap --version"
+  install:
+    apt: "apt-get install -y sqlmap"
+    pip: "pip install sqlmap"
+    brew: "brew install sqlmap"
+  update:
+    apt: "apt-get update && apt-get install -y --only-upgrade sqlmap"
+    pip: "pip install --upgrade sqlmap"
+    brew: "brew upgrade sqlmap"
+  website: "https://sqlmap.org/"
+  documentation: "https://github.com/sqlmapproject/sqlmap/wiki"
+  execution_time: "medium"
+  target_types: ["url", "webapp"]
+  recommendation_score: 89
+
+nikto:
+  name: nikto
+  category: vulnerability_scanning
+  description: "Web server scanner for dangerous files and vulnerabilities"
+  binary: nikto
+  check_command: "nikto -Version"
+  install:
+    apt: "apt-get install -y nikto"
+    brew: "brew install nikto"
+    docker: "docker pull secfigo/nikto"
+  update:
+    apt: "apt-get update && apt-get install -y --only-upgrade nikto"
+    brew: "brew upgrade nikto"
+  website: "https://github.com/sullo/nikto"
+  documentation: "https://github.com/sullo/nikto/wiki"
+  execution_time: "medium"
+  target_types: ["url", "webapp"]
+  recommendation_score: 82
+
+wpscan:
+  name: wpscan
+  category: vulnerability_scanning
+  description: "WordPress security scanner"
+  binary: wpscan
+  check_command: "wpscan --version"
+  install:
+    gem: "gem install wpscan"
+    docker: "docker pull wpscanteam/wpscan"
+  update:
+    gem: "gem update wpscan"
+  website: "https://wpscan.com/"
+  documentation: "https://github.com/wpscanteam/wpscan#readme"
+  execution_time: "medium"
+  target_types: ["url", "webapp"]
+  recommendation_score: 80
+
+sslyze:
+  name: sslyze
+  category: vulnerability_scanning
+  description: "SSL/TLS server scanning tool"
+  binary: sslyze
+  check_command: "sslyze --version"
+  install:
+    pip: "pip install sslyze"
+    brew: "brew install sslyze"
+  update:
+    pip: "pip install --upgrade sslyze"
+    brew: "brew upgrade sslyze"
+  website: "https://github.com/nabla-c0d3/sslyze"
+  documentation: "https://nabla-c0d3.github.io/sslyze/documentation/"
+  execution_time: "fast"
+  target_types: ["domain", "url"]
+  recommendation_score: 85
+
+# Exploitation Tools
+metasploit:
+  name: metasploit
+  category: exploitation
+  description: "Advanced open-source platform for developing, testing, and executing exploits"
+  binary: msfconsole
+  check_command: "msfconsole -v"
+  install:
+    apt: "apt-get install -y metasploit-framework"
+    brew: "brew install metasploit"
+    docker: "docker pull metasploitframework/metasploit-framework"
+  update:
+    apt: "apt-get update && apt-get install -y --only-upgrade metasploit-framework"
+    brew: "brew upgrade metasploit"
+  website: "https://www.metasploit.com/"
+  documentation: "https://docs.metasploit.com/"
+  execution_time: "medium"
+  target_types: ["ip", "domain", "webapp", "service"]
+  recommendation_score: 90
+
+xsstrike:
+  name: xsstrike
+  category: exploitation
+  description: "Advanced XSS detection and exploitation tool"
+  binary: xsstrike.py
+  check_command: "python3 -c 'import xsstrike' || echo $?"
+  install:
+    pip: "pip install xsstrike"
+    manual: "git clone https://github.com/s0md3v/XSStrike.git && cd XSStrike && pip install -r requirements.txt"
+  update:
+    manual: "cd XSStrike && git pull && pip install -r requirements.txt"
+  website: "https://github.com/s0md3v/XSStrike"
+  documentation: "https://github.com/s0md3v/XSStrike/wiki"
+  execution_time: "medium"
+  target_types: ["url", "webapp"]
+  recommendation_score: 87
+
+commix:
+  name: commix
+  category: exploitation
+  description: "Command injection exploitation tool"
+  binary: commix
+  check_command: "commix --version"
+  install:
+    manual: "git clone https://github.com/commixproject/commix.git /usr/local/commix && ln -s /usr/local/commix/commix.py /usr/local/bin/commix && chmod +x /usr/local/bin/commix"
+  update:
+    manual: "cd /usr/local/commix && git pull"
+  website: "https://github.com/commixproject/commix"
+  documentation: "https://github.com/commixproject/commix/wiki"
+  execution_time: "medium"
+  target_types: ["url", "webapp"]
+  recommendation_score: 84
+
+# Post-Exploitation Tools
+crackmapexec:
+  name: crackmapexec
+  category: post_exploitation
+  description: "Post-exploitation tool for Windows/Active Directory environments"
+  binary: crackmapexec
+  check_command: "crackmapexec -h"
+  install:
+    pip: "pip install crackmapexec"
+    apt: "apt-get install -y crackmapexec"
+    docker: "docker pull byt3bl33d3r/crackmapexec"
+  update:
+    pip: "pip install --upgrade crackmapexec"
+  website: "https://github.com/byt3bl33d3r/CrackMapExec"
+  documentation: "https://github.com/byt3bl33d3r/CrackMapExec/wiki"
+  execution_time: "fast"
+  target_types: ["ip", "network"]
+  recommendation_score: 88
+
+bloodhound:
+  name: bloodhound
+  category: post_exploitation
+  description: "Active Directory attack path visualization tool"
+  binary: bloodhound
+  check_command: "which bloodhound"
+  install:
+    apt: "apt-get install -y bloodhound"
+    npm: "npm install -g bloodhound"
+  update:
+    apt: "apt-get update && apt-get install -y --only-upgrade bloodhound"
+    npm: "npm update -g bloodhound"
+  website: "https://github.com/BloodHoundAD/BloodHound"
+  documentation: "https://bloodhound.readthedocs.io/en/latest/"
+  execution_time: "medium"
+  target_types: ["domain", "network"]
+  recommendation_score: 85
+
+# Utility Tools
+searchsploit:
+  name: searchsploit
+  category: utility
+  description: "Command line search tool for Exploit-DB"
+  binary: searchsploit
+  check_command: "searchsploit -h"
+  install:
+    apt: "apt-get install -y exploitdb"
+    brew: "brew install exploitdb"
+    manual: "git clone https://github.com/offensive-security/exploitdb.git /opt/exploitdb && ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit"
+  update:
+    apt: "apt-get update && apt-get install -y --only-upgrade exploitdb"
+    brew: "brew upgrade exploitdb"
+    manual: "cd /opt/exploitdb && git pull"
+  website: "https://www.exploit-db.com/searchsploit"
+  documentation: "https://www.exploit-db.com/documentation/SearchSploit.pdf"
+  execution_time: "fast"
+  target_types: ["service", "software"]
+  recommendation_score: 85
+
+httprobe:
+  name: httprobe
+  category: utility
+  description: "Take a list of domains and probe for working HTTP and HTTPS servers"
+  binary: httprobe
+  check_command: "httprobe -h"
+  install:
+    go: "go install github.com/tomnomnom/httprobe@latest"
+  update:
+    go: "go install github.com/tomnomnom/httprobe@latest"
+  website: "https://github.com/tomnomnom/httprobe"
+  documentation: "https://github.com/tomnomnom/httprobe#readme"
+  execution_time: "fast"
+  target_types: ["domain"]
+  recommendation_score: 82
+
+waybackurls:
+  name: waybackurls
+  category: utility
+  description: "Fetch URLs from the Wayback Machine for a specific domain"
+  binary: waybackurls
+  check_command: "waybackurls -h"
+  install:
+    go: "go install github.com/tomnomnom/waybackurls@latest"
+  update:
+    go: "go install github.com/tomnomnom/waybackurls@latest"
+  website: "https://github.com/tomnomnom/waybackurls"
+  documentation: "https://github.com/tomnomnom/waybackurls#readme"
+  execution_time: "medium"
+  target_types: ["domain"]
+  recommendation_score: 80
+
+# Reporting Tools
+report-generator:
+  name: report-generator
+  category: reporting
+  description: "Sniper's built-in vulnerability report generator"
+  python_package: "sniper.reporting"
+  check_command: "python -c 'from src.reporting import generator; print(\"OK\")'"
+  install:
+    pip: "pip install -e ."
+  update:
+    pip: "pip install -e ."
+  website: "https://github.com/your-username/sniper"
+  documentation: "https://github.com/your-username/sniper/docs/reporting.md"
+  execution_time: "fast"
+  target_types: ["report"]
+  recommendation_score: 95 
