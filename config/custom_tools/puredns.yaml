@@ -1,0 +1,12 @@
+Puredns:
+  api_key:
+    required: false
+  binary: puredns
+  category: reconnaissance
+  check_cmd: puredns -h
+  description: Fast domain resolver and subdomain bruteforcer
+  execution_time: 1200
+  name: Puredns
+  recommendation_score: 86
+  target_types:
+  - domain

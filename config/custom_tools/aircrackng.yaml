@@ -1,0 +1,13 @@
+AircrackNG:
+  api_key:
+    required: false
+  binary: aircrack-ng
+  category: wireless
+  check_cmd: aircrack-ng --version
+  description: Complete suite for wireless network security assessment
+  execution_time: 1200
+  name: Aircrack-ng
+  recommendation_score: 88
+  target_types:
+  - wifi
+  - wireless

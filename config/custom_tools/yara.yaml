@@ -1,0 +1,14 @@
+YARA:
+  api_key:
+    required: false
+  binary: yara
+  category: malware_analysis
+  check_cmd: yara --version
+  description: Pattern matching swiss knife for malware researchers
+  execution_time: 180
+  name: YARA
+  recommendation_score: 94
+  target_types:
+  - binary
+  - file
+  - memory

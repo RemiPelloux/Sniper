@@ -1,0 +1,12 @@
+Ffuf:
+  api_key:
+    required: false
+  binary: ffuf
+  category: fuzzing
+  check_cmd: ffuf -V
+  description: Fast web fuzzer for discovery and content testing
+  execution_time: 800
+  name: Ffuf
+  recommendation_score: 88
+  target_types:
+  - webapp

@@ -1,0 +1,12 @@
+GitleaksCI:
+  api_key:
+    required: false
+  binary: gitleaks
+  category: sast
+  check_cmd: gitleaks version
+  description: SAST scanner for finding hardcoded secrets in source code
+  execution_time: 240
+  name: GitleaksCI
+  recommendation_score: 93
+  target_types:
+  - code

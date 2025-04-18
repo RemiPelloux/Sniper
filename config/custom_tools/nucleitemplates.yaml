@@ -1,0 +1,12 @@
+NucleiTemplates:
+  api_key:
+    required: false
+  binary: git
+  category: vulnerability_scanning
+  check_cmd: ls ~/.nuclei-templates
+  description: Official template repository for Nuclei scanner
+  execution_time: 30
+  name: Nuclei-templates
+  recommendation_score: 95
+  target_types:
+  - webapp

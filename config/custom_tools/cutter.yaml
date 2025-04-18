@@ -1,0 +1,14 @@
+Cutter:
+  api_key:
+    required: false
+  binary: Cutter
+  category: reverse_engineering
+  check_cmd: Cutter --version
+  description: Free and open-source GUI for Radare2 reverse engineering framework
+  execution_time: 300
+  name: Cutter
+  recommendation_score: 87
+  target_types:
+  - binary
+  - executable
+  - firmware

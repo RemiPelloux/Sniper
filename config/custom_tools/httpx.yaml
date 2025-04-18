@@ -1,0 +1,13 @@
+HTTPx:
+  api_key:
+    required: false
+  binary: httpx
+  category: reconnaissance
+  check_cmd: httpx -version
+  description: Fast and multi-purpose HTTP toolkit for probing web servers
+  execution_time: 300
+  name: HTTPx
+  recommendation_score: 93
+  target_types:
+  - domain
+  - url

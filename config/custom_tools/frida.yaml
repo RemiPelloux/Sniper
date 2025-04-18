@@ -1,0 +1,16 @@
+Frida:
+  api_key:
+    required: false
+  binary: frida
+  category: mobile_security
+  check_cmd: frida --version
+  description: Dynamic instrumentation toolkit for developers, reverse-engineers,
+    and security researchers
+  execution_time: 300
+  name: Frida
+  recommendation_score: 91
+  target_types:
+  - mobile
+  - ios
+  - android
+  - binary

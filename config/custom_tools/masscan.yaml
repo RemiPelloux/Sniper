@@ -1,0 +1,13 @@
+Masscan:
+  api_key:
+    required: false
+  binary: masscan
+  category: reconnaissance
+  check_cmd: masscan --version
+  description: Mass IP port scanner, TCP port scanner
+  execution_time: 900
+  name: Masscan
+  recommendation_score: 89
+  target_types:
+  - ip
+  - network

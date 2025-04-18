@@ -1,0 +1,13 @@
+Gobuster:
+  api_key:
+    required: false
+  binary: gobuster
+  category: reconnaissance
+  check_cmd: gobuster version
+  description: Directory/file & DNS busting tool written in Go
+  execution_time: 600
+  name: Gobuster
+  recommendation_score: 89
+  target_types:
+  - webapp
+  - domain

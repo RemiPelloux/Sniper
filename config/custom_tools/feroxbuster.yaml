@@ -1,18 +1,12 @@
-feroxbuster:
-  name: feroxbuster
-  category: reconnaissance
-  description: "A fast, simple, recursive content discovery tool written in Rust"
+Feroxbuster:
+  api_key:
+    required: false
   binary: feroxbuster
-  check_command: "feroxbuster -V"
-  install:
-    apt: "curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/master/install-nix.sh | bash"
-    brew: "brew install feroxbuster"
-    binary: "https://github.com/epi052/feroxbuster/releases/latest/download/feroxbuster_amd64.tar.gz"
-  update:
-    apt: "curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/master/install-nix.sh | bash"
-    brew: "brew upgrade feroxbuster"
-  website: "https://github.com/epi052/feroxbuster"
-  documentation: "https://github.com/epi052/feroxbuster/wiki"
-  execution_time: "medium"
-  target_types: ["url", "webapp"]
-  recommendation_score: 93 
+  category: fuzzing
+  check_cmd: feroxbuster --version
+  description: A fast, simple, recursive content discovery tool
+  execution_time: 900
+  name: Feroxbuster
+  recommendation_score: 89
+  target_types:
+  - webapp

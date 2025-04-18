@@ -1,0 +1,13 @@
+Dalfox:
+  api_key:
+    required: false
+  binary: dalfox
+  category: exploitation
+  check_cmd: dalfox version
+  description: Parameter analysis and XSS scanner
+  execution_time: 600
+  name: Dalfox
+  recommendation_score: 87
+  target_types:
+  - webapp
+  - api

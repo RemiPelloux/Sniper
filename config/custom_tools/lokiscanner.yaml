@@ -1,0 +1,13 @@
+LokiScanner:
+  api_key:
+    required: false
+  binary: loki.py
+  category: endpoint_security
+  check_cmd: python loki.py --version
+  description: Simple IOC and YARA rule scanner for incident response
+  execution_time: 1800
+  name: Loki
+  recommendation_score: 87
+  target_types:
+  - endpoint
+  - filesystem

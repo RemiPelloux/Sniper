@@ -1,0 +1,17 @@
+TheHiveProject:
+  api_key:
+    description: API key for TheHive platform integration
+    env_var: THEHIVE_API_KEY
+    required: true
+    url: http://localhost:9000/
+  binary: thehive
+  category: incident_response
+  check_cmd: curl -s http://localhost:9000/api/status | grep version
+  description: Scalable, open-source security incident response platform
+  execution_time: 60
+  name: TheHive
+  recommendation_score: 92
+  target_types:
+  - alert
+  - case
+  - incident

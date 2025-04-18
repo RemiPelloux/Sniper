@@ -1,0 +1,13 @@
+AutopsyForensics:
+  api_key:
+    required: false
+  binary: autopsy
+  category: forensics
+  check_cmd: autopsy --version
+  description: Digital forensics platform for disk image analysis
+  execution_time: 1800
+  name: Autopsy
+  recommendation_score: 90
+  target_types:
+  - disk_image
+  - filesystem

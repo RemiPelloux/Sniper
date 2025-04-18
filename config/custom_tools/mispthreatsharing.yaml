@@ -1,0 +1,18 @@
+MISPThreatSharing:
+  api_key:
+    description: API key for MISP platform access
+    env_var: MISP_API_KEY
+    required: true
+    url: https://www.misp-project.org/
+  binary: misp-cli
+  category: threat_intelligence
+  check_cmd: misp-cli --version
+  description: Open Source Threat Intelligence Platform & Open Standards For Threat
+    Information Sharing
+  execution_time: 300
+  name: MISP
+  recommendation_score: 93
+  target_types:
+  - threat
+  - ioc
+  - incident

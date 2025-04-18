@@ -1,0 +1,13 @@
+SSLyze:
+  api_key:
+    required: false
+  binary: sslyze
+  category: vulnerability_scanning
+  check_cmd: sslyze --version
+  description: Fast and powerful SSL/TLS server scanning library
+  execution_time: 180
+  name: SSLyze
+  recommendation_score: 87
+  target_types:
+  - domain
+  - ip

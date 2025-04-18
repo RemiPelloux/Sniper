@@ -1,0 +1,17 @@
+Snyk:
+  api_key:
+    description: API token for Snyk platform access
+    env_var: SNYK_API_KEY
+    required: true
+    url: https://app.snyk.io/account
+  binary: snyk
+  category: sca
+  check_cmd: snyk --version
+  description: Find and fix vulnerabilities in open source dependencies
+  execution_time: 240
+  name: Snyk
+  recommendation_score: 92
+  target_types:
+  - code
+  - dependency
+  - container

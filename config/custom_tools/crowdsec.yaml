@@ -1,0 +1,17 @@
+CrowdSec:
+  api_key:
+    description: API key for CrowdSec console
+    env_var: CROWDSEC_API_KEY
+    required: true
+    url: https://app.crowdsec.net/
+  binary: cscli
+  category: threat_intelligence
+  check_cmd: cscli version
+  description: Collaborative security platform to detect and block attacks
+  execution_time: 300
+  name: CrowdSec
+  recommendation_score: 89
+  target_types:
+  - server
+  - cloud
+  - network

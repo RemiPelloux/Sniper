@@ -1,0 +1,14 @@
+GoogleTsunami:
+  api_key:
+    required: false
+  binary: tsunami-main
+  category: vulnerability_scanning
+  check_cmd: java -jar tsunami-main.jar --version
+  description: Google's network security scanner for detecting high severity vulnerabilities
+  execution_time: 1200
+  name: Google Tsunami
+  recommendation_score: 89
+  target_types:
+  - network
+  - webapp
+  - service

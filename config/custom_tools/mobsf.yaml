@@ -1,0 +1,14 @@
+MobSF:
+  api_key:
+    required: false
+  binary: mobsf
+  category: mobile_security
+  check_cmd: docker ps | grep mobsf
+  description: Mobile Security Framework for automated pentesting of mobile applications
+  execution_time: 600
+  name: MobSF
+  recommendation_score: 93
+  target_types:
+  - apk
+  - ipa
+  - mobile

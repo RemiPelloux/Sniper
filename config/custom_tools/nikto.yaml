@@ -1,0 +1,12 @@
+Nikto:
+  api_key:
+    required: false
+  binary: nikto
+  category: vulnerability_scanning
+  check_cmd: nikto -Version
+  description: Web server scanner that performs comprehensive tests
+  execution_time: 900
+  name: Nikto
+  recommendation_score: 84
+  target_types:
+  - webapp

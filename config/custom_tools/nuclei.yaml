@@ -1,0 +1,14 @@
+Nuclei:
+  api_key:
+    required: false
+  binary: nuclei
+  category: vulnerability_scanning
+  check_cmd: nuclei -version
+  description: Template-based vulnerability scanner with extensive library
+  execution_time: 600
+  name: Nuclei
+  recommendation_score: 95
+  target_types:
+  - webapp
+  - api
+  - network

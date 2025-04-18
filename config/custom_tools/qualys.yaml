@@ -1,0 +1,19 @@
+Qualys:
+  api_key:
+    description: API credentials for Qualys platform access
+    env_var: QUALYS_API_KEY
+    password_env_var: QUALYS_PASSWORD
+    required: true
+    url: https://www.qualys.com/platform-identification/
+    username_env_var: QUALYS_USERNAME
+  binary: qualys-cli
+  category: vulnerability_scanning
+  check_cmd: qualys-cli --version
+  description: Cloud-based security and compliance solution
+  execution_time: 900
+  name: Qualys
+  recommendation_score: 85
+  target_types:
+  - network
+  - webapp
+  - cloud

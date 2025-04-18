@@ -1,17 +1,15 @@
-semgrep:
-  name: semgrep
-  category: vulnerability_scanning
-  description: "Lightweight static analysis for many languages. Find security vulnerabilities in code"
+Semgrep:
+  api_key:
+    description: API token for Semgrep App integration
+    env_var: SEMGREP_APP_TOKEN
+    required: false
+    url: https://semgrep.dev/
   binary: semgrep
-  check_command: "semgrep --version"
-  install:
-    pip: "pip install semgrep"
-    brew: "brew install semgrep"
-  update:
-    pip: "pip install --upgrade semgrep"
-    brew: "brew upgrade semgrep"
-  website: "https://semgrep.dev/"
-  documentation: "https://semgrep.dev/docs/"
-  execution_time: "medium"
-  target_types: ["code", "repository"]
-  recommendation_score: 94 
+  category: sast
+  check_cmd: semgrep --version
+  description: Static Application Security Testing with simple patterns
+  execution_time: 300
+  name: Semgrep
+  recommendation_score: 90
+  target_types:
+  - code

@@ -1,0 +1,14 @@
+Naabu:
+  api_key:
+    required: false
+  binary: naabu
+  category: reconnaissance
+  check_cmd: naabu -version
+  description: Fast port scanner with customizable port range
+  execution_time: 600
+  name: Naabu
+  recommendation_score: 87
+  target_types:
+  - ip
+  - domain
+  - network

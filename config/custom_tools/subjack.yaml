@@ -1,0 +1,12 @@
+Subjack:
+  api_key:
+    required: false
+  binary: subjack
+  category: vulnerability_scanning
+  check_cmd: subjack -h
+  description: Subdomain takeover vulnerability scanner
+  execution_time: 600
+  name: Subjack
+  recommendation_score: 88
+  target_types:
+  - domain

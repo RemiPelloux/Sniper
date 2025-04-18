@@ -1,0 +1,12 @@
+Amass:
+  api_key:
+    required: false
+  binary: amass
+  category: reconnaissance
+  check_cmd: amass -version
+  description: In-depth Attack Surface Mapping and Asset Discovery
+  execution_time: 1200
+  name: Amass
+  recommendation_score: 92
+  target_types:
+  - domain

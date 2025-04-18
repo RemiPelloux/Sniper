@@ -1,0 +1,14 @@
+Searchsploit:
+  api_key:
+    required: false
+  binary: searchsploit
+  category: exploitation
+  check_cmd: searchsploit -v
+  description: Command line search tool for Exploit-DB
+  execution_time: 60
+  name: Searchsploit
+  recommendation_score: 86
+  target_types:
+  - cve
+  - service
+  - software

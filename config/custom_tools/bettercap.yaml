@@ -1,0 +1,14 @@
+Bettercap:
+  api_key:
+    required: false
+  binary: bettercap
+  category: network_security
+  check_cmd: bettercap -version
+  description: Swiss army knife for network attacks and monitoring
+  execution_time: 600
+  name: Bettercap
+  recommendation_score: 90
+  target_types:
+  - network
+  - wifi
+  - bluetooth

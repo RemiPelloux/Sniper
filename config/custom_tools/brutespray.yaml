@@ -1,0 +1,13 @@
+Brutespray:
+  api_key:
+    required: false
+  binary: brutespray
+  category: exploitation
+  check_cmd: brutespray --version
+  description: Automatically attempts default credentials on discovered services
+  execution_time: 1200
+  name: Brutespray
+  recommendation_score: 81
+  target_types:
+  - service
+  - network

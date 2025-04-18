@@ -1,0 +1,12 @@
+Subfinder:
+  api_key:
+    required: false
+  binary: subfinder
+  category: reconnaissance
+  check_cmd: subfinder -version
+  description: Subdomain discovery tool using passive online sources
+  execution_time: 300
+  name: Subfinder
+  recommendation_score: 92
+  target_types:
+  - domain

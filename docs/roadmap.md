@@ -46,21 +46,22 @@ This roadmap outlines the planned development trajectory for the Sniper Security
 - [x] Develop custom reporting templates
 - [x] Implement notifications system (email, Slack, Teams)
 
-## Sprint 5: Distributed Scanning Architecture (IN PROGRESS)
+## Sprint 5: Distributed Scanning Architecture (COMPLETED)
 - [x] Design distributed architecture components
 - [x] Implement master node for scan coordination
 - [x] Develop worker nodes for distributed scanning
 - [x] Create communication protocol between nodes
 - [x] Implement task distribution algorithms
-- [ ] Add fault tolerance and failover mechanisms
+- [x] Add fault tolerance and failover mechanisms
 - [x] Create node registration and discovery
 - [x] Develop monitoring and health check system
-- [ ] Implement resource-aware task allocation
-- [ ] Create deployment documentation and examples
+- [x] Implement resource-aware task allocation
+- [x] Create deployment documentation and examples
+- [x] Expand security tool arsenal with 40+ specialized tools
+- [x] Implement Docker and Kubernetes worker providers
+- [x] Create auto-scaling capabilities based on workload
 
-
-
-## Sprint 6: Advanced Attack Simulation
+## Sprint 6: Advanced Attack Simulation & Tool Orchestration (IN PROGRESS)
 - [ ] Implement safe exploitation framework
 - [ ] Create payload generation for validated vulnerabilities
 - [ ] Develop exploitation chain analysis
@@ -69,6 +70,12 @@ This roadmap outlines the planned development trajectory for the Sniper Security
 - [ ] Develop customizable exploitation rules
 - [ ] Implement sandbox for exploitation testing
 - [ ] Create post-exploitation simulation
+- [ ] Develop tool orchestration framework for automated attack chains
+- [ ] Implement findings correlation between different security tools
+- [ ] Create advanced tool result parsing and normalization
+- [ ] Develop security tool performance metrics collection
+- [ ] Implement dynamic tool selection based on target characteristics
+- [ ] Create tool execution optimization for efficient scanning
 
 ## Sprint 7: Advanced Web Application Testing
 - [ ] Implement advanced XSS detection

@@ -1,0 +1,14 @@
+Radare2:
+  api_key:
+    required: false
+  binary: r2
+  category: reverse_engineering
+  check_cmd: r2 -v
+  description: Complete framework for reverse-engineering and analyzing binaries
+  execution_time: 300
+  name: Radare2
+  recommendation_score: 89
+  target_types:
+  - binary
+  - executable
+  - firmware

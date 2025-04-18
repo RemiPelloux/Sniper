@@ -1,0 +1,13 @@
+VolatilityFramework:
+  api_key:
+    required: false
+  binary: vol.py
+  category: forensics
+  check_cmd: vol.py --info
+  description: Advanced memory forensics framework
+  execution_time: 900
+  name: Volatility Framework
+  recommendation_score: 92
+  target_types:
+  - memory_dump
+  - ram_image

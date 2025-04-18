@@ -1,0 +1,14 @@
+Metasploit:
+  api_key:
+    required: false
+  binary: msfconsole
+  category: exploitation
+  check_cmd: msfconsole -v
+  description: Penetration testing framework with exploit modules
+  execution_time: 1800
+  name: Metasploit
+  recommendation_score: 90
+  target_types:
+  - network
+  - webapp
+  - service

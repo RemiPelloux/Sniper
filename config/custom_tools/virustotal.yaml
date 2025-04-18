@@ -1,0 +1,17 @@
+VirusTotal:
+  api_key:
+    description: API key for VirusTotal services
+    env_var: VIRUSTOTAL_API_KEY
+    required: true
+    url: https://www.virustotal.com/gui/my-apikey
+    usage: --apikey $VIRUSTOTAL_API_KEY
+  binary: vt
+  category: threat_intelligence
+  check_cmd: vt --version
+  description: File and URL analysis for malware detection
+  execution_time: 120
+  name: VirusTotal
+  recommendation_score: 90
+  target_types:
+  - file
+  - url

@@ -1,0 +1,14 @@
+Ghidra:
+  api_key:
+    required: false
+  binary: ghidraRun
+  category: reverse_engineering
+  check_cmd: ls $(dirname $(which ghidraRun))/support/version.txt
+  description: Software reverse engineering framework developed by NSA
+  execution_time: 600
+  name: Ghidra
+  recommendation_score: 93
+  target_types:
+  - binary
+  - executable
+  - firmware

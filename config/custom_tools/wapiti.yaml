@@ -1,0 +1,12 @@
+Wapiti:
+  api_key:
+    required: false
+  binary: wapiti
+  category: vulnerability_scanning
+  check_cmd: wapiti --version
+  description: Web application vulnerability scanner
+  execution_time: 1200
+  name: Wapiti
+  recommendation_score: 83
+  target_types:
+  - webapp

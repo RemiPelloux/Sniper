@@ -1,0 +1,13 @@
+GasMask:
+  api_key:
+    required: false
+  binary: gasmask
+  category: reconnaissance
+  check_cmd: gasmask -h
+  description: All-in-one Information Gathering Tool
+  execution_time: 600
+  name: GasMask
+  recommendation_score: 82
+  target_types:
+  - domain
+  - organization

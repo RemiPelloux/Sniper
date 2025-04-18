@@ -1,0 +1,12 @@
+DNSRecon:
+  api_key:
+    required: false
+  binary: dnsrecon
+  category: reconnaissance
+  check_cmd: dnsrecon -h
+  description: DNS enumeration script for extracting domain information
+  execution_time: 300
+  name: DNSRecon
+  recommendation_score: 85
+  target_types:
+  - domain

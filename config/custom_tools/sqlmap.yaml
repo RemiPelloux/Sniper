@@ -1,0 +1,13 @@
+Sqlmap:
+  api_key:
+    required: false
+  binary: sqlmap
+  category: exploitation
+  check_cmd: sqlmap --version
+  description: Automatic SQL injection and database takeover tool
+  execution_time: 1500
+  name: Sqlmap
+  recommendation_score: 85
+  target_types:
+  - webapp
+  - api

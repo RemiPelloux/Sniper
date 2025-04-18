@@ -1,0 +1,18 @@
+Shodan:
+  api_key:
+    description: API key for Shodan search engine
+    env_var: SHODAN_API_KEY
+    required: true
+    url: https://account.shodan.io/
+    usage: shodan init $SHODAN_API_KEY
+  binary: shodan
+  category: reconnaissance
+  check_cmd: shodan --version
+  description: Search engine for Internet-connected devices
+  execution_time: 300
+  name: Shodan
+  recommendation_score: 88
+  target_types:
+  - ip
+  - domain
+  - network

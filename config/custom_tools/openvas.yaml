@@ -1,0 +1,18 @@
+OpenVAS:
+  api_key:
+    description: OpenVAS/GVM credentials
+    env_var: OPENVAS_USERNAME
+    password_env_var: OPENVAS_PASSWORD
+    required: true
+    url: http://localhost:9392
+  binary: gvm-cli
+  category: vulnerability_scanning
+  check_cmd: gvm-cli --version
+  description: Open Vulnerability Assessment Scanner
+  execution_time: 3600
+  name: OpenVAS
+  recommendation_score: 89
+  target_types:
+  - network
+  - ip
+  - domain

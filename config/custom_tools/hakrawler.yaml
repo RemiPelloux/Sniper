@@ -1,0 +1,12 @@
+Hakrawler:
+  api_key:
+    required: false
+  binary: hakrawler
+  category: reconnaissance
+  check_cmd: hakrawler -version
+  description: Web crawler for discovering endpoints and assets
+  execution_time: 300
+  name: Hakrawler
+  recommendation_score: 82
+  target_types:
+  - webapp

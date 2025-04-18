@@ -1,0 +1,15 @@
+WPScan:
+  api_key:
+    description: API token for WPScan Vulnerability Database
+    env_var: WPSCAN_API_TOKEN
+    required: false
+    url: https://wpscan.com/api
+  binary: wpscan
+  category: cms_scanning
+  check_cmd: wpscan --version
+  description: WordPress Security Scanner
+  execution_time: 600
+  name: WPScan
+  recommendation_score: 92
+  target_types:
+  - wordpress

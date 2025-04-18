@@ -1,0 +1,15 @@
+OWASP_Dependency_Check:
+  api_key:
+    required: false
+  binary: dependency-check.sh
+  category: sca
+  check_cmd: dependency-check.sh --version
+  description: Software Composition Analysis tool that identifies project dependencies
+    with known vulnerabilities
+  execution_time: 900
+  name: OWASP Dependency Check
+  recommendation_score: 94
+  target_types:
+  - code
+  - dependency
+  - library

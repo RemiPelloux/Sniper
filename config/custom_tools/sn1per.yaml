@@ -1,0 +1,14 @@
+Sn1per:
+  api_key:
+    required: false
+  binary: sniper
+  category: vulnerability_scanning
+  check_cmd: sniper -v
+  description: Automated Pentest Framework for Offensive Security
+  execution_time: 3600
+  name: Sn1per
+  recommendation_score: 88
+  target_types:
+  - domain
+  - ip
+  - network

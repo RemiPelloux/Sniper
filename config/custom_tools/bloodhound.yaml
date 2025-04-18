@@ -1,0 +1,13 @@
+BloodHound:
+  api_key:
+    required: false
+  binary: bloodhound
+  category: active_directory
+  check_cmd: bloodhound --version
+  description: Graph theory-based Active Directory analysis tool
+  execution_time: 900
+  name: BloodHound
+  recommendation_score: 95
+  target_types:
+  - active_directory
+  - azure_ad
