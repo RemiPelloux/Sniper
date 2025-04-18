@@ -1,13 +1,11 @@
 """
-Worker Node Implementation for Sniper Security Tool
+Worker Node Implementation for Sniper Security Tool's Distributed Scanning Architecture.
 
-This module implements the worker node component of the distributed scanning architecture.
-The worker node is responsible for:
-1. Registering with master nodes
-2. Executing scanning tasks assigned by master nodes
-3. Reporting task status and results back to master nodes
-4. Sending regular heartbeats to master nodes
-5. Managing local resources and scan execution
+This module provides the implementation of worker nodes responsible for:
+- Registering with master node
+- Executing distributed scanning tasks
+- Reporting results and status updates
+- Health monitoring and heartbeat
 """
 
 import asyncio
@@ -15,898 +13,604 @@ import json
 import logging
 import os
 import platform
+import queue
+import requests
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Any, Union, Callable
+import traceback
 
-import psutil
-
-from src.core.logging import setup_logging
-from src.distributed.base import (
-    DistributedTask,
-    NodeInfo,
-    NodeStatus,
-    TaskPriority,
-    TaskStatus,
-    WorkerNode,
-)
-from src.distributed.protocol import (
-    HeartbeatMessage,
-    MessageType,
-    ProtocolBase,
-    ProtocolMessage,
-    RegisterMessage,
-    TaskResultMessage,
-    TaskStatusMessage,
-    create_protocol,
-)
+from src.distributed.base import BaseNode, NodeStatus, DistributedTask, TaskStatus, TaskPriority, NodeInfo, NodeRole
+from src.distributed.protocol import create_protocol, ProtocolMessage, MessageType, ProtocolBase
+from src.distributed.protocol import HeartbeatMessage, TaskResultMessage
 
 logger = logging.getLogger("sniper.distributed.worker")
 
-
-class SniperWorkerNode(WorkerNode):
+class SniperWorkerNode(BaseNode):
     """
-    Worker Node implementation for the Sniper Security Tool's distributed scanning architecture.
-
-    Responsible for executing scanning tasks and reporting results to master nodes.
+    Sniper Worker Node implementation for distributed scanning architecture.
+    
+    Handles task execution and reporting results back to the master node.
     """
-
-    def __init__(
-        self,
-        master_host: str,
-        master_port: int,
-        worker_id: Optional[str] = None,
-        host: str = "0.0.0.0",
-        port: int = 0,  # 0 means auto-assign
-        protocol_type: str = "rest",
-        capabilities: Optional[List[str]] = None,
-        heartbeat_interval: int = 15,
-        max_concurrent_tasks: int = 5,
-        task_execution_timeout: int = 3600,  # 1 hour default timeout
-    ):
+    
+    def __init__(self, master_host: str, master_port: int, 
+                 protocol_type: str = "REST",
+                 capabilities: List[str] = None,
+                 max_concurrent_tasks: int = 5,
+                 heartbeat_interval: int = 30):
         """
         Initialize the Sniper Worker Node.
-
+        
         Args:
             master_host: Host address of the master node
             master_port: Port of the master node
-            worker_id: Unique ID for this worker (auto-generated if not provided)
-            host: Host address to bind this worker's server
-            port: Port to listen on (0 for auto-assignment)
-            protocol_type: Communication protocol type ('rest', 'grpc', etc.)
-            capabilities: List of scan types/capabilities this worker supports
-            heartbeat_interval: Interval in seconds for sending heartbeats to master
-            max_concurrent_tasks: Maximum number of tasks to execute concurrently
-            task_execution_timeout: Maximum execution time for a task in seconds
+            protocol_type: Communication protocol to use (default: "REST")
+            capabilities: List of task types this worker can execute
+            max_concurrent_tasks: Maximum number of concurrent tasks
+            heartbeat_interval: Interval in seconds for sending heartbeats
         """
-        # Call the parent class constructor with the required parameters
-        super().__init__(
-            master_address=master_host,
-            master_port=master_port,
-            node_id=worker_id,
-            hostname=host,
-            address=host,
-            port=port,
-            capabilities=capabilities or ["nmap", "basic"],
-        )
-
-        # Protocol
+        super().__init__(node_id=f"worker-{uuid.uuid4()}")
+        self.master_host = master_host
+        self.master_port = master_port
         self.protocol_type = protocol_type
-        self.protocol = create_protocol(protocol_type, master_host, master_port)
-
-        # Task execution
+        self.capabilities = capabilities or ["scan", "vuln", "recon"]
         self.max_concurrent_tasks = max_concurrent_tasks
-        self.task_execution_timeout = task_execution_timeout
-        self.task_executors: Dict[str, Callable] = {
-            "nmap_scan": self._execute_nmap_scan,
-            "vulnerability_scan": self._execute_vulnerability_scan,
-            "web_scan": self._execute_web_scan,
-            "port_scan": self._execute_port_scan,
-            "default": self._execute_default_task,
-        }
-
+        self.heartbeat_interval = heartbeat_interval
+        
+        # Protocol and client
+        self.protocol: Optional[ProtocolBase] = None
+        self.master_id: Optional[str] = None
+        
         # Task management
         self.tasks: Dict[str, DistributedTask] = {}
-        self.task_lock = threading.RLock()
-        self.executor = ThreadPoolExecutor(max_workers=max_concurrent_tasks)
-        self.future_tasks: Dict[str, asyncio.Future] = {}
-
-        # Heartbeat and monitoring
-        self.heartbeat_interval = heartbeat_interval
-        self.heartbeat_thread = None
+        self.active_tasks = 0
+        self.task_handlers: Dict[str, Callable] = {}
+        
+        # Thread management
         self.running = False
-
-        # Server for receiving task assignments
-        self.server = None
-        self._message_handlers = {
-            MessageType.TASK_ASSIGNMENT: self._handle_task_assignment,
-            MessageType.CANCEL_TASK: self._handle_cancel_task,
-            MessageType.SHUTDOWN: self._handle_shutdown,
-        }
-
-        # Override the attributes from the parent class
-        self.master_address = master_host  # Renamed in our implementation
-
-    def register_with_master(self) -> bool:
+        self.heartbeat_thread = None
+        self.executor = ThreadPoolExecutor(max_workers=max_concurrent_tasks + 2)
+        
+        # Status and metrics
+        self.status = NodeStatus.INITIALIZING
+        self.task_count = 0
+        self.success_count = 0
+        self.failure_count = 0
+        
+        self.task_semaphore: Optional[asyncio.Semaphore] = None
+    
+    def register_task_handler(self, task_type: str, handler: Callable) -> None:
         """
-        Register this worker with the master node.
-
-        Returns:
-            True if registration was successful, False otherwise
+        Register a handler function for a specific task type.
+        
+        Args:
+            task_type: Type of task the handler can process
+            handler: Function to handle the task execution
         """
-        return self._register_with_master()
+        self.task_handlers[task_type] = handler
+        logger.info(f"Registered handler for task type: {task_type}")
+        
+        # Add to capabilities if not already present
+        if task_type not in self.capabilities:
+            self.capabilities.append(task_type)
+    
+    async def start(self) -> bool:
+        """Start the worker node client and connect to master."""
+        if self.running:
+            logger.warning("Worker node already running")
+            return False
+            
+        try:
+            # Set up protocol
+            self.protocol = create_protocol(self.protocol_type, self)
+            
+            # Connect to master node
+            logger.info(f"Connecting to master node at {self.master_host}:{self.master_port}")
+            if not await self._register_with_master():
+                logger.error("Failed to register with master node")
+                return False
+                
+            # Set status to active
+            self.status = NodeStatus.ACTIVE
+            self.running = True
+            
+            # Start heartbeat thread
+            self.heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop,
+                daemon=True
+            )
+            self.heartbeat_thread.start()
+            
+            self.task_semaphore = asyncio.Semaphore(self.max_concurrent_tasks)
+            
+            logger.info("Worker node started successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start worker node: {str(e)}")
+            self.running = False
+            return False
+    
+    async def stop(self) -> bool:
+        """Stop the worker node and disconnect from master."""
+        if not self.running:
+            logger.warning("Worker node not running")
+            return False
+            
+        try:
+            self.running = False
+            self.status = NodeStatus.OFFLINE
+            
+            # Cancel active tasks
+            for task_id, task in list(self.tasks.items()):
+                if task.status == TaskStatus.RUNNING:
+                    await self.cancel_task(task_id)
+            
+            # Disconnect from master
+            if self.protocol:
+                await self.protocol.disconnect()
+            
+            # Shutdown executor
+            self.executor.shutdown(wait=False)
+            
+            logger.info("Worker node stopped")
+            return True
+        except Exception as e:
+            logger.error(f"Error stopping worker node: {str(e)}")
+            return False
+    
+    async def _register_with_master(self) -> bool:
+        """Register this worker with the master node."""
+        if not self.protocol:
+            logger.error("Protocol not initialized")
+            return False
+            
+        try:
+            # Create worker info
+            worker_info = NodeInfo(
+                node_id=self.id,
+                role=NodeRole.WORKER,
+                hostname=self.hostname,
+                address=self.address,
+                port=self.port,
+                capabilities=self.capabilities,
+            )
+            worker_info.status = NodeStatus.INITIALIZING
 
-    def get_task(self) -> Optional[DistributedTask]:
-        """
-        Request a task from the master.
+            # Create registration message using ProtocolMessage
+            reg_message = ProtocolMessage(
+                 message_type=MessageType.REGISTER,
+                 sender_id=self.id,
+                 receiver_id="master",
+                 payload=worker_info.to_dict()
+            )
 
-        Returns:
-            Task to execute, or None if no tasks are available
-        """
-        # In our implementation, tasks are pushed to workers
-        # rather than pulled by workers, so this is a placeholder
-        logger.debug("get_task is not implemented as we use a push model")
-        return None
+            # Send registration message
+            response_dict = await self.protocol.send_message(reg_message)
+
+            # Process response (assuming send_message returns a dict or None)
+            if response_dict and response_dict.get("message_type") == MessageType.REGISTER_RESPONSE.name:
+                payload = response_dict.get("payload", {})
+                if payload.get("status") == "success":
+                    self.master_id = response_dict.get("sender_id")
+                    self.status = NodeStatus.IDLE
+                    logger.info(f"Successfully registered with master node {self.master_id}")
+                    return True
+                else:
+                    logger.error(f"Master rejected registration: {payload.get('message')}")
+                    return False
+            else:
+                logger.error(f"Failed to register with master node, invalid or no response: {response_dict}")
+                return False
+        except Exception as e:
+            logger.error(f"Error registering with master node: {str(e)}")
+            return False
+    
+    def _heartbeat_loop(self) -> None:
+        """Periodically send heartbeats to the master node."""
+        while self.running:
+            try:
+                self._send_heartbeat()
+                time.sleep(self.heartbeat_interval)
+            except Exception as e:
+                logger.error(f"Error in heartbeat loop: {str(e)}")
+                time.sleep(5)  # Retry after a short delay
+    
+    def _send_heartbeat(self) -> None:
+        """Send a heartbeat message to the master node."""
+        if not self.protocol or not self.master_id:
+            logger.warning("Cannot send heartbeat: not connected to master")
+            return
+            
+        try:
+            # Create heartbeat message with metrics
+            metrics = {
+                "load": self.active_tasks / self.max_concurrent_tasks if self.max_concurrent_tasks > 0 else 0,
+                "task_count": self.task_count,
+                "success_rate": self.success_count / self.task_count if self.task_count > 0 else 1.0,
+                "active_tasks": self.active_tasks
+            }
+            
+            heartbeat_msg = ProtocolMessage(
+                message_type=MessageType.HEARTBEAT,
+                sender_id=self.id,
+                receiver_id=self.master_id,
+                payload=metrics
+            )
+            
+            # Send heartbeat
+            response = self.protocol.send_message(heartbeat_msg)
+            
+            if response and response.message_type == MessageType.HEARTBEAT_ACK:
+                logger.debug("Heartbeat acknowledged by master")
+            else:
+                logger.warning("Heartbeat not acknowledged by master")
+        except Exception as e:
+            logger.error(f"Error sending heartbeat: {str(e)}")
+    
+    def handle_message(self, message: ProtocolMessage) -> Optional[ProtocolMessage]:
+        """Handle incoming messages from the master node."""
+        try:
+            if message.message_type == MessageType.TASK_ASSIGNMENT:
+                return self._handle_task_assignment(message)
+            elif message.message_type == MessageType.TASK_CANCEL:
+                return self._handle_task_cancel(message)
+            else:
+                logger.warning(f"Unknown message type: {message.message_type}")
+                return None
+        except Exception as e:
+            logger.error(f"Error handling message: {str(e)}")
+            return None
+    
+    def _handle_task_assignment(self, message: ProtocolMessage) -> Optional[ProtocolMessage]:
+        """Handle task assignment messages from the master node."""
+        try:
+            # Parse task data
+            task_data = json.loads(message.data)
+            task = DistributedTask.from_dict(task_data)
+            
+            logger.info(f"Received task assignment: {task.task_id} (Type: {task.task_type})")
+            
+            # Check if we can handle this task type
+            if task.task_type not in self.capabilities:
+                logger.warning(f"Cannot handle task type: {task.task_type}")
+                return ProtocolMessage(
+                    sender=self.node_id,
+                    recipient=message.sender,
+                    message_type=MessageType.TASK_STATUS,
+                    data=json.dumps({
+                        "task_id": task.task_id,
+                        "status": TaskStatus.REJECTED.name,
+                        "reason": f"Worker does not support task type: {task.task_type}"
+                    })
+                )
+            
+            # Check if we have capacity
+            if self.active_tasks >= self.max_concurrent_tasks:
+                logger.warning("Cannot accept task: at maximum capacity")
+                return ProtocolMessage(
+                    sender=self.node_id,
+                    recipient=message.sender,
+                    message_type=MessageType.TASK_STATUS,
+                    data=json.dumps({
+                        "task_id": task.task_id,
+                        "status": TaskStatus.REJECTED.name,
+                        "reason": "Worker at maximum capacity"
+                    })
+                )
+            
+            # Accept and store the task
+            self.tasks[task.task_id] = task
+            
+            # Submit task for execution
+            asyncio.create_task(self._execute_task_wrapper(task))
+            
+            # Send acceptance message
+            return ProtocolMessage(
+                sender=self.node_id,
+                recipient=message.sender,
+                message_type=MessageType.TASK_STATUS,
+                data=json.dumps({
+                    "task_id": task.task_id,
+                    "status": TaskStatus.RUNNING.name
+                })
+            )
+        except Exception as e:
+            logger.error(f"Error handling task assignment: {str(e)}")
+            return None
+    
+    def _handle_task_cancel(self, message: ProtocolMessage) -> Optional[ProtocolMessage]:
+        """Handle task cancellation messages from the master node."""
+        try:
+            # Parse cancellation data
+            cancel_data = json.loads(message.data)
+            task_id = cancel_data.get("task_id")
+            
+            if not task_id or task_id not in self.tasks:
+                logger.warning(f"Cannot cancel unknown task: {task_id}")
+                return None
+                
+            logger.info(f"Received cancellation for task: {task_id}")
+            
+            # Cancel the task
+            asyncio.create_task(self.cancel_task(task_id))
+            
+            # Send acknowledgment immediately (cancellation happens in background)
+            return ProtocolMessage(
+                sender=self.node_id,
+                recipient=message.sender,
+                message_type=MessageType.TASK_STATUS,
+                data=json.dumps({
+                    "task_id": task_id,
+                    "status": TaskStatus.CANCELLED.name
+                })
+            )
+        except Exception as e:
+            logger.error(f"Error handling task cancellation: {str(e)}")
+            return None
+    
+    async def _execute_task_wrapper(self, task: DistributedTask):
+        """Acquires semaphore and wraps the actual task execution with error handling."""
+        task_id = task.id # Get id early
+        if not self.task_semaphore:
+             logger.error(f"Task semaphore not initialized. Cannot execute task {task_id}.")
+             # Mark task as failed immediately and notify master
+             if task_id in self.tasks:
+                 self.tasks[task_id].status = TaskStatus.FAILED
+                 self.tasks[task_id].completed_at = datetime.now(timezone.utc)
+             await self.status_update(task_id, TaskStatus.FAILED, message="Worker semaphore not initialized")
+             return
+
+        async with self.task_semaphore:
+            self.active_tasks += 1
+            logger.info(f"Starting execution for task {task_id}... Active tasks: {self.active_tasks}")
+            task.status = TaskStatus.RUNNING
+            task.started_at = datetime.now(timezone.utc)
+            await self.status_update(task_id, TaskStatus.RUNNING)
+
+            result = None
+            final_status = TaskStatus.FAILED # Default to failed
+
+            try:
+                handler = self.task_handlers.get(task.task_type)
+                if not handler:
+                    raise ValueError(f"No handler registered for task type: {task.task_type}")
+
+                logger.debug(f"Executing task {task_id} ({task.task_type}) with handler {handler.__name__}")
+                # Check if handler is async or sync
+                if asyncio.iscoroutinefunction(handler):
+                    result = await handler(task.target, **task.parameters)
+                else:
+                    # Run sync handler in thread pool executor
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(
+                        self.executor, handler, task.target, *task.parameters.values()
+                    )
+                logger.info(f"Task {task_id} completed successfully by handler.")
+                final_status = TaskStatus.COMPLETED
+
+            except Exception as e:
+                logger.error(f"Error executing task {task_id}: {e}", exc_info=True)
+                # Status remains FAILED (or set explicitly)
+                final_status = TaskStatus.FAILED
+                # Store error information if needed
+                # task.error_message = str(e)
+
+            finally:
+                self.active_tasks -= 1
+                logger.info(f"Finished execution for task {task_id}. Final status: {final_status.value}. Active tasks: {self.active_tasks}")
+                # Update task object in worker's memory
+                if task_id in self.tasks:
+                    task_ref = self.tasks[task_id]
+                    task_ref.status = final_status
+                    task_ref.completed_at = datetime.now(timezone.utc)
+                    task_ref.result = result if final_status == TaskStatus.COMPLETED else None
+                    # Optionally store error details if failed
+                    # task_ref.error_message = str(e) if final_status == TaskStatus.FAILED else None
+                else:
+                     logger.warning(f"Task {task_id} not found in worker tasks during finally block.")
+
+                # Send final status/result to master
+                try:
+                    # Send result only if completed successfully
+                    await self._send_task_result(
+                        task_id, result if final_status == TaskStatus.COMPLETED else None, final_status
+                    )
+                except Exception as send_error:
+                    logger.error(f"Failed to send final status/result for task {task_id} to master: {send_error}", exc_info=True)
 
     def execute_task(self, task: DistributedTask) -> Dict[str, Any]:
         """
-        Execute a task.
-
+        Execute a distributed task.
+        
         Args:
-            task: Task to execute
-
+            task: The task to execute
+            
         Returns:
-            Result of the task execution
+            Dict[str, Any]: The result of the task execution
+            
+        Raises:
+            ValueError: If the task type is not supported
         """
-        # Get the appropriate executor for the task type
-        executor = self.task_executors.get(
-            task.task_type, self.task_executors["default"]
-        )
-
-        # Execute the task
-        result = executor(task)
+        task_type = task.task_type
+        
+        # Check if we have a handler for this task type
+        if task_type not in self.task_handlers:
+            raise ValueError(f"No handler registered for task type: {task_type}")
+            
+        # Get the handler function
+        handler = self.task_handlers[task_type]
+        
+        # Execute the handler with task parameters
+        logger.info(f"Executing task {task.task_id} (Type: {task_type})")
+        result = handler(task.target, **task.parameters)
+        
         return result
-
-    def send_result(self, task_id: str, result: Dict[str, Any]) -> bool:
+    
+    async def _send_task_result(self, task_id: str, result: Dict[str, Any], status: TaskStatus) -> None:
         """
-        Send a task result back to the master.
-
+        Send task result to the master node.
+        
         Args:
             task_id: ID of the completed task
-            result: Result data
-
-        Returns:
-            Whether the result was successfully sent
+            result: Result data from the task execution
+            status: Final status of the task
         """
-        with self.task_lock:
-            if task_id not in self.tasks:
-                logger.warning(f"Cannot send result for unknown task {task_id}")
-                return False
-
-            task = self.tasks[task_id]
-
-        # Send the result to the master
-        self._send_task_result(task_id, TaskStatus.COMPLETED, result)
-        return True
-
-    def send_heartbeat(self) -> bool:
-        """
-        Send a heartbeat message to the master.
-
-        Returns:
-            Whether the heartbeat was successfully sent
-        """
-        self._send_heartbeat()
-        return True
-
-    def status_update(self) -> Dict[str, Any]:
-        """
-        Get status information about the node.
-
-        Returns:
-            Dictionary with current status information
-        """
-        with self.task_lock:
-            current_tasks = sum(
-                1 for task in self.tasks.values() if task.status == TaskStatus.RUNNING
-            )
-
-        # Get current system metrics
-        cpu_percent = psutil.cpu_percent()
-        memory_percent = psutil.virtual_memory().percent
-
-        return {
-            "id": self.id,
-            "status": self.status.value,
-            "running_tasks": current_tasks,
-            "max_tasks": self.max_concurrent_tasks,
-            "cpu_percent": cpu_percent,
-            "memory_percent": memory_percent,
-            "uptime": self.uptime(),
-        }
-
-    def start(self):
-        """Start the worker node, connect to master, and begin processing tasks."""
-        if self.running:
-            logger.warning("Worker node is already running")
+        if not self.protocol or not self.master_id:
+            logger.warning("Cannot send result: not connected to master")
             return
-
-        logger.info(f"Starting Sniper Worker Node {self.id}")
-        self.running = True
-
-        # Register with master
-        success = self.register_with_master()
-        if not success:
-            logger.error("Failed to register with master node")
-            self.running = False
-            return False
-
-        # Start heartbeat thread
-        self.heartbeat_thread = threading.Thread(
-            target=self._heartbeat_loop, daemon=True
-        )
-        self.heartbeat_thread.start()
-
-        # Start the server based on protocol type
+            
         try:
-            if self.protocol_type == "rest":
-                self._start_rest_server()
+            # Create result message
+            result_payload = {
+                "task_id": task_id,
+                "status": status.value,
+                "result": result
+            }
+            
+            result_msg = ProtocolMessage(
+                message_type=MessageType.TASK_RESULT,
+                sender_id=self.id,
+                receiver_id=self.master_id,
+                payload=result_payload
+            )
+            
+            # Send result to master using async executor
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(
+                self.executor,
+                self.protocol.send_message,
+                result_msg
+            )
+            
+            if response and response.get("message_type") == MessageType.TASK_RESULT_ACK.name:
+                logger.info(f"Result for task {task_id} acknowledged by master")
             else:
-                raise NotImplementedError(
-                    f"Protocol {self.protocol_type} not implemented yet"
-                )
-
-            logger.info(f"Worker node {self.id} started successfully")
-            return True
+                logger.warning(f"Result for task {task_id} not acknowledged by master")
         except Exception as e:
-            self.running = False
-            logger.error(f"Failed to start worker node: {e}")
-            return False
-
-    def stop(self):
-        """Stop the worker node and cleanup resources."""
-        if not self.running:
-            logger.warning("Worker node is not running")
+            logger.error(f"Error sending task result: {str(e)}", exc_info=True)
+    
+    async def status_update(self, task_id: str, status: TaskStatus, message: str = "") -> None:
+        """
+        Update the status of a task and notify the master node.
+        
+        Args:
+            task_id: ID of the task to update
+            status: New status for the task
+            message: Optional message with additional information
+        """
+        if task_id not in self.tasks:
+            logger.warning(f"Task {task_id} not found for status update")
             return
-
-        logger.info(f"Stopping worker node {self.id}")
-        self.running = False
-
-        # Cancel any running tasks
-        with self.task_lock:
-            for task_id, task in list(self.tasks.items()):
-                if task.status == TaskStatus.RUNNING:
-                    self._cancel_task(task_id)
-
-        # Stop the server
-        if self.server:
-            self._stop_server()
-
-        # Wait for heartbeat thread to finish
-        if self.heartbeat_thread and self.heartbeat_thread.is_alive():
-            self.heartbeat_thread.join(timeout=5)
-
-        # Shutdown executor
-        self.executor.shutdown(wait=False)
-
-        logger.info(f"Worker node {self.id} stopped")
-
-    def _register_with_master(self) -> bool:
-        """
-        Register this worker with the master node.
-
-        Returns:
-            True if registration was successful, False otherwise
-        """
-        logger.info(
-            f"Registering with master node at {self.master_address}:{self.master_port}"
-        )
-
-        # System info for registration
-        system_info = {
-            "platform": platform.system(),
-            "processor": platform.processor(),
-            "memory": psutil.virtual_memory().total,
-            "cores": os.cpu_count(),
-        }
-
-        # Build registration message
-        payload = {
-            "host": self.address,
-            "port": self.port,
-            "capabilities": self.capabilities,
-            "system_info": system_info,
-        }
-
-        register_msg = RegisterMessage(
-            sender_id=self.id, receiver_id="master", payload=payload
-        )
-
-        # In a real implementation, this would use the protocol to send
-        # the registration message to the master
-        # For now, we'll just assume it worked
-
-        logger.info(f"Registered with master node as worker {self.id}")
-        self.status = NodeStatus.ACTIVE
-        return True
-
-    def _start_rest_server(self):
-        """Start the REST server for the worker node."""
-        # This would be implemented with a web framework like FastAPI or Flask
-        # For now, we'll use a placeholder method
-        logger.info(f"Starting REST server on {self.address}:{self.port}")
-
-        # Placeholder for actual server implementation
-        self.server = {"status": "running", "type": "rest"}
-
-        # In a real implementation, this would be:
-        # from src.distributed.rest import create_worker_app
-        # app = create_worker_app(self)
-        # self.server = uvicorn.run(app, host=self.address, port=self.port)
-
-    def _stop_server(self):
-        """Stop the server."""
-        logger.info("Stopping server")
-        # Placeholder for actual server stop implementation
-        self.server = None
-
-    def _heartbeat_loop(self):
-        """Background thread for sending periodic heartbeats to the master."""
-        logger.info("Starting heartbeat loop")
-        while self.running:
-            try:
-                self.send_heartbeat()
-            except Exception as e:
-                logger.error(f"Error sending heartbeat: {e}")
-
-            time.sleep(self.heartbeat_interval)
-
-    def _send_heartbeat(self):
-        """Send a heartbeat message to the master node."""
-        # Get current system metrics
-        cpu_percent = psutil.cpu_percent()
-        memory_percent = psutil.virtual_memory().percent
-
-        # Count current tasks
-        with self.task_lock:
-            current_tasks = sum(
-                1 for task in self.tasks.values() if task.status == TaskStatus.RUNNING
-            )
-
-        # Build heartbeat message
-        payload = {
-            "current_load": (cpu_percent + memory_percent)
-            / 2,  # Simple load calculation
-            "current_tasks": current_tasks,
-            "cpu_percent": cpu_percent,
-            "memory_percent": memory_percent,
-        }
-
-        heartbeat_msg = HeartbeatMessage(
-            sender_id=self.id, receiver_id="master", payload=payload
-        )
-
-        # In a real implementation, this would use the protocol to send
-        # the heartbeat message to the master
-        # For now, we'll just log it
-        logger.debug(
-            f"Sent heartbeat to master: load={payload['current_load']:.1f}%, tasks={current_tasks}"
-        )
-
-    def _handle_message(self, message: ProtocolMessage):
-        """
-        Handle incoming messages from the master node.
-
-        Args:
-            message: The received message
-        """
-        if message.message_type in self._message_handlers:
-            handler = self._message_handlers[message.message_type]
-            handler(message)
-        else:
-            logger.warning(f"No handler for message type {message.message_type}")
-
-    def _handle_task_assignment(self, message: ProtocolMessage):
-        """Handle task assignment message from master."""
-        task_data = message.payload.get("task")
-        if not task_data:
-            logger.warning("Received task assignment without task data")
-            return
-
-        try:
-            # Create task object from message payload
-            task_id = task_data.get("id")
-            task_type = task_data.get("task_type")
-
-            # Check if we have the required capability
-            if task_type not in self.capabilities:
-                logger.warning(
-                    f"Received task of type {task_type} but worker doesn't have this capability"
-                )
-                self._send_task_status(
-                    task_id, TaskStatus.FAILED, f"Worker doesn't support {task_type}"
-                )
-                return
-
-            # Check if we're at capacity
-            with self.task_lock:
-                if len(self.tasks) >= self.max_concurrent_tasks:
-                    logger.warning("Rejecting task assignment - worker at capacity")
-                    self._send_task_status(
-                        task_id, TaskStatus.FAILED, "Worker at capacity"
-                    )
-                    return
-
-            # Parse priority (default to MEDIUM if not specified)
-            priority_value = task_data.get("priority", TaskPriority.MEDIUM.value)
-            priority = TaskPriority(priority_value)
-
-            # Extract target information
-            target = task_data.get("target", {})
-            if isinstance(target, str):
-                # Convert string target to dictionary format
-                target = {"host": target}
-
-            # Create the task
-            task = DistributedTask(
-                task_type=task_type,
-                target=target,
-                parameters=task_data.get("parameters", {}),
-                priority=priority,
-            )
-
-            # Set the task ID if provided
-            if task_id:
-                task.id = task_id
-
-            # Update task status
-            task.status = TaskStatus.ASSIGNED
-            task.assigned_node = self.id
-
-            # Add task to our task list
-            with self.task_lock:
-                self.tasks[task.id] = task
-
-            # Send acceptance back to master
-            self._send_task_status(task.id, TaskStatus.ASSIGNED)
-
-            # Start task execution
-            self._execute_task(task.id)
-
-        except Exception as e:
-            logger.error(f"Error processing task assignment: {str(e)}")
-            if task_data and "id" in task_data:
-                self._send_task_status(
-                    task_data["id"], TaskStatus.FAILED, f"Error: {str(e)}"
-                )
-
-    def _handle_cancel_task(self, message: ProtocolMessage):
-        """Handle task cancellation message from master."""
-        task_id = message.payload.get("task_id")
-        if not task_id:
-            logger.warning("Received cancel task without task_id")
-            return
-
-        logger.info(f"Received cancellation request for task {task_id}")
-
-        with self.task_lock:
-            if task_id not in self.tasks:
-                logger.warning(f"Cannot cancel unknown task {task_id}")
-                return
-
-            self._cancel_task(task_id)
-
-    def _handle_shutdown(self, message: ProtocolMessage):
-        """Handle shutdown message from master."""
-        logger.info("Received shutdown request from master")
-        grace_period = message.payload.get("grace_period", 30)
-
-        # Graceful shutdown
-        threading.Thread(
-            target=self._graceful_shutdown, args=(grace_period,), daemon=True
-        ).start()
-
-    def _graceful_shutdown(self, grace_period: int):
-        """
-        Perform a graceful shutdown after finishing current tasks.
-
-        Args:
-            grace_period: Grace period in seconds before forced shutdown
-        """
-        logger.info(f"Initiating graceful shutdown with {grace_period}s grace period")
-
-        # Stop accepting new tasks
-        self.status = NodeStatus.DRAINING
-
-        # Set shutdown timer
-        shutdown_time = time.time() + grace_period
-
-        # Wait for running tasks to complete
-        while time.time() < shutdown_time:
-            with self.task_lock:
-                running_tasks = sum(
-                    1
-                    for task in self.tasks.values()
-                    if task.status == TaskStatus.RUNNING
-                )
-
-            if running_tasks == 0:
-                logger.info("All tasks completed, shutting down")
-                break
-
-            logger.info(
-                f"Waiting for {running_tasks} tasks to complete before shutdown"
-            )
-            time.sleep(5)
-
-        # Stop the worker
-        self.stop()
-
-    def _execute_task(self, task_id: str):
-        """
-        Execute a task asynchronously.
-
-        Args:
-            task_id: ID of the task to execute
-        """
-        with self.task_lock:
-            if task_id not in self.tasks:
-                logger.warning(f"Cannot execute unknown task {task_id}")
-                return
-
-            task = self.tasks[task_id]
-            task.status = TaskStatus.RUNNING
-            task.start_time = datetime.now(timezone.utc)
-
-            logger.info(
-                f"Starting execution of task {task_id} (type: {task.task_type})"
-            )
-
-            # Send status update to master
-            self._send_task_status(task_id, TaskStatus.RUNNING)
-
-            # Submit task to thread pool
-            future = self.executor.submit(self._task_worker, task_id)
-            self.future_tasks[task_id] = future
-
-    def _task_worker(self, task_id: str):
-        """
-        Worker function that executes a task.
-
-        Args:
-            task_id: ID of the task to execute
-        """
-        with self.task_lock:
-            if task_id not in self.tasks:
-                logger.warning(f"Task {task_id} no longer exists")
-                return
-
-            task = self.tasks[task_id]
-
-        result = None
-        error = None
-        status = TaskStatus.COMPLETED
-
-        try:
-            # Get the appropriate executor for the task type
-            executor = self.task_executors.get(
-                task.task_type, self.task_executors["default"]
-            )
-
-            # Execute the task with timeout
-            result = executor(task)
-
-            logger.info(f"Task {task_id} completed successfully")
-        except asyncio.TimeoutError:
-            error = "Task execution timed out"
-            status = TaskStatus.FAILED
-            logger.error(
-                f"Task {task_id} timed out after {self.task_execution_timeout} seconds"
-            )
-        except Exception as e:
-            error = str(e)
-            status = TaskStatus.FAILED
-            logger.error(f"Error executing task {task_id}: {e}")
-
+            
         # Update task status
-        with self.task_lock:
-            if task_id in self.tasks:
-                task = self.tasks[task_id]
-                task.status = status
-                task.result = result
-                task.error = error
-                task.end_time = datetime.now(timezone.utc)
+        task = self.tasks[task_id]
+        task.status = status
+        
+        # Send status update to master
+        if self.protocol and self.master_id:
+            try:
+                # Create status update message using generic ProtocolMessage
+                status_payload = {
+                    "task_id": task_id,
+                    "status": status.value,
+                    "message": message
+                }
+                status_msg = ProtocolMessage(
+                    message_type=MessageType.TASK_STATUS,
+                    sender_id=self.id,
+                    receiver_id=self.master_id,
+                    payload=status_payload
+                )
 
-                # Remove the future
-                self.future_tasks.pop(task_id, None)
+                # Send status update
+                # Use asyncio to handle potential blocking calls
+                loop = asyncio.get_running_loop()
+                response_dict = await loop.run_in_executor(
+                    self.executor, 
+                    self.protocol.send_message,
+                    status_msg
+                )
 
-                # Send result to master
-                self._send_task_result(task_id, status, result, error)
-
-                # Remove the task
-                del self.tasks[task_id]
-
-    def _cancel_task(self, task_id: str):
+                if response_dict and response_dict.get("message_type") == MessageType.TASK_STATUS_RESPONSE.name:
+                    logger.debug(f"Status update for task {task_id} acknowledged by master")
+                else:
+                    logger.warning(f"Status update for task {task_id} not acknowledged by master: {response_dict}")
+            except Exception as e:
+                logger.error(f"Error sending status update: {str(e)}", exc_info=True)
+    
+    async def cancel_task(self, task_id: str) -> bool:
         """
-        Cancel a running task.
-
+        Cancel a task.
+        
         Args:
             task_id: ID of the task to cancel
+            
+        Returns:
+            bool: True if cancellation successful, False otherwise
         """
-        with self.task_lock:
-            if task_id not in self.tasks:
-                logger.warning(f"Cannot cancel unknown task {task_id}")
-                return
-
-            task = self.tasks[task_id]
-
-            # Cancel the future if it exists
-            future = self.future_tasks.pop(task_id, None)
-            if future and not future.done():
-                future.cancel()
-                logger.info(f"Cancelled task {task_id}")
-
-            # Update task status
-            task.status = TaskStatus.CANCELED
-
-            # Remove the task
-            self.tasks.pop(task_id, None)
-
-            # Send task status update to master
-            self._send_task_status(
-                task_id, TaskStatus.CANCELED, "Task cancelled by worker"
-            )
-
-    def _send_task_status(self, task_id: str, status: TaskStatus, message: str = ""):
-        """
-        Send a task status update to the master.
-
-        Args:
-            task_id: ID of the task
-            status: New status of the task
-            message: Optional status message
-        """
-        payload = {"task_id": task_id, "status": status.value, "message": message}
-
-        status_msg = TaskStatusMessage(
-            sender_id=self.id, receiver_id="master", payload=payload
-        )
-
-        # In a real implementation, this would use the protocol to send
-        # the status message to the master
-        # For now, we'll just log it
-        logger.debug(f"Sent status update for task {task_id}: {status.name}")
-
-    def _send_task_result(
-        self, task_id: str, status: TaskStatus, result=None, error=None
-    ):
-        """
-        Send task result to the master.
-
-        Args:
-            task_id: ID of the task
-            status: Final status of the task
-            result: Task execution result
-            error: Error message if task failed
-        """
-        payload = {
-            "task_id": task_id,
-            "status": status.value,
-            "result": result,
-            "error": error,
-        }
-
-        result_msg = TaskResultMessage(
-            sender_id=self.id, receiver_id="master", payload=payload
-        )
-
-        # In a real implementation, this would use the protocol to send
-        # the result message to the master
-        # For now, we'll just log it
-        logger.info(f"Sent result for task {task_id}: status={status.name}")
-
-    # Task execution methods
-    def _execute_default_task(self, task: DistributedTask):
-        """Default task executor for unknown task types."""
-        logger.warning(f"Using default executor for task type: {task.task_type}")
-        time.sleep(1)  # Simulate work
-        return {"status": "completed", "message": f"Executed {task.task_type} task"}
-
-    def _execute_nmap_scan(self, task: DistributedTask):
-        """Execute an nmap scan task."""
-        logger.info(f"Executing nmap scan: {task.parameters}")
-        target = task.parameters.get("target", "")
-        scan_type = task.parameters.get("scan_type", "basic")
-
-        # Simulate nmap scan
-        time.sleep(2)  # Simulate work
-
-        # Return simulated results
-        return {
-            "target": target,
-            "scan_type": scan_type,
-            "ports": [22, 80, 443] if scan_type != "quick" else [80],
-            "open_services": (
-                {"22": "ssh", "80": "http", "443": "https"}
-                if scan_type != "quick"
-                else {"80": "http"}
-            ),
-        }
-
-    def _execute_vulnerability_scan(self, task: DistributedTask):
-        """Execute a vulnerability scan task."""
-        logger.info(f"Executing vulnerability scan: {task.parameters}")
-        target = task.parameters.get("target", "")
-        depth = task.parameters.get("depth", "normal")
-
-        # Simulate vulnerability scan
-        scan_time = 5 if depth == "deep" else 2
-        time.sleep(scan_time)  # Simulate work
-
-        # Return simulated results
-        return {
-            "target": target,
-            "depth": depth,
-            "vulnerabilities": (
-                [
-                    {
-                        "id": "CVE-2023-1234",
-                        "severity": "high",
-                        "description": "Remote code execution vulnerability",
-                    },
-                    {
-                        "id": "CVE-2023-5678",
-                        "severity": "medium",
-                        "description": "Information disclosure vulnerability",
-                    },
-                ]
-                if depth == "deep"
-                else [
-                    {
-                        "id": "CVE-2023-1234",
-                        "severity": "high",
-                        "description": "Remote code execution vulnerability",
-                    }
-                ]
-            ),
-        }
-
-    def _execute_web_scan(self, task: DistributedTask):
-        """Execute a web scan task."""
-        logger.info(f"Executing web scan: {task.parameters}")
-        target = task.parameters.get("target", "")
-        scan_depth = task.parameters.get("scan_depth", 1)
-
-        # Simulate web scan
-        time.sleep(scan_depth * 2)  # Simulate work
-
-        # Return simulated results
-        return {
-            "target": target,
-            "scan_depth": scan_depth,
-            "findings": (
-                [
-                    {
-                        "type": "xss",
-                        "severity": "high",
-                        "path": "/search",
-                        "description": "Reflected XSS vulnerability",
-                    },
-                    {
-                        "type": "sqli",
-                        "severity": "critical",
-                        "path": "/login",
-                        "description": "SQL injection vulnerability",
-                    },
-                ]
-                if scan_depth > 1
-                else [
-                    {
-                        "type": "xss",
-                        "severity": "high",
-                        "path": "/search",
-                        "description": "Reflected XSS vulnerability",
-                    }
-                ]
-            ),
-        }
-
-    def _execute_port_scan(self, task: DistributedTask):
-        """Execute a port scan task."""
-        logger.info(f"Executing port scan: {task.parameters}")
-        target = task.parameters.get("target", "")
-        port_range = task.parameters.get("port_range", "1-1000")
-
-        # Simulate port scan
-        time.sleep(1)  # Simulate work
-
-        # Parse port range
-        try:
-            start, end = port_range.split("-")
-            start, end = int(start), int(end)
-        except ValueError:
-            start, end = 1, 1000
-
-        # Return simulated results
-        return {
-            "target": target,
-            "port_range": port_range,
-            "open_ports": [22, 80, 443, 3306] if end > 3000 else [22, 80, 443],
-        }
-
+        if task_id not in self.tasks:
+            logger.warning(f"Task {task_id} not found for cancellation")
+            return False
+            
+        task = self.tasks[task_id]
+        
+        # Update task status
+        task.status = TaskStatus.CANCELLED
+        task.completed_at = datetime.now(timezone.utc)
+        
+        # Notify master of cancellation
+        await self.status_update(task_id, TaskStatus.CANCELLED)
+        
+        logger.info(f"Task {task_id} cancelled")
+        return True
 
 class WorkerNodeClient:
     """
-    Client wrapper for the Sniper Worker Node, handling configuration and startup.
+    Wrapper class for SniperWorkerNode to handle configuration and startup.
     """
-
-    def __init__(
-        self,
-        config_path: Optional[str] = None,
-        master_host: str = "localhost",
-        master_port: int = 5555,
-        worker_id: Optional[str] = None,
-        protocol_type: str = "rest",
-        capabilities: Optional[List[str]] = None,
-    ):
+    
+    def __init__(self, master_host: str, master_port: int,
+                 protocol_type: str = "REST",
+                 capabilities: List[str] = None,
+                 max_concurrent_tasks: int = 5,
+                 heartbeat_interval: int = 30):
         """
-        Initialize the worker node client with configuration.
-
+        Initialize the worker node client.
+        
         Args:
-            config_path: Optional path to configuration file
             master_host: Host address of the master node
             master_port: Port of the master node
-            worker_id: Unique ID for this worker
-            protocol_type: Communication protocol type
-            capabilities: List of scan types/capabilities this worker supports
+            protocol_type: Communication protocol to use
+            capabilities: List of task types this worker can execute
+            max_concurrent_tasks: Maximum number of concurrent tasks
+            heartbeat_interval: Interval in seconds for sending heartbeats
         """
-        # Set up logging
-        setup_logging()
-
-        # Load configuration from file if provided
-        if config_path:
-            # In a real implementation, this would load config from file
-            pass
-
-        # Determine worker capabilities
-        if capabilities is None:
-            capabilities = self._detect_capabilities()
-
-        # Create the worker node
         self.worker_node = SniperWorkerNode(
             master_host=master_host,
             master_port=master_port,
-            worker_id=worker_id,
             protocol_type=protocol_type,
             capabilities=capabilities,
+            max_concurrent_tasks=max_concurrent_tasks,
+            heartbeat_interval=heartbeat_interval
         )
-
-    def _detect_capabilities(self) -> List[str]:
+    
+    def register_task_handler(self, task_type: str, handler: Callable) -> None:
         """
-        Detect the capabilities of this worker based on installed tools.
-
-        Returns:
-            List of supported scan types/capabilities
+        Register a handler function for a specific task type.
+        
+        Args:
+            task_type: Type of task the handler can process
+            handler: Function to handle the task execution
         """
-        capabilities = ["basic"]
-
-        # In a real implementation, this would detect installed tools
-        # For now, we'll return a default set
-        return ["nmap", "port_scan", "basic"]
-
-    def start(self) -> bool:
-        """
-        Start the worker node.
-
-        Returns:
-            True if started successfully, False otherwise
-        """
-        return self.worker_node.start()
-
-    def stop(self):
-        """Stop the worker node."""
-        self.worker_node.stop()
+        self.worker_node.register_task_handler(task_type, handler)
+    
+    async def start(self) -> bool:
+        """Start the worker node client."""
+        return await self.worker_node.start()
+    
+    async def stop(self) -> bool:
+        """Stop the worker node client."""
+        return await self.worker_node.stop()

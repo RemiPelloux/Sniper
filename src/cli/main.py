@@ -41,7 +41,7 @@ app = typer.Typer(
 app.add_typer(scan.app)
 app.add_typer(report.app)
 app.add_typer(tools.app)
-app.add_typer(ml.app)
+app.add_typer(ml.ml)
 
 
 # Separate callback for version handling

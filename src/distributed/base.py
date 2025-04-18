@@ -36,6 +36,8 @@ class NodeStatus(Enum):
     PAUSED = "paused"
     ERROR = "error"
     OFFLINE = "offline"
+    DISCONNECTED = "disconnected"
+    CONNECTED = "connected"
 
 
 class TaskPriority(Enum):
@@ -237,7 +239,16 @@ class BaseNode(abc.ABC):
 
         self.id = node_id or str(uuid.uuid4())
         self.hostname = hostname or socket.gethostname()
-        self.address = address or socket.gethostbyname(self.hostname)
+        
+        # Try to resolve hostname, default to 127.0.0.1 if it fails
+        if address:
+            self.address = address
+        else:
+            try:
+                self.address = socket.gethostbyname(self.hostname)
+            except socket.gaierror:
+                self.address = "127.0.0.1"
+                
         self.port = port
         self.start_time = datetime.now(timezone.utc)
         self.status = NodeStatus.INITIALIZING

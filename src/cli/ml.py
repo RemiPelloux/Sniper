@@ -55,14 +55,14 @@ class VisualizationType(str, Enum):
 
 
 # Create typer app
-app = typer.Typer(
+ml = typer.Typer(
     name="ml",
     help="Machine learning commands for vulnerability prediction and risk assessment.",
     add_completion=False,
 )
 
 
-@app.command("predict")
+@ml.command("predict")
 def predict(
     findings_file: Path = typer.Argument(
         ..., exists=True, help="Path to a JSON file containing security findings"
@@ -118,7 +118,7 @@ def predict(
         raise typer.Exit(code=1)
 
 
-@app.command("risk")
+@ml.command("risk")
 def risk(
     findings_file: Path = typer.Argument(
         ..., exists=True, help="Path to a JSON file containing security findings"
@@ -173,7 +173,7 @@ def risk(
         raise typer.Exit(code=1)
 
 
-@app.command("train")
+@ml.command("train")
 def train(
     training_data: Path = typer.Argument(
         ..., exists=True, help="Path to a CSV/JSON file containing training data"
@@ -282,7 +282,7 @@ def train(
         raise typer.Exit(code=1)
 
 
-@app.command("visualize")
+@ml.command("visualize")
 def visualize(
     findings_file: Path = typer.Argument(
         ..., exists=True, help="Path to a JSON file containing security findings"
@@ -665,4 +665,4 @@ def evaluate_model(true_labels, predictions, threshold=0.5):
 
 
 if __name__ == "__main__":
-    app()
+    ml()
