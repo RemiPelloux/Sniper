@@ -166,27 +166,35 @@ def _create_web_finding(data: Dict[str, Any]) -> WebFinding:
     """Create a WebFinding from dictionary data."""
     # Extract web-specific fields
     url = data.get("url", data.get("target", ""))
-    vuln_type = data.get("vuln_type", data.get("type", "unknown"))
-    request = data.get("request")
-    response = data.get("response")
+    method = data.get("method")
+    parameter = data.get("parameter")
+    status_code = data.get("status_code")
 
     # Create base fields if not present
     if "title" not in data:
-        data["title"] = f"{vuln_type.title()} vulnerability in {url}"
+        title_parts = ["Web Finding"]
+        if status_code:
+            title_parts.append(f"(Status: {status_code})")
+        data["title"] = " ".join(title_parts)
 
     if "description" not in data:
-        data["description"] = f"A {vuln_type} vulnerability was found in {url}"
+        description_parts = [f"A web finding was discovered at {url}"]
+        if method:
+            description_parts.append(f"using {method}")
+        if parameter:
+            description_parts.append(f"with parameter {parameter}")
+        data["description"] = " ".join(description_parts)
 
     # Create the finding
     return WebFinding(
         url=url,
-        vuln_type=vuln_type,
-        request=request,
-        response=response,
+        method=method,
+        parameter=parameter,
+        status_code=status_code,
         **{
             k: v
             for k, v in data.items()
-            if k not in ["url", "vuln_type", "request", "response"]
+            if k not in ["url", "method", "parameter", "status_code"]
         },
     )
 
@@ -195,6 +203,8 @@ def _create_subdomain_finding(data: Dict[str, Any]) -> SubdomainFinding:
     """Create a SubdomainFinding from dictionary data."""
     # Extract subdomain-specific fields
     subdomain = data.get("subdomain", data.get("target", ""))
+    
+    # Get resolved_ip for description only (not a model field)
     resolved_ip = data.get("resolved_ip")
 
     # Create base fields if not present
@@ -206,10 +216,9 @@ def _create_subdomain_finding(data: Dict[str, Any]) -> SubdomainFinding:
             f", resolving to {resolved_ip}" if resolved_ip else ""
         )
 
-    # Create the finding
+    # Create the finding - exclude resolved_ip as it's not part of the model
     return SubdomainFinding(
         subdomain=subdomain,
-        resolved_ip=resolved_ip,
         **{k: v for k, v in data.items() if k not in ["subdomain", "resolved_ip"]},
     )
 
@@ -217,25 +226,27 @@ def _create_subdomain_finding(data: Dict[str, Any]) -> SubdomainFinding:
 def _create_technology_finding(data: Dict[str, Any]) -> TechnologyFinding:
     """Create a TechnologyFinding from dictionary data."""
     # Extract technology-specific fields
-    technology = data.get("technology", data.get("name", ""))
+    technology_name = data.get("technology_name", data.get("technology", data.get("name", "")))
     version = data.get("version")
+    categories = data.get("categories", [])
 
     # Create base fields if not present
     if "title" not in data:
-        data["title"] = f"Detected {technology}" + (f" {version}" if version else "")
+        data["title"] = f"Detected {technology_name}" + (f" {version}" if version else "")
 
     if "description" not in data:
         data["description"] = (
-            f"Technology {technology}"
+            f"Technology {technology_name}"
             + (f" version {version}" if version else "")
             + " was detected on the target"
         )
 
     # Create the finding
     return TechnologyFinding(
-        technology=technology,
+        technology_name=technology_name,
         version=version,
-        **{k: v for k, v in data.items() if k not in ["technology", "version"]},
+        categories=categories,
+        **{k: v for k, v in data.items() if k not in ["technology_name", "technology", "name", "version", "categories"]},
     )
 
 
@@ -257,7 +268,7 @@ def save_findings(findings: List[BaseFinding], output_file: Union[str, Path]) ->
 
     try:
         # Convert findings to dictionaries
-        findings_data = [finding.dict() for finding in findings]
+        findings_data = [finding.model_dump() for finding in findings]
 
         # Determine format based on file extension
         if output_file.suffix.lower() == ".json":

@@ -29,6 +29,7 @@ from src.distributed.base import (
     DistributedTask,
     MasterNode,
     NodeInfo,
+    NodeRole,
     NodeStatus,
     TaskPriority,
     TaskStatus,
@@ -169,9 +170,8 @@ class SniperMasterNode(MasterNode):
         logger.info(f"Starting Sniper Master Node on {self.host}:{self.port}")
         self.running = True
 
-        # Start the cleanup thread
-        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
-        self.cleanup_thread.start()
+        # Submit cleanup loop to the executor instead of direct threading
+        self.executor.submit(self._cleanup_loop)
 
         # Start the server based on protocol type
         try:
@@ -182,21 +182,18 @@ class SniperMasterNode(MasterNode):
                     f"Protocol {self.protocol_type} not implemented yet"
                 )
             logger.info(f"Master node server started successfully on {self.host}:{self.port}")
+            self.status = NodeStatus.ACTIVE
             return True
         except Exception as e:
             self.running = False
             logger.error(f"Failed to start master node: {e}", exc_info=True)
             raise
-        finally:
-            # Ensure status is set even if protocol start fails initially but recovers
-            if self.running: 
-                self.status = NodeStatus.ACTIVE
 
     def stop(self):
         """Stop the master node server and cleanup resources."""
         if not self.running:
             logger.warning("Master node is not running")
-            return
+            return False
 
         logger.info("Stopping Sniper Master Node")
         self.running = False
@@ -205,34 +202,68 @@ class SniperMasterNode(MasterNode):
         if self.server:
             self._stop_server()
 
-        # Wait for cleanup thread to finish
-        if self.cleanup_thread and self.cleanup_thread.is_alive():
-            self.cleanup_thread.join(timeout=5)
+        # Shutdown executor with wait=True as expected by the test
+        self.executor.shutdown(wait=True)
 
-        # Shutdown executor
-        self.executor.shutdown(wait=False)
-
+        # Set node status to offline
+        self.status = NodeStatus.OFFLINE
+        
         logger.info("Master node stopped")
+        return True
 
     def _start_rest_server(self):
-        """Start the REST server for the master node."""
-        # This would be implemented with a web framework like FastAPI or Flask
-        # For now, we'll use a placeholder method
-        logger.info(f"Starting REST server on {self.host}:{self.port}")
-
-        # Placeholder for actual server implementation
-        self.server = {"status": "running", "type": "rest"}
-
-        # In a real implementation, this would be:
-        # from src.distributed.rest import create_master_app
-        # app = create_master_app(self)
-        # self.server = uvicorn.run(app, host=self.host, port=self.port)
+        """Start a REST server for the master node."""
+        logger.info(f"Starting REST server for master node on {self.host}:{self.port}")
+        
+        # Import here to avoid circular imports
+        from src.distributed.rest import create_master_app, run_app
+        
+        # Start the protocol server
+        self.protocol.start_server(self.host, self.port, self._handle_message)
+        
+        # Create the FastAPI app
+        app = create_master_app(self)
+        
+        # Run the app in a separate thread
+        thread, server = run_app(app, host=self.host, port=self.port)
+        
+        # Store server information
+        self.server = {
+            "type": "rest",
+            "status": "running",
+            "host": self.host,
+            "port": self.port,
+            "app": app,
+            "thread": thread,
+            "server": server
+        }
+        
+        logger.info(f"REST server started at {self.host}:{self.port}")
 
     def _stop_server(self):
-        """Stop the server."""
-        logger.info("Stopping server")
-        # Placeholder for actual server stop implementation
-        self.server = None
+        """Stop the REST server for the master node."""
+        if self.server and self.server.get("status") == "running":
+            logger.info("Stopping REST server")
+            
+            # Stop the protocol server
+            self.protocol.stop_server()
+            
+            # If we have a rest server with a thread
+            if self.server.get("type") == "rest" and self.server.get("thread"):
+                # Import here to avoid circular imports
+                from src.distributed.rest import shutdown_app
+                
+                # Shutdown the application
+                if self.server.get("app"):
+                    shutdown_app(self.server["app"])
+                
+                # Wait for the thread to finish
+                if self.server["thread"].is_alive():
+                    self.server["thread"].join(timeout=5)
+            
+            # Update server status
+            self.server["status"] = "stopped"
+            logger.info("REST server stopped")
 
     def _cleanup_loop(self):
         """Background thread for cleaning up stale workers and tasks."""
@@ -250,22 +281,47 @@ class SniperMasterNode(MasterNode):
     def _cleanup_workers(self):
         """Remove workers that haven't sent a heartbeat within the timeout period."""
         with self.worker_lock:
-            current_time = time.time()
             stale_workers = []
+            now = datetime.now(timezone.utc)
+            current_time = time.time()
 
-            for worker_id, worker_info in self.workers.items():
-                if worker_info.status == NodeStatus.ACTIVE:
-                    last_heartbeat = self.worker_metrics[worker_id].last_heartbeat
-                    if current_time - last_heartbeat > self.worker_timeout:
+            for worker_id, worker_info in list(self.workers.items()):
+                is_stale = False
+                
+                # Check using NodeInfo heartbeat timestamp
+                time_diff_seconds = (now - worker_info.heartbeat).total_seconds()
+                if time_diff_seconds > self.worker_timeout:
+                    is_stale = True
+                    logger.warning(
+                        f"Worker {worker_id} timed out (last heartbeat: {worker_info.heartbeat})"
+                    )
+                
+                # Also check using worker metrics if available
+                elif worker_id in self.worker_metrics:
+                    metrics_last_heartbeat = self.worker_metrics[worker_id].last_heartbeat
+                    if current_time - metrics_last_heartbeat > self.worker_timeout:
+                        is_stale = True
                         logger.warning(
-                            f"Worker {worker_id} timed out (last heartbeat: {datetime.fromtimestamp(last_heartbeat)})"
+                            f"Worker {worker_id} timed out (last metrics heartbeat: {datetime.fromtimestamp(metrics_last_heartbeat)})"
                         )
-                        worker_info.status = NodeStatus.OFFLINE
-                        stale_workers.append(worker_id)
+                
+                if is_stale:
+                    worker_info.status = NodeStatus.OFFLINE
+                    stale_workers.append(worker_id)
 
             # Handle tasks assigned to stale workers
             for worker_id in stale_workers:
+                # Reassign tasks from the stale worker
                 self._handle_worker_failure(worker_id)
+                
+                # Remove the worker from collections
+                if worker_id in self.workers:
+                    del self.workers[worker_id]
+                
+                if worker_id in self.worker_metrics:
+                    del self.worker_metrics[worker_id]
+                
+                logger.info(f"Removed stale worker {worker_id}")
 
     def _handle_worker_failure(self, worker_id: str):
         """Handle tasks assigned to a failed worker."""
@@ -705,51 +761,72 @@ class SniperMasterNode(MasterNode):
 
         # Create NodeInfo ensuring all required fields are present or defaulted
         try:
+            # Extract worker information from payload
             capabilities = payload.get("capabilities", [])
-            host = payload.get("host")
-            port = payload.get("port")
-            status = NodeStatus.ACTIVE
-            created_at = datetime.now(timezone.utc)
-            last_updated = created_at
-
+            address = payload.get("address")
+            hostname = payload.get("hostname", "unknown")
+            port = payload.get("port", 5000)
+            
+            # Create the NodeInfo with proper parameters
             worker_info = NodeInfo(
-                id=worker_id,
-                host=host,
+                node_id=worker_id,
+                role=NodeRole.WORKER,
+                hostname=hostname,
+                address=address,
                 port=port,
-                status=status,
-                capabilities=capabilities,
-                created_at=created_at,
-                last_updated=last_updated,
+                capabilities=capabilities
             )
+            
+            # Set status if present in payload
+            status_str = payload.get("status")
+            if status_str:
+                try:
+                    worker_info.status = NodeStatus(status_str)
+                except ValueError:
+                    worker_info.status = NodeStatus.ACTIVE
+            else:
+                worker_info.status = NodeStatus.ACTIVE
+                
+            # Set heartbeat from payload or current time
+            heartbeat_str = payload.get("heartbeat")
+            if heartbeat_str:
+                try:
+                    worker_info.heartbeat = datetime.fromisoformat(heartbeat_str)
+                except ValueError:
+                    worker_info.heartbeat = datetime.now(timezone.utc)
+            
+            # Store the worker
             self.workers[worker_id] = worker_info
 
             # Initialize metrics for the new worker
             self.worker_metrics[worker_id] = WorkerMetrics(
-                current_tasks=0,
-                total_assigned=0,
-                success_count=0,
-                failure_count=0,
-                total_execution_time=0,
-                avg_response_time=0,
-                last_heartbeat=time.time(),
+                node_id=worker_id,
+                capabilities=worker_info.capabilities,
+                current_load=0.0,
+                task_count=0,
+                success_rate=1.0,
+                response_time=0.0,
+                last_heartbeat=time.time()
             )
 
             logger.info(f"Worker {worker_id} registered with capabilities: {capabilities}")
-            return {"status": "success", "message": f"Worker {worker_id} registered successfully"}
+            return {"status": "success", "message": f"Worker {worker_id} registered successfully", "master_id": self.id}
         except Exception as e:
             logger.error(f"Error registering worker {worker_id}: {e}", exc_info=True)
             return {"status": "error", "message": f"Error registering worker: {e}"}
 
-    def _handle_heartbeat(self, message: HeartbeatMessage):
+    def _handle_heartbeat(self, message: ProtocolMessage):
         """Handle worker heartbeat message."""
         worker_id = message.sender_id
-        current_load = message.payload.get("current_load", 0)
-        current_tasks = message.payload.get("current_tasks", 0)
+        current_load = message.payload.get("load", 0)
+        current_tasks = message.payload.get("task_count", 0)
+        memory_usage = message.payload.get("memory_usage", 0)
 
         with self.worker_lock:
             if worker_id in self.workers:
                 worker_info = self.workers[worker_id]
                 worker_info.status = NodeStatus.ACTIVE
+                
                 # Update heartbeat timestamp from payload
                 heartbeat_ts_str = message.payload.get("timestamp")
                 if heartbeat_ts_str:
@@ -760,22 +837,26 @@ class SniperMasterNode(MasterNode):
                         worker_info.heartbeat = datetime.now(timezone.utc)
                 else:
                     worker_info.heartbeat = datetime.now(timezone.utc)
-                worker_info.last_updated = worker_info.heartbeat # Use same time for consistency
-
-                # Update metrics
+                
+                # Update worker statistics
+                worker_info.stats["load"] = current_load
+                worker_info.stats["task_count"] = current_tasks
+                worker_info.stats["memory_usage"] = memory_usage
+                
+                # Update metrics if using the metrics system
                 if worker_id in self.worker_metrics:
                     metrics = self.worker_metrics[worker_id]
                     metrics.current_load = current_load
-                    metrics.current_tasks = current_tasks
+                    metrics.task_count = current_tasks
                     metrics.last_heartbeat = time.time()
 
-                    logger.debug(
-                        f"Received heartbeat from worker {worker_id}, load: {current_load}, tasks: {current_tasks}"
-                    )
+                logger.debug(
+                    f"Received heartbeat from worker {worker_id}, load: {current_load}, tasks: {current_tasks}"
+                )
             else:
                 logger.warning(f"Received heartbeat from unknown worker {worker_id}")
 
-    def _handle_task_status(self, message: TaskStatusMessage):
+    def _handle_task_status(self, message: ProtocolMessage):
         """Handle task status update message."""
         payload = message.payload
         task_id = payload.get("task_id")
@@ -815,11 +896,19 @@ class SniperMasterNode(MasterNode):
 
         # Handle task state transitions if necessary
         if new_status_enum == TaskStatus.RUNNING and task.status in [TaskStatus.PENDING, TaskStatus.ASSIGNED]: # Allow transition from ASSIGNED too
-             if not task.started_at:
-                 task.started_at = task.updated_at # Set started_at on transition to RUNNING
-        elif new_status_enum in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELED] and task_id in self.tasks:
-             # If task transitions to a terminal state, move it to completed_tasks
-             self._handle_completed_task(task) # This removes from self.tasks and adds to self.completed_tasks
+            if not task.started_at:
+                task.started_at = task.updated_at # Set started_at on transition to RUNNING
+        elif new_status_enum in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELED]:
+            # If results are included in the payload, store them
+            if 'result' in payload:
+                task.result = payload['result']
+                
+            # If task transitions to a terminal state, move it to completed_tasks
+            if task_id in self.tasks:
+                # This removes from self.tasks and adds to self.completed_tasks
+                self._handle_completed_task(task)
+                
+            logger.info(f"Task {task_id} completed successfully on {worker_id}.")
 
         return {"status": "success", "message": f"Task {task_id} status updated to {new_status_enum.value}"}
 

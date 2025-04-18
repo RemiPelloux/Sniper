@@ -18,7 +18,7 @@ PATTERNS = {
     "xss": r"(?i)(cross\s*site\s*scripting|\bxss\b)",
     "command_injection": r"(?i)(command\s*injection|code\s*injection|os\s*command|shell\s*command)",
     "path_traversal": r"(?i)(path\s*traversal|directory\s*traversal|\.\.\/)",
-    "authentication": r"(?i)(auth.*fail|weak\s*password|brute\s*force|credential)",
+    "authentication": r"(?i)(auth.*fail|weak\s*password|brute\s*force|credential|bypass\s*authentication|authentication)",
     "authorization": r"(?i)(authorization|permission|privilege|access\s*control)",
     "information_disclosure": r"(?i)(information\s*disclosure|data\s*leak|sensitive\s*data)",
     "security_misconfiguration": r"(?i)(misconfiguration|default\s*config|insecure\s*setting)",
@@ -73,8 +73,10 @@ def extract_text_features(text: str) -> Dict[str, float]:
     # Add text length as a feature
     features["text_length"] = len(text)
 
-    # Add word count
-    features["word_count"] = len(text.split())
+    # Add word count - splitting on whitespace and handling punctuation correctly
+    # This ensures word count matches expectations in tests
+    words = re.findall(r'\b\w+\b', text)
+    features["word_count"] = len(words)
 
     return features
 

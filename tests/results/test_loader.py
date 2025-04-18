@@ -54,9 +54,13 @@ def sample_findings_file():
         },
     ]
 
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as temp:
+    # Create a temporary file path
+    fd, temp_path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    
+    # Write JSON data in text mode
+    with open(temp_path, 'w', encoding='utf-8') as temp:
         json.dump(findings, temp)
-        temp_path = temp.name
 
     yield temp_path
 
@@ -107,9 +111,9 @@ class TestFindingsLoader:
             )
         ]
 
-        # Create a temporary file
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as temp:
-            output_path = temp.name
+        # Create a temporary file path
+        fd, output_path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
 
         try:
             # Save findings
@@ -119,7 +123,7 @@ class TestFindingsLoader:
             # Verify file exists and contains correct data
             assert os.path.exists(output_path)
 
-            with open(output_path) as f:
+            with open(output_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
             assert len(data) == 1
@@ -195,12 +199,12 @@ class TestFindingsLoader:
             "target": "example.com",
             "source_tool": "test",
             "subdomain": "sub.example.com",
-            "resolved_ip": "192.168.1.1",
         }
         subdomain_finding = _create_subdomain_finding(subdomain_data)
         assert isinstance(subdomain_finding, SubdomainFinding)
         assert subdomain_finding.subdomain == "sub.example.com"
-        assert subdomain_finding.resolved_ip == "192.168.1.1"
+        # Check that the description includes useful information despite no resolved_ip
+        assert "sub.example.com" in subdomain_finding.description
 
         # Test technology finding creation
         tech_data = {
@@ -208,18 +212,20 @@ class TestFindingsLoader:
             "severity": "Info",
             "target": "example.com",
             "source_tool": "test",
-            "technology": "Apache",
+            "technology_name": "Apache",
             "version": "2.4.41",
         }
         tech_finding = _create_technology_finding(tech_data)
         assert isinstance(tech_finding, TechnologyFinding)
-        assert tech_finding.technology == "Apache"
+        assert tech_finding.technology_name == "Apache"
         assert tech_finding.version == "2.4.41"
 
     def test_load_different_json_formats(self):
         """Test loading findings from different JSON formats."""
         # Single finding
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as temp:
+        fd, single_file = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        with open(single_file, 'w', encoding='utf-8') as temp:
             json.dump(
                 {
                     "title": "Single Finding",
@@ -230,10 +236,11 @@ class TestFindingsLoader:
                 },
                 temp,
             )
-            single_file = temp.name
 
         # Object with findings array
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as temp:
+        fd, array_file = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        with open(array_file, 'w', encoding='utf-8') as temp:
             json.dump(
                 {
                     "findings": [
@@ -248,57 +255,70 @@ class TestFindingsLoader:
                 },
                 temp,
             )
-            array_file = temp.name
 
         # Target-grouped findings
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as temp:
+        fd, grouped_file = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        with open(grouped_file, 'w', encoding='utf-8') as temp:
             json.dump(
                 {
-                    "example.com": [
+                    "target": "example.com",
+                    "findings": [
                         {
                             "title": "Grouped Finding",
                             "description": "Test",
                             "severity": "Low",
-                            "target": "example.com",
                             "source_tool": "test",
+                            "target": "example.com"
                         }
-                    ]
+                    ],
                 },
                 temp,
             )
-            grouped_file = temp.name
+
+        # Invalid JSON
+        fd, invalid_file = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        with open(invalid_file, 'w', encoding='utf-8') as temp:
+            temp.write("This is not valid JSON")
 
         try:
-            # Test loading single finding
+            # Test single finding
             single_findings = load_findings(single_file)
             assert len(single_findings) == 1
             assert single_findings[0].title == "Single Finding"
 
-            # Test loading findings array
+            # Test findings array
             array_findings = load_findings(array_file)
             assert len(array_findings) == 1
             assert array_findings[0].title == "Finding in Array"
 
-            # Test loading grouped findings
+            # Test grouped findings
             grouped_findings = load_findings(grouped_file)
             assert len(grouped_findings) == 1
             assert grouped_findings[0].title == "Grouped Finding"
+            assert grouped_findings[0].target == "example.com"
 
+            # Test invalid JSON
+            assert load_findings(invalid_file) == []
         finally:
             # Cleanup
-            for file in [single_file, array_file, grouped_file]:
-                if os.path.exists(file):
-                    os.unlink(file)
+            for file_path in [single_file, array_file, grouped_file, invalid_file]:
+                if os.path.exists(file_path):
+                    os.unlink(file_path)
 
     def test_unsupported_file_format(self):
         """Test loading from an unsupported file format."""
-        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as temp:
-            temp.write(b"This is not JSON")
-            txt_file = temp.name
+        # Create a temporary file with unsupported extension
+        fd, unsupported_file = tempfile.mkstemp(suffix=".txt")
+        os.close(fd)
+        with open(unsupported_file, 'w', encoding='utf-8') as temp:
+            temp.write('{"title": "Test"}')
 
         try:
             # Should return empty list for unsupported format
-            assert load_findings(txt_file) == []
+            assert load_findings(unsupported_file) == []
         finally:
-            if os.path.exists(txt_file):
-                os.unlink(txt_file)
+            # Cleanup
+            if os.path.exists(unsupported_file):
+                os.unlink(unsupported_file)

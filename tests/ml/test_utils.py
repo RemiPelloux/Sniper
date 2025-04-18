@@ -24,16 +24,22 @@ class TestFeatureExtraction:
     """Test the feature extraction utilities"""
 
     def test_extract_text_features(self):
-        """Test extracting features from text"""
-        # Test with SQL injection text
-        text = "This contains a SQL injection vulnerability that allows attackers to bypass authentication."
-        features = extract_text_features(text)
-
+        """Test that text features are extracted correctly."""
+        test_text = "This contains a SQL injection vulnerability that allows attackers to bypass authentication."
+        features = extract_text_features(test_text)
+        
+        # Check basic text features
+        assert features["text_length"] == len(test_text)
+        assert features["word_count"] == 12  # Updated from 15 to 12
+        
+        # Check vulnerability patterns
         assert features["sql_injection_present"] == 1.0
+        assert features["sql_injection_count"] >= 1
         assert features["authentication_present"] == 1.0
+        
+        # Features that shouldn't be present
         assert features["xss_present"] == 0.0
-        assert features["text_length"] == len(text)
-        assert features["word_count"] == 15
+        assert features["command_injection_present"] == 0.0
 
         # Test with empty text
         assert extract_text_features("") == {}
@@ -171,7 +177,7 @@ class TestModelEvaluation:
         mixed_preds = [0.9, 0.4, 0.6, 0.3, 0.4]  # Threshold is 0.5
         mixed_metrics = evaluate_model_performance(true_labels, mixed_preds)
 
-        assert mixed_metrics["accuracy"] == 0.6  # 3/5 correct
+        assert mixed_metrics["accuracy"] == 0.8  # 4/5 correct
         assert mixed_metrics["true_positives"] == 2  # Correctly predicted 2 positives
         assert mixed_metrics["false_negatives"] == 1  # Missed 1 positive
 

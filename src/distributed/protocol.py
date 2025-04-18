@@ -28,6 +28,7 @@ class MessageType(Enum):
     # Heartbeat and status
     HEARTBEAT = auto()
     HEARTBEAT_RESPONSE = auto()
+    NODE_STATUS = auto()
 
     # Task management
     TASK_REQUEST = auto()
@@ -218,9 +219,9 @@ class HeartbeatMessage(ProtocolMessage):
 
 class TaskStatusMessage(ProtocolMessage):
     """
-    Message sent by a worker node to update the status of a task.
+    Message sent by a worker to update the status of a task.
 
-    Contains task ID, status, and optional message/details.
+    Contains current status, progress information, and any intermediate results.
     """
 
     def __init__(
@@ -235,9 +236,9 @@ class TaskStatusMessage(ProtocolMessage):
         Initialize a task status message.
 
         Args:
-            sender_id: ID of the worker node
-            receiver_id: ID of the master node
-            payload: Task status information including task_id and status
+            sender_id: ID of the node sending the status update
+            receiver_id: ID of the receiving node
+            payload: Status information including task_id, status, progress, etc.
             message_id: Unique message identifier
             timestamp: Message timestamp
         """
@@ -253,9 +254,9 @@ class TaskStatusMessage(ProtocolMessage):
 
 class TaskResultMessage(ProtocolMessage):
     """
-    Message sent by a worker node with the results of a completed task.
+    Message sent by a worker to deliver task results.
 
-    Contains task ID, status, and the task results data.
+    Contains task results, metadata, and performance metrics.
     """
 
     def __init__(
@@ -270,14 +271,120 @@ class TaskResultMessage(ProtocolMessage):
         Initialize a task result message.
 
         Args:
-            sender_id: ID of the worker node
-            receiver_id: ID of the master node
-            payload: Task result data including task_id, status, and result
+            sender_id: ID of the worker node that completed the task
+            receiver_id: ID of the receiving node (typically master)
+            payload: Result data including task_id, findings, metrics, etc.
             message_id: Unique message identifier
             timestamp: Message timestamp
         """
         super().__init__(
             message_type=MessageType.TASK_RESULT,
+            sender_id=sender_id,
+            receiver_id=receiver_id,
+            payload=payload or {},
+            message_id=message_id,
+            timestamp=timestamp,
+        )
+
+
+class NodeStatusMessage(ProtocolMessage):
+    """
+    Message sent by a node to report its current status.
+
+    Contains detailed status information about the node, including resource utilization,
+    active tasks, and other metrics.
+    """
+
+    def __init__(
+        self,
+        sender_id: str,
+        receiver_id: str,
+        payload: Dict[str, Any] = None,
+        message_id: Optional[str] = None,
+        timestamp: Optional[str] = None,
+    ):
+        """
+        Initialize a node status message.
+
+        Args:
+            sender_id: ID of the node sending the status
+            receiver_id: ID of the receiving node
+            payload: Status information including load, active_tasks, resource_usage, etc.
+            message_id: Unique message identifier
+            timestamp: Message timestamp
+        """
+        super().__init__(
+            message_type=MessageType.NODE_STATUS,
+            sender_id=sender_id,
+            receiver_id=receiver_id,
+            payload=payload or {},
+            message_id=message_id,
+            timestamp=timestamp,
+        )
+
+
+class TaskAssignmentMessage(ProtocolMessage):
+    """
+    Message sent by the master to assign a task to a worker.
+
+    Contains task information and execution parameters.
+    """
+
+    def __init__(
+        self,
+        sender_id: str,
+        receiver_id: str,
+        payload: Dict[str, Any] = None,
+        message_id: Optional[str] = None,
+        timestamp: Optional[str] = None,
+    ):
+        """
+        Initialize a task assignment message.
+
+        Args:
+            sender_id: ID of the master node
+            receiver_id: ID of the worker node receiving the task
+            payload: Task information including task_id, task_type, parameters, etc.
+            message_id: Unique message identifier
+            timestamp: Message timestamp
+        """
+        super().__init__(
+            message_type=MessageType.TASK_ASSIGNMENT,
+            sender_id=sender_id,
+            receiver_id=receiver_id,
+            payload=payload or {},
+            message_id=message_id,
+            timestamp=timestamp,
+        )
+
+
+class TaskCancelMessage(ProtocolMessage):
+    """
+    Message sent to cancel a task that is in progress or pending.
+
+    Contains task identifier and cancellation reason.
+    """
+
+    def __init__(
+        self,
+        sender_id: str,
+        receiver_id: str,
+        payload: Dict[str, Any] = None,
+        message_id: Optional[str] = None,
+        timestamp: Optional[str] = None,
+    ):
+        """
+        Initialize a task cancel message.
+
+        Args:
+            sender_id: ID of the node requesting cancellation
+            receiver_id: ID of the node handling the task
+            payload: Cancellation information including task_id, reason, etc.
+            message_id: Unique message identifier
+            timestamp: Message timestamp
+        """
+        super().__init__(
+            message_type=MessageType.CANCEL_TASK,
             sender_id=sender_id,
             receiver_id=receiver_id,
             payload=payload or {},

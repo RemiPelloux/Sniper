@@ -14,6 +14,7 @@ import textwrap
 from typing import Dict, List, Optional, Any
 
 import tabulate
+import typer
 import yaml
 from colorama import Fore, Style, init
 
@@ -24,6 +25,13 @@ from src.tools.manager import ToolManager, ToolCategory
 
 # Initialize colorama for cross-platform colored terminal output
 init(autoreset=True)
+
+# Create Typer app
+app = typer.Typer(
+    name="tools",
+    help="Manage security tools used by Sniper",
+    no_args_is_help=True,
+)
 
 # Configure logging
 logging.basicConfig(

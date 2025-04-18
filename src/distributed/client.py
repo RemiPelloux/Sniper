@@ -16,7 +16,7 @@ from typing import Dict, List, Callable, Any, Optional, Union
 
 from .worker import WorkerNodeClient, SniperWorkerNode
 from .base import TaskStatus, TaskPriority
-from .protocol import create_protocol
+from .protocol import create_protocol, ProtocolMessage
 from src.ml.autonomous_tester import VulnerabilityType
 
 logger = logging.getLogger("sniper.distributed.client")
