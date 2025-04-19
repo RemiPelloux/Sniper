@@ -1,0 +1,12 @@
+services:
+  juice-shop:
+    image: bkimminich/juice-shop
+    ports:
+      - "3000:3000"
+    # networks:
+    #   - sandbox_net
+    restart: unless-stopped
+
+# networks:
+#   sandbox_net:
+#     driver: bridge 

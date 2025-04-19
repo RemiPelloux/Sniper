@@ -2,6 +2,131 @@
 
 This roadmap outlines the planned development trajectory for the Sniper Security Tool, a comprehensive penetration testing CLI tool with machine learning capabilities.
 
+## Legend
+
+*   [ ] To Do
+*   [/] In Progress
+*   [x] Done
+*   [!] Blocked / Needs Discussion
+
+## Near-Term Goals (Current Sprint / Next 1-2 Sprints)
+
+*   **Core Functionality:**
+    *   [x] Basic Scan Orchestration (`scan` command)
+    *   [x] Result Normalization & Correlation
+    *   [x] Reporting Framework (Markdown, JSON, HTML)
+    *   [x] Tool Management CLI (`tools` command)
+    *   [x] Configuration Loading (Env Vars, `.env` file)
+    *   [x] Robust Logging Setup
+    *   [x] Plugin System (`PluginManager`, `PluginInterface`)
+    *   [x] Initial Plugin Integration (`Sandbox`)
+*   **Integrations:**
+    *   [x] Nmap (Port Scanning)
+    *   [x] Wappalyzer (Technology Detection)
+    *   [x] Sublist3r (Subdomain Enumeration)
+    *   [x] Dirsearch (Directory Brute-forcing)
+    *   [x] OWASP ZAP (Basic Web Scan - Passive/Active)
+*   **Machine Learning:**
+    *   [x] Vulnerability Prediction Model (Basic Implementation)
+    *   [x] Risk Scoring Logic
+    *   [x] ML CLI (`ml predict`, `ml risk`)
+    *   [ ] Model Training CLI (`ml train` - Needs data definition)
+*   **Plugins:**
+    *   [x] Sandbox Plugin (DVWA, Juice Shop)
+    *   [ ] Plugin SDK / Developer Documentation
+*   **Testing & Quality:**
+    *   [x] Pytest setup with basic unit tests for core modules
+    *   [x] Pre-commit hooks (Black, isort, flake8, mypy)
+    *   [x] Initial integration tests for tools
+    *   [x] Test coverage for new Plugin system and Sandbox plugin
+    *   [ ] Increase overall test coverage (Target > 85%)
+*   **Documentation:**
+    *   [x] Initial README
+    *   [x] Core Concepts Documentation
+    *   [x] Tool Integration Docs
+    *   [x] Reporting Docs
+    *   [x] ML Module Docs
+    *   [x] Sandbox Plugin Docs
+    *   [ ] Plugin Development Guide
+    *   [ ] Comprehensive User Guide
+
+## Mid-Term Goals (Next 3-6 Months)
+
+*   **Core Functionality:**
+    *   [ ] Enhanced Scan Configuration (Profiles, Templates)
+    *   [ ] Scan State Management (Pause/Resume/Save)
+    *   [ ] Advanced Result Correlation & Deduplication
+    *   [ ] User Authentication / Authorization (if needed for hosted version)
+    *   [ ] More sophisticated Plugin discovery and isolation
+    *   [ ] Performance Optimizations (Async improvements, parallelization tuning)
+*   **Integrations:**
+    *   [ ] Nuclei (Template-based vulnerability scanning)
+    *   [ ] Metasploit (Exploitation capabilities - careful design needed)
+    *   [ ] Burp Suite (Integration via REST API)
+    *   [ ] Cloud Security Tools (e.g., ScoutSuite, Prowler)
+    *   [ ] Code Scanning Tools (e.g., Semgrep, Bandit)
+    *   [ ] Secret Scanning Tools (e.g., TruffleHog, Gitleaks)
+    *   [ ] More Subdomain Enumeration Tools (Amass, Assetfinder)
+    *   [ ] API Scanning Tools
+*   **Machine Learning:**
+    *   [ ] Improve Vulnerability Prediction Model (More features, better algorithms)
+    *   [ ] Exploit Prediction / Prioritization Model
+    *   [ ] Attack Surface Discovery Assistance Model
+    *   [ ] Anomaly Detection in Scan Results
+    *   [ ] Model Explainability (SHAP, LIME)
+    *   [ ] Automated Model Retraining Pipeline
+*   **Distributed Scanning:**
+    *   [x] Basic Master/Worker Architecture
+    *   [x] Task Distribution & Result Aggregation
+    *   [x] Auto-Scaling POC
+    *   [ ] Robust Communication Protocol (gRPC?)
+    *   [ ] Improved Fault Tolerance & Resilience
+    *   [ ] Secure Communication between nodes
+    *   [ ] Web UI for managing distributed scans
+*   **Plugins:**
+    *   [ ] Reporting Plugins (e.g., Jira, Slack, DefectDojo integration)
+    *   [ ] Authentication Plugins (e.g., handle login for web scans)
+    *   [ ] Custom Scripting Plugin
+*   **Reporting & Visualization:**
+    *   [ ] Interactive HTML Reports (DataTables, Charts.js)
+    *   [ ] Dashboard / Web UI for viewing results
+    *   [ ] Customizable Report Templates
+    *   [ ] Integration with BI Tools (e.g., exporting to formats suitable for Tableau/PowerBI)
+*   **Autonomous Testing:**
+    *   [x] Basic Framework Concept
+    *   [ ] Define Test Case Schema
+    *   [ ] Implement Test Runner based on Scan Results
+    *   [ ] Integrate Exploit Verification (e.g., using Metasploit cautiously)
+    *   [ ] Feedback Loop to Scanning/ML Modules
+
+## Long-Term Goals (6+ Months)
+
+*   **Platform & Ecosystem:**
+    *   [ ] Stable Plugin API & SDK
+    *   [ ] Community Plugin Marketplace/Repository
+    *   [ ] Potential SaaS Offering / Managed Service
+    *   [ ] Deeper Cloud Integrations (AWS, GCP, Azure)
+    *   [ ] Enterprise Features (RBAC, Audit Logs, SSO)
+*   **Advanced Capabilities:**
+    *   [ ] AI-Driven Test Case Generation
+    *   [ ] Automated Root Cause Analysis for Vulnerabilities
+    *   [ ] Supply Chain Security Analysis Features
+    *   [ ] Cloud Security Posture Management (CSPM) Features
+    *   [ ] Advanced Threat Modeling Integration
+*   **UX/UI:**
+    *   [ ] Comprehensive Web UI covering all major features
+    *   [ ] Desktop Application (Electron?)
+    *   [ ] Improved CLI UX (interactive modes, better progress reporting)
+
+## Ideas & Exploration (Not yet prioritized)
+
+*   Chatbot Interface for interacting with Sniper
+*   Visual Network Mapping
+*   Integration with Threat Intelligence Feeds
+*   Support for different database backends for results
+*   Mobile Security Testing Integrations
+*   IoT Device Scanning Capabilities
+
 ## Sprint 1: Foundation and Core Architecture (COMPLETED)
 - [x] Initialize Git repository with appropriate structure
 - [x] Set up Python project environment with Poetry for dependency management

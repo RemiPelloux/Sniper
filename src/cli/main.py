@@ -1,4 +1,5 @@
 import logging
+import atexit # Import atexit for cleanup
 
 import typer
 
@@ -8,6 +9,7 @@ from src import __version__
 # Import subcommand apps
 from src.cli import ml, report, scan, tools, custom_tools
 from src.core.logging import setup_logging
+from app.core.plugin_manager import PluginManager # Import PluginManager
 
 # from importlib import metadata # Removed unused import
 
@@ -17,6 +19,19 @@ from src.core.logging import setup_logging
 
 # Get a logger for this module
 log = logging.getLogger(__name__)
+
+# --- Plugin Manager Setup ---
+# Instantiate the Plugin Manager
+# TODO: Consider making plugin_dirs configurable
+plugin_manager = PluginManager()
+
+# Register a cleanup function to unload plugins on exit
+@atexit.register
+def cleanup_plugins():
+    log.info("Unloading plugins before exit...")
+    plugin_manager.unload_all_plugins()
+    log.info("Plugin cleanup complete.")
+# --- End Plugin Manager Setup ---
 
 
 # Function to get version
@@ -37,12 +52,24 @@ app = typer.Typer(
     no_args_is_help=True,  # Show help if no command is given
 )
 
-# Register subcommands
+# Register built-in subcommands
 app.add_typer(scan.app)
 app.add_typer(report.app)
-app.add_typer(tools.app)
+app.add_typer(tools.tools_app)
 app.add_typer(ml.ml)
 app.add_typer(custom_tools.custom_tools, name="custom-tools")
+
+# --- Load Plugins and Register Commands ---
+try:
+    log.info("Loading and registering plugins...")
+    plugin_manager.load_all_plugins()
+    plugin_manager.register_all_cli_commands(app) # Pass the main app instance
+    log.info("Plugin loading and registration complete.")
+except Exception as e:
+     log.error(f"Failed during plugin initialization: {e}", exc_info=True)
+     # Decide if the app should fail to start if plugins fail
+     # For now, we log the error and continue
+# --- End Plugin Loading ---
 
 
 # Separate callback for version handling

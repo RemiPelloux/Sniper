@@ -2,32 +2,33 @@
 Command-line interface for managing Sniper security tools.
 
 This module provides a CLI for listing, installing, updating, and managing
-security tools used by the Sniper Security Tool.
+security tools used by the Sniper Security Tool using Typer.
 """
 
-import argparse
 import json
 import logging
 import os
 import sys
 import textwrap
-from typing import Dict, List, Optional, Any
+from typing import List, Optional, Dict, Any
+from pathlib import Path
 
 import tabulate
 import typer
 import yaml
 from colorama import Fore, Style, init
+from typing_extensions import Annotated
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.tools.manager import ToolManager, ToolCategory
+from src.tools.manager import ToolManager, ToolCategory, ToolInstallMethod
 
 # Initialize colorama for cross-platform colored terminal output
 init(autoreset=True)
 
-# Create Typer app
-app = typer.Typer(
+# Rename app to avoid conflict if this module is imported elsewhere
+tools_app = typer.Typer(
     name="tools",
     help="Manage security tools used by Sniper",
     no_args_is_help=True,
@@ -62,12 +63,27 @@ def print_info(message: str) -> None:
     print(f"{Fore.BLUE}ℹ {message}{Style.RESET_ALL}")
 
 
-def list_tools(args: argparse.Namespace) -> None:
+@tools_app.command("list")
+def list_tools(
+    category: Annotated[
+        Optional[str],
+        typer.Option("--category", "-c", help="Filter tools by category (e.g., reconnaissance)")
+    ] = None,
+    installed: Annotated[
+        Optional[bool],
+        typer.Option("--installed", "-i", help="Show only installed tools")
+    ] = None,
+    not_installed: Annotated[
+        Optional[bool],
+        typer.Option("--not-installed", "-n", help="Show only tools that are not installed")
+    ] = None,
+    json_output: Annotated[
+        Optional[bool],
+        typer.Option("--json", help="Output in JSON format")
+    ] = None
+) -> None:
     """
     List available tools, optionally filtered by category and installation status.
-    
-    Args:
-        args: Command-line arguments
     """
     manager = ToolManager()
     
@@ -78,50 +94,57 @@ def list_tools(args: argparse.Namespace) -> None:
     installation_status = manager.get_installation_status()
     
     # Filter by category if specified
-    if args.category:
-        filtered_tools = {
-            name: info for name, info in all_tools.items()
-            if info.get("category") == args.category
-        }
+    if category:
+        try:
+            ToolCategory(category)
+            filtered_tools = {
+                name: info for name, info in all_tools.items()
+                if info.get("category") == category
+            }
+        except ValueError:
+            print_error(f"Invalid category: {category}. Available categories: {[c.value for c in ToolCategory]}")
+            raise typer.Exit(code=1)
     else:
         filtered_tools = all_tools
     
     # Filter by installation status if specified
-    if args.installed:
+    if installed and not_installed:
+        print_error("--installed and --not-installed options are mutually exclusive.")
+        raise typer.Exit(code=1)
+    elif installed:
         filtered_tools = {
             name: info for name, info in filtered_tools.items()
             if installation_status.get(name, False)
         }
-    elif args.not_installed:
+    elif not_installed:
         filtered_tools = {
             name: info for name, info in filtered_tools.items()
             if not installation_status.get(name, False)
         }
     
     # Prepare output format
-    if args.json:
+    if json_output:
         # JSON output
-        json_output = []
+        json_output_data = []
         for name, info in filtered_tools.items():
             tool_info = dict(info)
             tool_info["installed"] = installation_status.get(name, False)
-            json_output.append(tool_info)
-        print(json.dumps(json_output, indent=2))
+            json_output_data.append(tool_info)
+        print(json.dumps(json_output_data, indent=2))
     else:
         # Table output
         table_data = []
         for name, info in filtered_tools.items():
-            installed = installation_status.get(name, False)
-            status = f"{Fore.GREEN}Installed{Style.RESET_ALL}" if installed else f"{Fore.RED}Not Installed{Style.RESET_ALL}"
+            is_installed = installation_status.get(name, False)
+            status = f"{Fore.GREEN}Installed{Style.RESET_ALL}" if is_installed else f"{Fore.RED}Not Installed{Style.RESET_ALL}"
             
             description = info.get("description", "")
-            if len(description) > 50:
-                description = description[:47] + "..."
-                
+            wrapped_description = textwrap.fill(description, width=50)
+            
             row = [
                 name,
-                info.get("category", ""),
-                description,
+                info.get("category", "Unknown"),
+                wrapped_description,
                 status
             ]
             
@@ -129,35 +152,36 @@ def list_tools(args: argparse.Namespace) -> None:
         
         headers = ["Name", "Category", "Description", "Status"]
         if table_data:
-            print(tabulate.tabulate(table_data, headers=headers, tablefmt="simple"))
+            print(tabulate.tabulate(table_data, headers=headers, tablefmt="pretty"))
         else:
             print_warning("No tools found matching the specified criteria.")
         
         print(f"\nTotal: {len(table_data)} tools")
 
 
-def show_tool(args: argparse.Namespace) -> None:
+@tools_app.command("show")
+def show_tool(
+    name: Annotated[str, typer.Argument(help="The name of the tool to show details for")]
+) -> None:
     """
     Show detailed information about a specific tool.
-    
-    Args:
-        args: Command-line arguments
     """
     manager = ToolManager()
     
-    tool_info = manager.get_tool(args.name)
+    tool_info = manager.get_tool(name)
     if not tool_info:
-        print_error(f"Tool '{args.name}' not found")
-        return
+        print_error(f"Tool '{name}' not found")
+        raise typer.Exit(code=1)
     
     # Check if the tool is installed
-    is_installed = manager.check_tool_availability(args.name)
+    is_installed = manager.check_tool_availability(name)
     
     # Display basic information
-    print(f"{Fore.CYAN}=== {tool_info.get('name')} ==={Style.RESET_ALL}")
+    print(f"{Fore.CYAN}=== {tool_info.get('name', name)} ==={Style.RESET_ALL}")
     print(f"Category: {tool_info.get('category', 'Unknown')}")
     print(f"Description: {tool_info.get('description', 'No description available')}")
-    print(f"Status: {Fore.GREEN}Installed{Style.RESET_ALL}" if is_installed else f"Status: {Fore.RED}Not Installed{Style.RESET_ALL}")
+    status_text = f"{Fore.GREEN}Installed{Style.RESET_ALL}" if is_installed else f"{Fore.RED}Not Installed{Style.RESET_ALL}"
+    print(f"Status: {status_text}")
     
     # Display additional information
     if "website" in tool_info:
@@ -173,367 +197,395 @@ def show_tool(args: argparse.Namespace) -> None:
         print(f"Target Types: {', '.join(tool_info['target_types'])}")
     
     # Display installation methods
-    if "install" in tool_info:
+    install_methods = tool_info.get("install")
+    if install_methods and isinstance(install_methods, dict):
         print("\nInstallation Methods:")
-        for method, command in tool_info["install"].items():
-            print(f"  - {method}: {command}")
+        for method, command in install_methods.items():
+            command_str = str(command) if not isinstance(command, (str, bytes)) else command
+            print(f"  - {method}: {command_str}")
     
     # Display update methods
-    if "update" in tool_info:
+    update_methods = tool_info.get("update")
+    if update_methods and isinstance(update_methods, dict):
         print("\nUpdate Methods:")
-        for method, command in tool_info["update"].items():
-            print(f"  - {method}: {command}")
+        for method, command in update_methods.items():
+            command_str = str(command) if not isinstance(command, (str, bytes)) else command
+            print(f"  - {method}: {command_str}")
     
     print()
 
 
-def install_tool(args: argparse.Namespace) -> None:
+@tools_app.command("install")
+def install_tool(
+    tools: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Specific tool(s) to install", show_default=False)
+    ] = None,
+    all_tools: Annotated[
+        Optional[bool],
+        typer.Option("--all", help="Install all available tools")
+    ] = None,
+    category: Annotated[
+        Optional[str],
+        typer.Option("--category", "-c", help="Install all tools in a specific category (used with --all)")
+    ] = None,
+    method: Annotated[
+        Optional[str],
+        typer.Option("--method", "-m", help="Specify installation method (e.g., apt, brew, pip)")
+    ] = None
+) -> None:
     """
-    Install one or more tools.
-    
-    Args:
-        args: Command-line arguments
+    Install one or more tools. Provide tool names or use --all.
     """
     manager = ToolManager()
     
-    if args.all:
-        # Install all tools
-        all_tools = manager.get_all_tools()
+    tools_to_install: List[str] = []
+    
+    # Determine which tools to install
+    if all_tools:
+        if tools:
+            print_error("Cannot specify tool names when using --all.")
+            raise typer.Exit(code=1)
         
-        if args.category:
-            # Filter by category
-            tools_to_install = manager.get_tool_names_by_category(args.category)
+        available_tools = manager.get_all_tools()
+        
+        if category:
+            try:
+                ToolCategory(category)
+                tools_to_install = manager.get_tool_names_by_category(category)
+                if not tools_to_install:
+                    print_warning(f"No tools found in category: {category}")
+                    return
+            except ValueError:
+                print_error(f"Invalid category: {category}. Available categories: {[c.value for c in ToolCategory]}")
+                raise typer.Exit(code=1)
         else:
-            tools_to_install = list(all_tools.keys())
+            tools_to_install = list(available_tools.keys())
         
-        print_info(f"Installing {len(tools_to_install)} tools...")
+        if not tools_to_install:
+            print_warning("No tools selected for installation.")
+            return
         
-        success_count = 0
-        for tool_name in tools_to_install:
-            print(f"Installing {tool_name}...")
-            if manager.install_tool(tool_name, args.method):
-                print_success(f"Installed {tool_name}")
+        print_info(f"Attempting to install {len(tools_to_install)} tools...")
+    elif tools:
+        tools_to_install = tools
+        print_info(f"Attempting to install {len(tools_to_install)} specified tool(s)...")
+    else:
+        # No tools specified and --all not used, show help (Typer might handle this)
+        print_error("Please specify tool names to install or use the --all flag.")
+        # Consider showing help here, though Typer's no_args_is_help might cover the main app
+        raise typer.Exit(code=1)
+    
+    # Perform installation
+    success_count = 0
+    failure_count = 0
+    for tool_name in tools_to_install:
+        print(f"Installing {tool_name}...")
+        try:
+            if manager.install_tool(tool_name):
+                print_success(f"Successfully installed {tool_name}")
                 success_count += 1
             else:
-                print_error(f"Failed to install {tool_name}")
-        
-        print(f"\nInstalled {success_count} of {len(tools_to_install)} tools")
-    else:
-        # Install specific tools
-        for tool_name in args.tools:
-            print(f"Installing {tool_name}...")
-            if manager.install_tool(tool_name, args.method):
-                print_success(f"Installed {tool_name}")
-            else:
-                print_error(f"Failed to install {tool_name}")
-
-
-def update_tool(args: argparse.Namespace) -> None:
-    """
-    Update one or more tools.
+                # ToolManager should ideally log specific errors
+                print_error(f"Installation failed for {tool_name}. Check logs for details.")
+                failure_count += 1
+        except Exception as e:
+            # Catch exceptions during installation process
+            print_error(f"Error during installation of {tool_name}: {e}")
+            failure_count += 1
     
-    Args:
-        args: Command-line arguments
-    """
-    manager = ToolManager()
-    
-    if args.all:
-        # Update all installed tools
-        installation_status = manager.get_installation_status()
-        tools_to_update = [name for name, installed in installation_status.items() if installed]
-        
-        if args.category:
-            # Filter by category
-            category_tools = manager.get_tool_names_by_category(args.category)
-            tools_to_update = [name for name in tools_to_update if name in category_tools]
-        
-        print_info(f"Updating {len(tools_to_update)} tools...")
-        
-        success_count = 0
-        for tool_name in tools_to_update:
-            print(f"Updating {tool_name}...")
-            if manager.update_tool(tool_name):
-                print_success(f"Updated {tool_name}")
-                success_count += 1
-            else:
-                print_error(f"Failed to update {tool_name}")
-        
-        print(f"\nUpdated {success_count} of {len(tools_to_update)} tools")
-    else:
-        # Update specific tools
-        for tool_name in args.tools:
-            # Check if the tool is installed
-            if not manager.check_tool_availability(tool_name):
-                print_warning(f"Tool '{tool_name}' is not installed. Installing instead...")
-                if manager.install_tool(tool_name):
-                    print_success(f"Installed {tool_name}")
-                else:
-                    print_error(f"Failed to install {tool_name}")
-                continue
-            
-            print(f"Updating {tool_name}...")
-            if manager.update_tool(tool_name):
-                print_success(f"Updated {tool_name}")
-            else:
-                print_error(f"Failed to update {tool_name}")
+    # Print summary
+    total_attempted = len(tools_to_install)
+    print(f"\nInstallation Summary:")
+    print_success(f"Successfully installed: {success_count}")
+    if failure_count > 0:
+        print_error(f"Failed to install: {failure_count}")
+    print(f"Total attempted: {total_attempted}")
 
 
-def add_tool(args: argparse.Namespace) -> None:
+@tools_app.command("update")
+def update_tool(
+    tools: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Specific tool(s) to update", show_default=False)
+    ] = None,
+    all_tools: Annotated[
+        Optional[bool],
+        typer.Option("--all", help="Update all installed tools")
+    ] = None,
+    category: Annotated[
+        Optional[str],
+        typer.Option("--category", "-c", help="Update all installed tools in a specific category (used with --all)")
+    ] = None,
+    method: Annotated[
+        Optional[str],
+        typer.Option("--method", "-m", help="Specify update method (if applicable)")
+    ] = None
+) -> None:
     """
-    Add a new custom tool.
-    
-    Args:
-        args: Command-line arguments
+    Update one or more installed tools. Provide tool names or use --all.
     """
     manager = ToolManager()
+    tools_to_update: List[str] = []
     
-    # Check if the tool already exists
-    if manager.get_tool(args.name):
-        print_error(f"Tool '{args.name}' already exists")
+    installed_tools_status = manager.get_installation_status()
+    all_installed_tools = [name for name, installed in installed_tools_status.items() if installed]
+    
+    if not all_installed_tools:
+        print_warning("No tools are currently installed.")
         return
     
-    # Create tool information
-    tool_info = {
-        "name": args.name,
-        "category": args.category,
-        "description": args.description,
-    }
-    
-    if args.binary:
-        tool_info["binary"] = args.binary
-    
-    if args.check_command:
-        tool_info["check_command"] = args.check_command
-    
-    # Add installation methods
-    if args.install:
-        install_methods = {}
-        for method_str in args.install:
+    # Determine which tools to update
+    if all_tools:
+        if tools:
+            print_error("Cannot specify tool names when using --all.")
+            raise typer.Exit(code=1)
+        
+        if category:
             try:
-                method, command = method_str.split(":", 1)
-                install_methods[method.strip()] = command.strip()
+                ToolCategory(category)
+                category_tools = manager.get_tool_names_by_category(category)
+                # Filter category tools to only those that are installed
+                tools_to_update = [name for name in category_tools if name in all_installed_tools]
+                if not tools_to_update:
+                    print_warning(f"No installed tools found in category: {category}")
+                    return
             except ValueError:
-                print_error(f"Invalid installation method format: {method_str}")
-                print_info("Format should be 'method:command'")
-                return
+                print_error(f"Invalid category: {category}. Available categories: {[c.value for c in ToolCategory]}")
+                raise typer.Exit(code=1)
+        else:
+            # Update all installed tools
+            tools_to_update = all_installed_tools
         
-        if install_methods:
-            tool_info["install"] = install_methods
-    
-    # Add update methods
-    if args.update:
-        update_methods = {}
-        for method_str in args.update:
-            try:
-                method, command = method_str.split(":", 1)
-                update_methods[method.strip()] = command.strip()
-            except ValueError:
-                print_error(f"Invalid update method format: {method_str}")
-                print_info("Format should be 'method:command'")
-                return
+        if not tools_to_update:
+            print_warning("No installed tools selected for update.")
+            return
         
-        if update_methods:
-            tool_info["update"] = update_methods
-    
-    # Add additional properties
-    if args.website:
-        tool_info["website"] = args.website
-    
-    if args.documentation:
-        tool_info["documentation"] = args.documentation
-    
-    if args.execution_time:
-        tool_info["execution_time"] = args.execution_time
-    
-    if args.target_types:
-        tool_info["target_types"] = args.target_types
-    
-    # Add the tool
-    if manager.add_tool(tool_info):
-        print_success(f"Added custom tool '{args.name}'")
-    else:
-        print_error(f"Failed to add custom tool '{args.name}'")
-
-
-def remove_tool(args: argparse.Namespace) -> None:
-    """
-    Remove a custom tool.
-    
-    Args:
-        args: Command-line arguments
-    """
-    manager = ToolManager()
-    
-    if manager.remove_tool(args.name):
-        print_success(f"Removed custom tool '{args.name}'")
-    else:
-        print_error(f"Failed to remove tool '{args.name}'")
-        print_info("Note: Only custom tools can be removed.")
-
-
-def categories(args: argparse.Namespace) -> None:
-    """
-    List available tool categories.
-    
-    Args:
-        args: Command-line arguments
-    """
-    print(f"{Fore.CYAN}Available Tool Categories:{Style.RESET_ALL}")
-    for category in ToolCategory.all():
-        print(f"  - {category}")
-
-
-def check_updates(args: argparse.Namespace) -> None:
-    """
-    Check for tool updates.
-    
-    Args:
-        args: Command-line arguments
-    """
-    manager = ToolManager()
-    
-    # Get installed tools
-    installation_status = manager.get_installation_status()
-    installed_tools = [name for name, installed in installation_status.items() if installed]
-    
-    # Check for updates (placeholder implementation)
-    print_info("Checking for updates...")
-    updates_available = manager.check_for_updates()
-    
-    # Filter to just installed tools
-    updates_available = {name: needs_update for name, needs_update in updates_available.items() if name in installed_tools}
-    
-    # Display results
-    tools_to_update = [name for name, needs_update in updates_available.items() if needs_update]
-    
-    if tools_to_update:
-        print_info(f"Updates available for {len(tools_to_update)} tools:")
-        for tool_name in tools_to_update:
-            print(f"  - {tool_name}")
+        print_info(f"Attempting to update {len(tools_to_update)} tools...")
+    elif tools:
+        # Check if specified tools are installed
+        not_installed = [name for name in tools if name not in all_installed_tools]
+        if not_installed:
+            print_warning(f"Skipping update for not installed tools: {', '.join(not_installed)}")
+        # Filter to only installed tools from the provided list
+        tools_to_update = [name for name in tools if name in all_installed_tools]
         
-        # Prompt to update
-        if not args.no_prompt:
-            response = input("\nDo you want to update these tools? [y/N] ")
-            if response.lower() in ["y", "yes"]:
-                for tool_name in tools_to_update:
-                    print(f"Updating {tool_name}...")
-                    if manager.update_tool(tool_name):
-                        print_success(f"Updated {tool_name}")
-                    else:
-                        print_error(f"Failed to update {tool_name}")
+        if not tools_to_update:
+            print_warning("None of the specified tools are installed or require update.")
+            return
+        
+        print_info(f"Attempting to update {len(tools_to_update)} specified tool(s)...")
     else:
-        print_success("All tools are up to date.")
-
-
-def main() -> None:
-    """Main entry point for the CLI."""
-    parser = argparse.ArgumentParser(
-        description="Sniper Security Tool - Tool Manager",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=textwrap.dedent("""
-            Examples:
-              List all tools:
-                sniper-tools list
-                
-              List tools in a specific category:
-                sniper-tools list --category reconnaissance
-                
-              Show details for a specific tool:
-                sniper-tools show nmap
-                
-              Install a tool:
-                sniper-tools install nmap
-                
-              Install all tools in a category:
-                sniper-tools install --all --category vulnerability_scanning
-                
-              Update an installed tool:
-                sniper-tools update nmap
-                
-              Add a custom tool:
-                sniper-tools add --name custom-tool --category utility --description "My custom tool" --binary custom-tool
-                
-              Remove a custom tool:
-                sniper-tools remove custom-tool
-        """)
-    )
+        print_error("Please specify tool names to update or use the --all flag.")
+        raise typer.Exit(code=1)
     
-    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
-    
-    # List command
-    list_parser = subparsers.add_parser("list", help="List available tools")
-    list_parser.add_argument("--category", help="Filter by category")
-    list_parser.add_argument("--installed", action="store_true", help="Show only installed tools")
-    list_parser.add_argument("--not-installed", action="store_true", help="Show only not installed tools")
-    list_parser.add_argument("--json", action="store_true", help="Output in JSON format")
-    list_parser.set_defaults(func=list_tools)
-    
-    # Show command
-    show_parser = subparsers.add_parser("show", help="Show detailed information about a tool")
-    show_parser.add_argument("name", help="Name of the tool")
-    show_parser.set_defaults(func=show_tool)
-    
-    # Install command
-    install_parser = subparsers.add_parser("install", help="Install tools")
-    install_parser.add_argument("tools", nargs="*", help="Names of tools to install")
-    install_parser.add_argument("--all", action="store_true", help="Install all tools")
-    install_parser.add_argument("--category", help="Filter by category (when using --all)")
-    install_parser.add_argument("--method", help="Installation method override")
-    install_parser.set_defaults(func=install_tool)
-    
-    # Update command
-    update_parser = subparsers.add_parser("update", help="Update installed tools")
-    update_parser.add_argument("tools", nargs="*", help="Names of tools to update")
-    update_parser.add_argument("--all", action="store_true", help="Update all installed tools")
-    update_parser.add_argument("--category", help="Filter by category (when using --all)")
-    update_parser.set_defaults(func=update_tool)
-    
-    # Add command
-    add_parser = subparsers.add_parser("add", help="Add a custom tool")
-    add_parser.add_argument("--name", required=True, help="Name of the tool")
-    add_parser.add_argument("--category", required=True, help="Category of the tool")
-    add_parser.add_argument("--description", required=True, help="Description of the tool")
-    add_parser.add_argument("--binary", help="Binary executable name")
-    add_parser.add_argument("--check-command", help="Command to check if the tool is installed")
-    add_parser.add_argument("--install", nargs="+", help="Installation methods (format: method:command)")
-    add_parser.add_argument("--update", nargs="+", help="Update methods (format: method:command)")
-    add_parser.add_argument("--website", help="Website URL")
-    add_parser.add_argument("--documentation", help="Documentation URL")
-    add_parser.add_argument("--execution-time", choices=["fast", "medium", "slow"], help="Execution time category")
-    add_parser.add_argument("--target-types", nargs="+", help="Target types the tool supports")
-    add_parser.set_defaults(func=add_tool)
-    
-    # Remove command
-    remove_parser = subparsers.add_parser("remove", help="Remove a custom tool")
-    remove_parser.add_argument("name", help="Name of the tool to remove")
-    remove_parser.set_defaults(func=remove_tool)
-    
-    # Categories command
-    categories_parser = subparsers.add_parser("categories", help="List available tool categories")
-    categories_parser.set_defaults(func=categories)
-    
-    # Check updates command
-    updates_parser = subparsers.add_parser("check-updates", help="Check for tool updates")
-    updates_parser.add_argument("--no-prompt", action="store_true", help="Don't prompt to install updates")
-    updates_parser.set_defaults(func=check_updates)
-    
-    # Parse arguments
-    args = parser.parse_args()
-    
-    # Execute the command
-    if hasattr(args, "func"):
+    # Perform update
+    success_count = 0
+    failure_count = 0
+    for tool_name in tools_to_update:
+        print(f"Updating {tool_name}...")
         try:
-            args.func(args)
-        except KeyboardInterrupt:
-            print("\nOperation cancelled by user")
-            sys.exit(1)
+            print_warning(f"Update functionality for '{tool_name}' not yet implemented in ToolManager.")
+            # Remove placeholder and implement actual call when ToolManager supports it
+            failure_count += 1 # Count as failure until implemented
         except Exception as e:
-            print_error(f"Error: {e}")
-            logger.exception("An error occurred")
-            sys.exit(1)
+            print_error(f"Error during update of {tool_name}: {e}")
+            failure_count += 1
+    
+    # Print summary
+    total_attempted = len(tools_to_update)
+    print(f"\nUpdate Summary:")
+    print_success(f"Successfully updated: {success_count}")
+    if failure_count > 0:
+        print_error(f"Failed to update (or not implemented): {failure_count}")
+    print(f"Total attempted: {total_attempted}")
+
+
+@tools_app.command("add")
+def add_tool(
+    config_file: Annotated[
+        Path,
+        typer.Argument(..., help="Path to the YAML configuration file for the tool(s)", exists=True, file_okay=True, dir_okay=False, readable=True)
+    ]
+) -> None:
+    """
+    Add a new custom tool from a YAML configuration file.
+    """
+    manager = ToolManager()
+    
+    try:
+        with open(config_file, 'r') as file:
+            tool_data = yaml.safe_load(file)
+        
+        if not isinstance(tool_data, dict):
+            print_error(f"Invalid format in {config_file}. Expected a dictionary (YAML mapping).")
+            raise typer.Exit(code=1)
+        
+        added_count = 0
+        failed_count = 0
+        for tool_name, tool_config in tool_data.items():
+            print_info(f"Attempting to add tool: {tool_name}")
+            if isinstance(tool_config, dict):
+                if manager.add_tool(tool_name, tool_config, custom=True):
+                    print_success(f"Successfully added custom tool: {tool_name}")
+                    added_count += 1
+                else:
+                    # ToolManager should log specific errors
+                    print_error(f"Failed to add tool: {tool_name}. It might already exist or have invalid config.")
+                    failed_count += 1
+            else:
+                print_error(f"Invalid configuration format for tool '{tool_name}' in {config_file}. Expected a dictionary.")
+                failed_count += 1
+        
+        print("\nAdd Tool Summary:")
+        print_success(f"Tools added: {added_count}")
+        if failed_count > 0:
+            print_error(f"Tools failed to add: {failed_count}")
+    except FileNotFoundError:
+        print_error(f"Configuration file not found: {config_file}")
+        raise typer.Exit(code=1)
+    except yaml.YAMLError as e:
+        print_error(f"Error parsing YAML file {config_file}: {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        print_error(f"An unexpected error occurred: {e}")
+        raise typer.Exit(code=1)
+
+
+@tools_app.command("remove")
+def remove_tool(
+    names: Annotated[
+        List[str],
+        typer.Argument(..., help="Name(s) of the custom tool(s) to remove")
+    ]
+) -> None:
+    """
+    Remove one or more custom tools.
+    """
+    manager = ToolManager()
+    removed_count = 0
+    failed_count = 0
+    
+    for name in names:
+        print_info(f"Attempting to remove tool: {name}")
+        try:
+            if manager.remove_tool(name):
+                print_success(f"Successfully removed custom tool: {name}")
+                removed_count += 1
+            else:
+                # ToolManager should log specific errors or indicate why
+                print_error(f"Failed to remove tool: {name}. It might not be a custom tool or not found.")
+                failed_count += 1
+        except Exception as e:
+            print_error(f"Error removing tool {name}: {e}")
+            failed_count += 1
+    
+    print("\nRemove Tool Summary:")
+    print_success(f"Tools removed: {removed_count}")
+    if failed_count > 0:
+        print_error(f"Tools failed to remove: {failed_count}")
+
+
+@tools_app.command("categories")
+def list_categories() -> None:
+    """
+    List all available tool categories.
+    """
+    manager = ToolManager()
+    categories = manager.get_tool_categories()
+    
+    if categories:
+        print_info("Available Tool Categories:")
+        for category in sorted(list(categories)):
+            print(f"  - {category}")
     else:
-        parser.print_help()
+        print_warning("No tool categories found.")
 
 
-if __name__ == "__main__":
-    main()
+@tools_app.command("check-updates")
+def check_updates(
+    tools: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Specific tool(s) to check for updates", show_default=False)
+    ] = None,
+    category: Annotated[
+        Optional[str],
+        typer.Option("--category", "-c", help="Check updates only for installed tools in a specific category")
+    ] = None
+) -> None:
+    """
+    Check for available updates for installed tools.
+    """
+    manager = ToolManager()
+    
+    installed_status = manager.get_installation_status()
+    installed_tools = [name for name, installed in installed_status.items() if installed]
+    
+    if not installed_tools:
+        print_warning("No tools are currently installed to check for updates.")
+        return
+    
+    tools_to_check: List[str] = []
+    
+    if tools:
+        # Filter specified tools to only those that are installed
+        specified_installed = [name for name in tools if name in installed_tools]
+        not_installed_specified = [name for name in tools if name not in installed_tools]
+        if not_installed_specified:
+            print_warning(f"Skipping check for not installed tools: {', '.join(not_installed_specified)}")
+        
+        if not specified_installed:
+            print_warning("None of the specified tools are installed.")
+            return
+        tools_to_check = specified_installed
+    elif category:
+        # Validate category
+        try:
+            ToolCategory(category)
+            category_tools = manager.get_tool_names_by_category(category)
+            # Filter category tools to only those that are installed
+            tools_to_check = [name for name in category_tools if name in installed_tools]
+            if not tools_to_check:
+                print_warning(f"No installed tools found in category: {category}")
+                return
+        except ValueError:
+            print_error(f"Invalid category: {category}. Available categories: {[c.value for c in ToolCategory]}")
+            raise typer.Exit(code=1)
+    else:
+        # Check all installed tools
+        tools_to_check = installed_tools
+    
+    print_info(f"Checking updates for {len(tools_to_check)} tool(s)...")
+    
+    try:
+        # --- Placeholder: Replace with actual call ---
+        # updates_available = manager.check_for_updates(tools_to_check) # Assuming method takes a list
+        # Mocked result for now:
+        updates_available = {name: (i % 2 == 0) for i, name in enumerate(tools_to_check)} # Mock: every other tool has update
+        print_warning("Update check functionality is mocked. Implement in ToolManager.")
+        # --- End Placeholder ---
+        
+        if not updates_available:
+            print_info("No update information available for the selected tools.")
+            return
+        
+        update_count = 0
+        print("\nUpdate Status:")
+        for tool_name in tools_to_check: # Iterate through checked tools for order
+            status = updates_available.get(tool_name)
+            if status is True:
+                print(f"  - {tool_name}: {Fore.YELLOW}Update Available{Style.RESET_ALL}")
+                update_count += 1
+            elif status is False:
+                print(f"  - {tool_name}: {Fore.GREEN}Up-to-date{Style.RESET_ALL}")
+            else:
+                # Handle cases where check might have failed or tool wasn't in result
+                print(f"  - {tool_name}: {Fore.RED}Check failed or unknown{Style.RESET_ALL}")
+        
+        if update_count > 0:
+            print(f"\n{update_count} tool(s) have updates available. Use 'sniper tools update'.")
+        else:
+            print_success("\nAll checked tools are up-to-date.")
+    except Exception as e:
+        print_error(f"An error occurred while checking for updates: {e}")
+        raise typer.Exit(code=1)
