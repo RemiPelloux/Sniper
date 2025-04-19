@@ -10,10 +10,10 @@ This module tests the WorkerNodeClient functionality, including:
 import os
 import signal
 import tempfile
+import threading
 import time
 from pathlib import Path
 from unittest import mock
-import threading
 
 import pytest
 import yaml
@@ -44,16 +44,16 @@ def config_file():
         "protocol_type": "rest",
         "capabilities": ["basic", "port_scan", "web_scan"],
         "max_concurrent_tasks": 10,
-        "heartbeat_interval": 30
+        "heartbeat_interval": 30,
     }
-    
+
     # Create a temporary file with yaml content
-    tmp_path = tempfile.mktemp(suffix='.yaml')
-    with open(tmp_path, 'w') as f:
+    tmp_path = tempfile.mktemp(suffix=".yaml")
+    with open(tmp_path, "w") as f:
         yaml.dump(config, f)
-        
+
     yield tmp_path
-    
+
     # Clean up
     if os.path.exists(tmp_path):
         os.unlink(tmp_path)
@@ -62,7 +62,7 @@ def config_file():
 @pytest.mark.usefixtures("mock_worker")
 class TestWorkerNodeClient:
     """Tests for the WorkerNodeClient class."""
-    
+
     def test_init_default_values(self):
         """Test initialization with default values."""
         with mock.patch("src.distributed.client.setup_logging") as mock_setup_logging:
@@ -72,11 +72,19 @@ class TestWorkerNodeClient:
             assert client.worker_node.master_host == "default_host"
             assert client.worker_node.master_port == 1234
             assert client.worker_node.protocol_type == "REST"
-            
+
             # Check the actual capabilities
-            expected_capabilities = ["scan", "vuln", "recon", "autonomous_test", "vulnerability_scan"]
-            assert sorted(client.worker_node.capabilities) == sorted(expected_capabilities)
-            
+            expected_capabilities = [
+                "scan",
+                "vuln",
+                "recon",
+                "autonomous_test",
+                "vulnerability_scan",
+            ]
+            assert sorted(client.worker_node.capabilities) == sorted(
+                expected_capabilities
+            )
+
             assert client.worker_node.max_concurrent_tasks == 5
             assert client.worker_node.heartbeat_interval == 30
             # mock_setup_logging.assert_called_once() # setup_logging is not called in __init__

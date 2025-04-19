@@ -27,16 +27,16 @@ class TestFeatureExtraction:
         """Test that text features are extracted correctly."""
         test_text = "This contains a SQL injection vulnerability that allows attackers to bypass authentication."
         features = extract_text_features(test_text)
-        
+
         # Check basic text features
         assert features["text_length"] == len(test_text)
         assert features["word_count"] == 12  # Updated from 15 to 12
-        
+
         # Check vulnerability patterns
         assert features["sql_injection_present"] == 1.0
         assert features["sql_injection_count"] >= 1
         assert features["authentication_present"] == 1.0
-        
+
         # Features that shouldn't be present
         assert features["xss_present"] == 0.0
         assert features["command_injection_present"] == 0.0

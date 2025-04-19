@@ -167,12 +167,12 @@ class TestSmartRecon:
         features = smart_recon.extract_target_features(sample_target)
         assert isinstance(features, np.ndarray)
         assert features.shape[0] > 0
-        
+
         # Test IP target
         features = smart_recon.extract_target_features(sample_ip_target)
         assert isinstance(features, np.ndarray)
         assert features.shape[0] > 0
-        
+
         # Just verify we get a non-empty numpy array with numeric values
         # We don't need to check specific indices since the feature extraction
         # has been modified to handle TLDs differently
@@ -181,7 +181,9 @@ class TestSmartRecon:
         """Test feature extraction from findings."""
         features = smart_recon.extract_finding_features(sample_findings)
         assert isinstance(features, np.ndarray)
-        assert features.shape[0] == len(sample_findings)  # Should have one row per finding
+        assert features.shape[0] == len(
+            sample_findings
+        )  # Should have one row per finding
 
     @patch("joblib.dump")
     def test_save_load_models(self, mock_joblib_dump, smart_recon):
@@ -193,7 +195,7 @@ class TestSmartRecon:
 
         # Save models
         smart_recon.save_models()
-        
+
         # Verify joblib.dump was called
         assert mock_joblib_dump.called
 
@@ -202,7 +204,7 @@ class TestSmartRecon:
         smart_recon.pattern_recognizer_model = None
         smart_recon.clustering_model = None
 
-        # Reload models 
+        # Reload models
         with patch("joblib.load", return_value=MagicMock()):
             smart_recon._load_models()
 
@@ -216,18 +218,16 @@ class TestSmartRecon:
         """Test training the tool selector model."""
         # Mock save_models to avoid actual disk writes
         smart_recon.save_models = MagicMock()
-        
+
         # Extract the tool effectiveness data from sample_tools_used
         tool_effectiveness = [
             {"nmap": 0.8, "zap": 0.9} if "zap" in tools["tools"] else {"dirsearch": 0.7}
             for tools in sample_tools_used[:1]
         ]
-        
+
         # Now call train_tool_selector with the correct signature
-        smart_recon.train_tool_selector(
-            ["example.com"], tool_effectiveness
-        )
-        
+        smart_recon.train_tool_selector(["example.com"], tool_effectiveness)
+
         # Just verify that a model was created
         assert smart_recon.tool_selector_model is not None
         # Check that save_models was called
@@ -239,15 +239,15 @@ class TestSmartRecon:
         """Test training the pattern recognizer model."""
         # Mock save_models to avoid actual disk writes
         smart_recon.save_models = MagicMock()
-            
+
         # Format the findings in the expected way
         findings_groups = [sample_findings]
         # Create binary labels (0 or 1) for each group
         labels = [1]  # 1 means vulnerability pattern
-            
+
         # Call train_pattern_recognizer
         smart_recon.train_pattern_recognizer(findings_groups, labels)
-            
+
         # Check that the model was created
         assert smart_recon.pattern_recognizer_model is not None
 
@@ -277,7 +277,7 @@ class TestSmartRecon:
         mock_model = MagicMock()
         # Set up predict to return a tool code
         mock_model.predict.return_value = np.array([2])  # 2 = zap
-        
+
         # Set up predict_proba to return probabilities for each class
         # Example: 6 classes (1=nmap, 2=zap, 3=wappalyzer, etc.)
         mock_probs = np.zeros((1, 6))
@@ -285,7 +285,7 @@ class TestSmartRecon:
         mock_probs[0, 2] = 0.7  # wappalyzer (index 2) = 70%
         mock_probs[0, 0] = 0.5  # nmap (index 0) = 50%
         mock_model.predict_proba.return_value = mock_probs
-        
+
         smart_recon.tool_selector_model = mock_model
 
         tools = smart_recon.select_tools(sample_target)
@@ -394,7 +394,10 @@ class TestSmartRecon:
         if "models" in stats:
             if "pattern_recognizer" in stats.get("models", {}):
                 if "feature_importance" in stats["models"]["pattern_recognizer"]:
-                    assert len(stats["models"]["pattern_recognizer"]["feature_importance"]) > 0
+                    assert (
+                        len(stats["models"]["pattern_recognizer"]["feature_importance"])
+                        > 0
+                    )
 
     def test_helper_methods(self, smart_recon):
         """Test various helper methods."""
@@ -416,16 +419,16 @@ class TestSmartRecon:
         assert "dirsearch" in smart_recon._select_tools_heuristic(web_target)
         assert "nmap" in smart_recon._select_tools_heuristic(non_web_target)
         assert "zap" not in smart_recon._select_tools_heuristic(non_web_target)
-        
+
     def test_load_available_tools(self, smart_recon):
         """Test loading available tools."""
         # Call the method
         available_tools = smart_recon.load_available_tools()
-        
+
         # Verify the result
         assert isinstance(available_tools, list)
         assert len(available_tools) > 0
-        
+
         # Check tool structure
         for tool in available_tools:
             assert isinstance(tool, dict)
@@ -438,26 +441,28 @@ class TestSmartRecon:
             assert isinstance(tool["target_types"], list)
             assert "output_formats" in tool
             assert isinstance(tool["output_formats"], list)
-        
+
         # Verify we have tools from different categories
         categories = set(tool["category"] for tool in available_tools)
         assert "reconnaissance" in categories
         assert "vulnerability_scanning" in categories
         assert "exploitation" in categories
-        
+
         # Verify we have common tools
         tool_names = set(tool["name"] for tool in available_tools)
         assert "nmap" in tool_names
         assert "zap" in tool_names
         assert "sqlmap" in tool_names
 
-    def test_recommend_tools(self, smart_recon, sample_target, sample_ip_target, sample_findings):
+    def test_recommend_tools(
+        self, smart_recon, sample_target, sample_ip_target, sample_findings
+    ):
         """Test tool recommendations."""
         # Test web target recommendation (without context)
         recommendations = smart_recon.recommend_tools(sample_target)
         assert isinstance(recommendations, list)
         assert len(recommendations) > 0
-        
+
         # Check recommendation structure
         for rec in recommendations:
             assert isinstance(rec, dict)
@@ -468,34 +473,41 @@ class TestSmartRecon:
             assert "parameters" in rec
             assert "reasons" in rec
             assert isinstance(rec["reasons"], list)
-        
+
         # Verify recommendations are sorted by confidence
         confidences = [rec["confidence"] for rec in recommendations]
         assert confidences == sorted(confidences, reverse=True)
-        
+
         # Test IP target recommendation
         ip_recommendations = smart_recon.recommend_tools(sample_ip_target)
         assert isinstance(ip_recommendations, list)
         assert len(ip_recommendations) > 0
-        
+
         # Test with context
         context = {
             "assessment_phase": "vulnerability_scanning",
             "assessment_type": "thorough",
             "previous_findings": sample_findings,
-            "max_recommendations": 3
+            "max_recommendations": 3,
         }
-        
+
         context_recommendations = smart_recon.recommend_tools(sample_target, context)
         assert isinstance(context_recommendations, list)
         assert len(context_recommendations) <= context["max_recommendations"]
-        
+
         # Test different phases
         recon_context = {"assessment_phase": "reconnaissance"}
-        recon_recommendations = smart_recon.recommend_tools(sample_target, recon_context)
-        
+        recon_recommendations = smart_recon.recommend_tools(
+            sample_target, recon_context
+        )
+
         exploit_context = {"assessment_phase": "exploitation"}
-        exploit_recommendations = smart_recon.recommend_tools(sample_target, exploit_context)
-        
+        exploit_recommendations = smart_recon.recommend_tools(
+            sample_target, exploit_context
+        )
+
         # Different phases should give different top recommendations
-        assert recon_recommendations[0]["tool_name"] != exploit_recommendations[0]["tool_name"]
+        assert (
+            recon_recommendations[0]["tool_name"]
+            != exploit_recommendations[0]["tool_name"]
+        )

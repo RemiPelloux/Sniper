@@ -1,7 +1,7 @@
-from typing import Any, Dict, Optional, Union
 from pathlib import Path
-import yaml
+from typing import Any, Dict, Optional, Union
 
+import yaml
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -39,10 +39,10 @@ settings = Settings()
 def load_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
     """
     Load configuration from a file or return the default settings.
-    
+
     Args:
         config_path: Optional path to a YAML configuration file.
-        
+
     Returns:
         Dict containing configuration values.
     """
@@ -51,7 +51,7 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any
         path = Path(config_path)
         if not path.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
-            
+
         # Load configuration from YAML file
         with open(path, "r") as f:
             try:
@@ -63,6 +63,6 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any
                 return config_data
             except yaml.YAMLError as e:
                 raise ValueError(f"Error parsing configuration file: {e}")
-    
+
     # Return a dictionary representation of the settings object
     return settings.dict()

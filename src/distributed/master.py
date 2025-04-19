@@ -14,15 +14,15 @@ The master node is responsible for:
 import asyncio
 import json
 import logging
+import random
 import threading
 import time
 import uuid
-import random
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple, Union, Any, Callable
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from src.core.logging import setup_logging
 from src.distributed.base import (
@@ -47,26 +47,29 @@ from src.distributed.distribution import (
 from src.distributed.protocol import (
     HeartbeatMessage,
     MessageType,
+    NodeStatusMessage,
     ProtocolBase,
     ProtocolMessage,
     RegisterMessage,
-    TaskResultMessage,
-    TaskStatusMessage,
-    NodeStatusMessage,
     TaskAssignmentMessage,
     TaskCancelMessage,
+    TaskResultMessage,
+    TaskStatusMessage,
     create_protocol,
 )
 from src.ml.autonomous_tester import VulnerabilityType
 
 logger = logging.getLogger("sniper.distributed.master")
 
+
 class TaskDistributionStrategy(str, Enum):
     """Strategy to use for distributing tasks to worker nodes."""
+
     ROUND_ROBIN = "round_robin"
     LEAST_LOADED = "least_loaded"
     CAPABILITY_BASED = "capability_based"
     RANDOM = "random"
+
 
 class SniperMasterNode(MasterNode):
     """
@@ -164,21 +167,21 @@ class SniperMasterNode(MasterNode):
     def initialize_auto_scaling(
         self,
         min_nodes: int = 1,
-        max_nodes: int = 10, 
+        max_nodes: int = 10,
         scaling_policy: str = "queue_depth",
         provider: str = "docker",
-        provider_config: Dict[str, Any] = None
+        provider_config: Dict[str, Any] = None,
     ):
         """
         Initialize the auto-scaling system for worker nodes.
-        
+
         Args:
             min_nodes: Minimum number of worker nodes to maintain
             max_nodes: Maximum number of worker nodes allowed
             scaling_policy: Policy to use for scaling decisions
             provider: Provider to use for creating worker nodes
             provider_config: Configuration for the provider
-        
+
         Returns:
             True if initialization was successful, False otherwise
         """
@@ -188,28 +191,28 @@ class SniperMasterNode(MasterNode):
                 AutoScaler,
                 ScalingConfig,
                 ScalingPolicy,
-                WorkerProvider
+                WorkerProvider,
             )
-            
+
             # Create scaling configuration
             config = ScalingConfig(
                 min_nodes=min_nodes,
                 max_nodes=max_nodes,
                 scaling_policy=ScalingPolicy(scaling_policy),
                 provider=WorkerProvider(provider),
-                check_interval=60  # Check every minute
+                check_interval=60,  # Check every minute
             )
-            
+
             # Create auto-scaler
             self.auto_scaler = AutoScaler(
-                master_node=self,
-                config=config,
-                provider_config=provider_config or {}
+                master_node=self, config=config, provider_config=provider_config or {}
             )
-            
-            logger.info(f"Auto-scaling initialized with {provider} provider, {min_nodes}-{max_nodes} nodes")
+
+            logger.info(
+                f"Auto-scaling initialized with {provider} provider, {min_nodes}-{max_nodes} nodes"
+            )
             return True
-        
+
         except Exception as e:
             logger.error(f"Failed to initialize auto-scaling: {e}", exc_info=True)
             return False
@@ -217,7 +220,7 @@ class SniperMasterNode(MasterNode):
     def start(self):
         """
         Start the master node server and maintenance threads.
-        
+
         Returns:
             True if startup was successful, False otherwise
         """
@@ -239,14 +242,16 @@ class SniperMasterNode(MasterNode):
                 raise NotImplementedError(
                     f"Protocol {self.protocol_type} not implemented yet"
                 )
-            logger.info(f"Master node server started successfully on {self.host}:{self.port}")
+            logger.info(
+                f"Master node server started successfully on {self.host}:{self.port}"
+            )
             self.status = NodeStatus.ACTIVE
-            
+
             # Start auto-scaler if configured
-            if hasattr(self, 'auto_scaler'):
+            if hasattr(self, "auto_scaler"):
                 logger.info("Starting auto-scaler")
                 self.auto_scaler.start()
-            
+
             return True
         except Exception as e:
             self.running = False
@@ -256,7 +261,7 @@ class SniperMasterNode(MasterNode):
     def stop(self):
         """
         Stop the master node server and cleanup resources.
-        
+
         Returns:
             True if shutdown was successful, False otherwise
         """
@@ -268,7 +273,7 @@ class SniperMasterNode(MasterNode):
         self.running = False
 
         # Stop auto-scaler if running
-        if hasattr(self, 'auto_scaler'):
+        if hasattr(self, "auto_scaler"):
             logger.info("Stopping auto-scaler")
             self.auto_scaler.stop()
 
@@ -281,26 +286,26 @@ class SniperMasterNode(MasterNode):
 
         # Set node status to offline
         self.status = NodeStatus.OFFLINE
-        
+
         logger.info("Master node stopped")
         return True
 
     def _start_rest_server(self):
         """Start a REST server for the master node."""
         logger.info(f"Starting REST server for master node on {self.host}:{self.port}")
-        
+
         # Import here to avoid circular imports
         from src.distributed.rest import create_master_app, run_app
-        
+
         # Start the protocol server
         self.protocol.start_server(self.host, self.port, self._handle_message)
-        
+
         # Create the FastAPI app
         app = create_master_app(self)
-        
+
         # Run the app in a separate thread
         thread, server = run_app(app, host=self.host, port=self.port)
-        
+
         # Store server information
         self.server = {
             "type": "rest",
@@ -309,32 +314,32 @@ class SniperMasterNode(MasterNode):
             "port": self.port,
             "app": app,
             "thread": thread,
-            "server": server
+            "server": server,
         }
-        
+
         logger.info(f"REST server started at {self.host}:{self.port}")
 
     def _stop_server(self):
         """Stop the REST server for the master node."""
         if self.server and self.server.get("status") == "running":
             logger.info("Stopping REST server")
-            
+
             # Stop the protocol server
             self.protocol.stop_server()
-            
+
             # If we have a rest server with a thread
             if self.server.get("type") == "rest" and self.server.get("thread"):
                 # Import here to avoid circular imports
                 from src.distributed.rest import shutdown_app
-                
+
                 # Shutdown the application
                 if self.server.get("app"):
                     shutdown_app(self.server["app"])
-                
+
                 # Wait for the thread to finish
                 if self.server["thread"].is_alive():
                     self.server["thread"].join(timeout=5)
-            
+
             # Update server status
             self.server["status"] = "stopped"
             logger.info("REST server stopped")
@@ -361,7 +366,7 @@ class SniperMasterNode(MasterNode):
 
             for worker_id, worker_info in list(self.workers.items()):
                 is_stale = False
-                
+
                 # Check using NodeInfo heartbeat timestamp
                 time_diff_seconds = (now - worker_info.heartbeat).total_seconds()
                 if time_diff_seconds > self.worker_timeout:
@@ -369,16 +374,18 @@ class SniperMasterNode(MasterNode):
                     logger.warning(
                         f"Worker {worker_id} timed out (last heartbeat: {worker_info.heartbeat})"
                     )
-                
+
                 # Also check using worker metrics if available
                 elif worker_id in self.worker_metrics:
-                    metrics_last_heartbeat = self.worker_metrics[worker_id].last_heartbeat
+                    metrics_last_heartbeat = self.worker_metrics[
+                        worker_id
+                    ].last_heartbeat
                     if current_time - metrics_last_heartbeat > self.worker_timeout:
                         is_stale = True
                         logger.warning(
                             f"Worker {worker_id} timed out (last metrics heartbeat: {datetime.fromtimestamp(metrics_last_heartbeat)})"
                         )
-                
+
                 if is_stale:
                     worker_info.status = NodeStatus.OFFLINE
                     stale_workers.append(worker_id)
@@ -387,20 +394,20 @@ class SniperMasterNode(MasterNode):
             for worker_id in stale_workers:
                 # Reassign tasks from the stale worker
                 self._handle_worker_failure(worker_id)
-                
+
                 # Remove the worker from collections
                 if worker_id in self.workers:
                     del self.workers[worker_id]
-                
+
                 if worker_id in self.worker_metrics:
                     del self.worker_metrics[worker_id]
-                
+
                 logger.info(f"Removed stale worker {worker_id}")
 
     def _handle_worker_failure(self, worker_id: str):
         """
         Handle tasks assigned to a failed worker.
-        
+
         This method implements robust fault tolerance for worker node failures by:
         1. Identifying all tasks assigned to the failed worker
         2. Reassigning tasks based on their priority and retry count
@@ -412,27 +419,31 @@ class SniperMasterNode(MasterNode):
             reassigned_tasks = 0
             failed_tasks = 0
             logger.warning(f"Handling worker failure for worker {worker_id}")
-            
+
             # Track failure statistics
             failure_time = datetime.now(timezone.utc)
             failed_task_ids = []
-            
+
             # Process all tasks assigned to the failed worker
             for task_id, task in list(self.tasks.items()):
                 if task.assigned_node == worker_id:
                     # Log the task that was impacted
-                    logger.info(f"Task {task_id} affected by worker {worker_id} failure")
+                    logger.info(
+                        f"Task {task_id} affected by worker {worker_id} failure"
+                    )
                     failed_task_ids.append(task_id)
-                    
+
                     # Clear worker assignment and update status
                     task.assigned_node = None
                     task.status = TaskStatus.PENDING
                     task.retries += 1
-                    
+
                     # Track partial results if any exist
-                    if hasattr(task, 'partial_results') and task.partial_results:
-                        logger.info(f"Task {task_id} has partial results that will be merged on completion")
-                    
+                    if hasattr(task, "partial_results") and task.partial_results:
+                        logger.info(
+                            f"Task {task_id} has partial results that will be merged on completion"
+                        )
+
                     # Determine if we should retry or fail the task
                     if task.retries <= self.task_retry_limit:
                         # High priority tasks get immediately requeued at the front
@@ -440,51 +451,61 @@ class SniperMasterNode(MasterNode):
                             self.pending_tasks.insert(0, task)
                         else:
                             self.pending_tasks.append(task)
-                        
-                        logger.info(f"Requeued task {task_id} for retry (attempt {task.retries}/{self.task_retry_limit})")
+
+                        logger.info(
+                            f"Requeued task {task_id} for retry (attempt {task.retries}/{self.task_retry_limit})"
+                        )
                         reassigned_tasks += 1
                     else:
                         # Task has exceeded retry limit
-                        logger.warning(f"Task {task_id} exceeded retry limit ({self.task_retry_limit}), marking as failed")
+                        logger.warning(
+                            f"Task {task_id} exceeded retry limit ({self.task_retry_limit}), marking as failed"
+                        )
                         task.status = TaskStatus.FAILED
                         task.end_time = datetime.now(timezone.utc)
-                        task.failure_reason = f"Exceeded retry limit after worker {worker_id} failure"
-                        
+                        task.failure_reason = (
+                            f"Exceeded retry limit after worker {worker_id} failure"
+                        )
+
                         # Store in completed_tasks for tracking
                         self.completed_tasks[task_id] = task
                         del self.tasks[task_id]
                         failed_tasks += 1
-            
+
             # Log overall recovery statistics
             if reassigned_tasks > 0 or failed_tasks > 0:
-                logger.info(f"Worker {worker_id} failure recovery: reassigned {reassigned_tasks} tasks, failed {failed_tasks} tasks")
-                
+                logger.info(
+                    f"Worker {worker_id} failure recovery: reassigned {reassigned_tasks} tasks, failed {failed_tasks} tasks"
+                )
+
                 # Record failure for analysis
-                worker_failures = getattr(self, 'worker_failures', {})
+                worker_failures = getattr(self, "worker_failures", {})
                 if worker_id not in worker_failures:
                     worker_failures[worker_id] = []
-                
-                worker_failures[worker_id].append({
-                    'time': failure_time,
-                    'affected_tasks': len(failed_task_ids),
-                    'reassigned_tasks': reassigned_tasks,
-                    'failed_tasks': failed_tasks,
-                    'task_ids': failed_task_ids
-                })
-                
+
+                worker_failures[worker_id].append(
+                    {
+                        "time": failure_time,
+                        "affected_tasks": len(failed_task_ids),
+                        "reassigned_tasks": reassigned_tasks,
+                        "failed_tasks": failed_tasks,
+                        "task_ids": failed_task_ids,
+                    }
+                )
+
                 # Update failure stats
                 self.worker_failures = worker_failures
-            
+
             # Check if we need to initiate auto-scaling to compensate for the lost worker
-            if reassigned_tasks > 0 and hasattr(self, 'auto_scaler'):
+            if reassigned_tasks > 0 and hasattr(self, "auto_scaler"):
                 logger.info(f"Notifying auto-scaler about worker {worker_id} failure")
-                if hasattr(self.auto_scaler, 'handle_worker_failure'):
+                if hasattr(self.auto_scaler, "handle_worker_failure"):
                     self.auto_scaler.handle_worker_failure(worker_id, reassigned_tasks)
 
     def _cleanup_tasks(self):
         """
         Clean up stale tasks that have been running too long or are stuck in an inconsistent state.
-        
+
         This method implements comprehensive task monitoring and recovery by:
         1. Detecting and recovering from tasks that have been running too long
         2. Identifying tasks stuck in transitional states
@@ -494,83 +515,109 @@ class SniperMasterNode(MasterNode):
         with self.task_lock:
             current_time = datetime.now(timezone.utc)
             recovered_tasks = 0
-            
+
             # Process all active tasks
             for task_id, task in list(self.tasks.items()):
                 # Case 1: Running tasks that have exceeded their time limit
-                if (task.status == TaskStatus.RUNNING and task.start_time and
-                    (current_time - task.start_time).total_seconds() > task.timeout):
-                    
-                    logger.warning(f"Task {task_id} timed out after running for {(current_time - task.start_time).total_seconds():.1f} seconds (limit: {task.timeout}s)")
-                    
+                if (
+                    task.status == TaskStatus.RUNNING
+                    and task.start_time
+                    and (current_time - task.start_time).total_seconds() > task.timeout
+                ):
+
+                    logger.warning(
+                        f"Task {task_id} timed out after running for {(current_time - task.start_time).total_seconds():.1f} seconds (limit: {task.timeout}s)"
+                    )
+
                     # Track the worker that was handling this task
                     problem_worker_id = task.assigned_node
-                    
+
                     # Reset task for retry
                     task.assigned_node = None
                     task.status = TaskStatus.PENDING
                     task.retries += 1
-                    
+
                     # Determine next steps based on retry count
                     if task.retries <= self.task_retry_limit:
                         # Re-queue with priority based on retries
                         if task.retries > self.task_retry_limit / 2:
-                            # For tasks that have been retried multiple times, 
+                            # For tasks that have been retried multiple times,
                             # place them at the front of the queue
                             self.pending_tasks.insert(0, task)
-                            logger.info(f"Task {task_id} prioritized for immediate retry (attempt {task.retries})")
+                            logger.info(
+                                f"Task {task_id} prioritized for immediate retry (attempt {task.retries})"
+                            )
                         else:
                             self.pending_tasks.append(task)
-                            logger.info(f"Task {task_id} queued for retry (attempt {task.retries})")
-                        
+                            logger.info(
+                                f"Task {task_id} queued for retry (attempt {task.retries})"
+                            )
+
                         recovered_tasks += 1
-                        
+
                         # Record worker performance issue
                         if problem_worker_id:
-                            self._record_worker_issue(problem_worker_id, "task_timeout", task_id)
+                            self._record_worker_issue(
+                                problem_worker_id, "task_timeout", task_id
+                            )
                     else:
                         # Task exceeded retry limit
-                        logger.warning(f"Task {task_id} exceeded retry limit, marking as failed")
+                        logger.warning(
+                            f"Task {task_id} exceeded retry limit, marking as failed"
+                        )
                         task.status = TaskStatus.FAILED
                         task.end_time = current_time
                         task.failure_reason = "Exceeded timeout and retry limits"
-                        
+
                         # Move to completed (failed) tasks
                         self.completed_tasks[task_id] = task
                         del self.tasks[task_id]
-                
+
                 # Case 2: Tasks stuck in ASSIGNED state for too long
-                elif (task.status == TaskStatus.ASSIGNED and task.assigned_at and
-                     (current_time - task.assigned_at).total_seconds() > 300):  # 5 minute limit
-                    
-                    logger.warning(f"Task {task_id} stuck in ASSIGNED state for {(current_time - task.assigned_at).total_seconds():.1f} seconds")
-                    
+                elif (
+                    task.status == TaskStatus.ASSIGNED
+                    and task.assigned_at
+                    and (current_time - task.assigned_at).total_seconds() > 300
+                ):  # 5 minute limit
+
+                    logger.warning(
+                        f"Task {task_id} stuck in ASSIGNED state for {(current_time - task.assigned_at).total_seconds():.1f} seconds"
+                    )
+
                     # Record the problematic worker
                     problem_worker_id = task.assigned_node
-                    
+
                     # Reset and requeue
                     task.assigned_node = None
                     task.status = TaskStatus.PENDING
                     task.retries += 1
-                    
+
                     if task.retries <= self.task_retry_limit:
                         self.pending_tasks.append(task)
-                        logger.info(f"Requeued task {task_id} that was stuck in ASSIGNED state")
+                        logger.info(
+                            f"Requeued task {task_id} that was stuck in ASSIGNED state"
+                        )
                         recovered_tasks += 1
-                        
+
                         # Record worker issue
                         if problem_worker_id:
-                            self._record_worker_issue(problem_worker_id, "task_stuck", task_id)
+                            self._record_worker_issue(
+                                problem_worker_id, "task_stuck", task_id
+                            )
                     else:
                         # Handle exceeded retry limit
-                        logger.warning(f"Task {task_id} exceeded retry limit after being stuck, marking as failed")
+                        logger.warning(
+                            f"Task {task_id} exceeded retry limit after being stuck, marking as failed"
+                        )
                         task.status = TaskStatus.FAILED
                         task.end_time = current_time
-                        task.failure_reason = "Exceeded retry limit after being stuck in ASSIGNED state"
-                        
+                        task.failure_reason = (
+                            "Exceeded retry limit after being stuck in ASSIGNED state"
+                        )
+
                         self.completed_tasks[task_id] = task
                         del self.tasks[task_id]
-            
+
             # Log recovery statistics
             if recovered_tasks > 0:
                 logger.info(f"Task cleanup recovered {recovered_tasks} tasks")
@@ -578,39 +625,48 @@ class SniperMasterNode(MasterNode):
     def _record_worker_issue(self, worker_id: str, issue_type: str, task_id: str):
         """
         Record worker issues for tracking and possible worker penalties.
-        
+
         Args:
             worker_id: ID of the problematic worker
             issue_type: Type of issue (e.g., 'task_timeout', 'task_stuck')
             task_id: ID of the affected task
         """
         # Initialize worker issues tracking if it doesn't exist
-        worker_issues = getattr(self, 'worker_issues', {})
+        worker_issues = getattr(self, "worker_issues", {})
         if worker_id not in worker_issues:
             worker_issues[worker_id] = []
-        
+
         # Record the issue
-        worker_issues[worker_id].append({
-            'time': datetime.now(timezone.utc),
-            'issue_type': issue_type,
-            'task_id': task_id
-        })
-        
+        worker_issues[worker_id].append(
+            {
+                "time": datetime.now(timezone.utc),
+                "issue_type": issue_type,
+                "task_id": task_id,
+            }
+        )
+
         # Update worker issues
         self.worker_issues = worker_issues
-        
+
         # Check if worker has too many issues and should be penalized
         if len(worker_issues[worker_id]) >= 3:
-            recent_issues = [i for i in worker_issues[worker_id] 
-                            if (datetime.now(timezone.utc) - i['time']).total_seconds() < 1800]  # last 30 minutes
-            
+            recent_issues = [
+                i
+                for i in worker_issues[worker_id]
+                if (datetime.now(timezone.utc) - i["time"]).total_seconds() < 1800
+            ]  # last 30 minutes
+
             if len(recent_issues) >= 3:
-                logger.warning(f"Worker {worker_id} has {len(recent_issues)} issues in the last 30 minutes, considering penalization")
-                
+                logger.warning(
+                    f"Worker {worker_id} has {len(recent_issues)} issues in the last 30 minutes, considering penalization"
+                )
+
                 # Penalize by reducing priority in task distribution
                 if worker_id in self.worker_metrics:
                     self.worker_metrics[worker_id].penalty_score = len(recent_issues)
-                    logger.info(f"Applied penalty score of {len(recent_issues)} to worker {worker_id}")
+                    logger.info(
+                        f"Applied penalty score of {len(recent_issues)} to worker {worker_id}"
+                    )
 
     def register_worker(self, worker_info: NodeInfo) -> bool:
         """
@@ -625,7 +681,7 @@ class SniperMasterNode(MasterNode):
         with self.worker_lock:
             worker_id = worker_info.node_id
             self.workers[worker_id] = worker_info
-            
+
             # Initialize metrics if not exists
             if worker_id not in self.worker_metrics:
                 self.worker_metrics[worker_id] = WorkerMetrics(
@@ -633,10 +689,12 @@ class SniperMasterNode(MasterNode):
                     task_count=0,
                     success_rate=1.0,
                     response_time=0.0,
-                    last_heartbeat=time.time()
+                    last_heartbeat=time.time(),
                 )
-            
-            logger.info(f"Worker {worker_id} registered with capabilities: {worker_info.capabilities}")
+
+            logger.info(
+                f"Worker {worker_id} registered with capabilities: {worker_info.capabilities}"
+            )
             return True
 
     def unregister_worker(self, worker_id: str) -> bool:
@@ -653,15 +711,15 @@ class SniperMasterNode(MasterNode):
             if worker_id not in self.workers:
                 logger.warning(f"Cannot unregister worker {worker_id}: not found")
                 return False
-            
+
             # Handle any assigned tasks
             self._handle_worker_failure(worker_id)
-            
+
             # Remove the worker
             del self.workers[worker_id]
             if worker_id in self.worker_metrics:
                 del self.worker_metrics[worker_id]
-            
+
             logger.info(f"Worker {worker_id} unregistered")
             return True
 
@@ -679,9 +737,9 @@ class SniperMasterNode(MasterNode):
             if task_id not in self.tasks:
                 logger.warning(f"Cannot cancel task {task_id}: not found")
                 return False
-            
+
             task = self.tasks[task_id]
-            
+
             # If task is pending, just remove it
             if task.status == TaskStatus.PENDING:
                 if task in self.pending_tasks:
@@ -689,25 +747,30 @@ class SniperMasterNode(MasterNode):
                 task.status = TaskStatus.CANCELED
                 logger.info(f"Canceled pending task {task_id}")
                 return True
-            
+
             # If task is assigned or running, we need to notify the worker
-            if task.status in [TaskStatus.ASSIGNED, TaskStatus.RUNNING] and task.assigned_worker:
+            if (
+                task.status in [TaskStatus.ASSIGNED, TaskStatus.RUNNING]
+                and task.assigned_worker
+            ):
                 worker_id = task.assigned_worker
                 cancel_message = ProtocolMessage(
                     message_type=MessageType.TASK_CANCEL,
                     payload={"task_id": task_id},
-                    receiver=worker_id
+                    receiver=worker_id,
                 )
-                
+
                 try:
                     self.protocol.send_message(cancel_message)
                     task.status = TaskStatus.CANCELED
-                    logger.info(f"Sent cancellation request for task {task_id} to worker {worker_id}")
+                    logger.info(
+                        f"Sent cancellation request for task {task_id} to worker {worker_id}"
+                    )
                     return True
                 except Exception as e:
                     logger.error(f"Failed to send cancellation request: {e}")
                     return False
-            
+
             # If task is already completed or failed, it can't be canceled
             logger.warning(f"Cannot cancel task {task_id} with status {task.status}")
             return False
@@ -720,11 +783,11 @@ class SniperMasterNode(MasterNode):
             Number of tasks distributed
         """
         return self._distribute_pending_tasks()
-        
+
     def _distribute_pending_tasks(self) -> int:
         """
         Distribute pending tasks to available workers based on the selected distribution algorithm.
-        
+
         Returns:
             Number of tasks distributed
         """
@@ -735,24 +798,22 @@ class SniperMasterNode(MasterNode):
                 for worker_id, info in self.workers.items()
                 if info.status in [NodeStatus.ACTIVE, NodeStatus.IDLE]
             }
-            
+
             if not active_workers:
                 logger.warning("No active workers available for task distribution")
                 return 0
-                
+
             if not self.pending_tasks:
                 logger.debug("No pending tasks to distribute")
                 return 0
-                
+
             # Use the distribution algorithm to assign tasks to workers
             task_distribution = self.distribution_algorithm.distribute(
-                self.pending_tasks,
-                active_workers,
-                self.worker_metrics
+                self.pending_tasks, active_workers, self.worker_metrics
             )
-            
+
             total_assigned = 0
-            
+
             # Send tasks to assigned workers
             for worker_id, tasks in task_distribution.items():
                 for task in self.pending_tasks:
@@ -760,14 +821,15 @@ class SniperMasterNode(MasterNode):
                         success = self._send_task_to_worker(task, worker_id)
                         if success:
                             total_assigned += 1
-            
+
             # Remove assigned tasks from pending list
             self.pending_tasks = [
-                task for task in self.pending_tasks
-                if task.status == TaskStatus.PENDING
+                task for task in self.pending_tasks if task.status == TaskStatus.PENDING
             ]
-            
-            logger.info(f"Distributed {total_assigned} tasks to {len(active_workers)} active workers")
+
+            logger.info(
+                f"Distributed {total_assigned} tasks to {len(active_workers)} active workers"
+            )
             return total_assigned
 
     def process_result(self, task_id: str, result: Dict[str, Any]) -> bool:
@@ -785,22 +847,22 @@ class SniperMasterNode(MasterNode):
             if task_id not in self.tasks:
                 logger.warning(f"Cannot process result for unknown task {task_id}")
                 return False
-            
+
             task = self.tasks[task_id]
             task.results = result
             task.status = TaskStatus.COMPLETED
             task.completion_time = datetime.now(timezone.utc)
-            
+
             # Move to completed tasks
             self.completed_tasks[task_id] = task
-            
+
             # If there's a callback, execute it
             if self.result_callback:
                 try:
                     self.executor.submit(self.result_callback, task_id, result)
                 except Exception as e:
                     logger.error(f"Error submitting result callback: {e}")
-            
+
             logger.info(f"Processed result for task {task_id}")
             return True
 
@@ -823,15 +885,17 @@ class SniperMasterNode(MasterNode):
                         # Store results with task_id as key
                         results[task_id] = task.results
                 else:
-                    logger.warning(f"Task {task_id} not found or not completed for aggregation")
-        
+                    logger.warning(
+                        f"Task {task_id} not found or not completed for aggregation"
+                    )
+
         return {
             "task_count": len(results),
             "tasks": results,
             "summary": {
                 "completed": len([t for t in task_ids if t in self.completed_tasks]),
-                "missing": len([t for t in task_ids if t not in self.completed_tasks])
-            }
+                "missing": len([t for t in task_ids if t not in self.completed_tasks]),
+            },
         }
 
     def status_update(self) -> Dict[str, Any]:
@@ -848,17 +912,35 @@ class SniperMasterNode(MasterNode):
                 "uptime": self.uptime(),
                 "workers": {
                     "total": len(self.workers),
-                    "active": len([w for w in self.workers.values() if w.status == NodeStatus.ACTIVE]),
-                    "busy": len([w for w in self.workers.values() if w.status == NodeStatus.BUSY]),
-                    "offline": len([w for w in self.workers.values() if w.status == NodeStatus.OFFLINE])
+                    "active": len(
+                        [
+                            w
+                            for w in self.workers.values()
+                            if w.status == NodeStatus.ACTIVE
+                        ]
+                    ),
+                    "busy": len(
+                        [
+                            w
+                            for w in self.workers.values()
+                            if w.status == NodeStatus.BUSY
+                        ]
+                    ),
+                    "offline": len(
+                        [
+                            w
+                            for w in self.workers.values()
+                            if w.status == NodeStatus.OFFLINE
+                        ]
+                    ),
                 },
                 "tasks": {
                     "total": len(self.tasks),
                     "pending": len(self.pending_tasks),
                     "completed": len(self.completed_tasks),
-                    "distribution_strategy": self.distribution_strategy.value
+                    "distribution_strategy": self.distribution_strategy.value,
                 },
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
     def _send_task_to_worker(self, task: DistributedTask, worker_id: str):
@@ -941,18 +1023,22 @@ class SniperMasterNode(MasterNode):
 
         Args:
             task_id: The ID of the task to check
-            
+
         Returns:
             The task status or result if completed/failed, or None if task doesn't exist
         """
         # Check completed tasks first for results
         if task_id in self.completed_tasks:
             task = self.completed_tasks[task_id]
-            return task.result if task.result else {"status": task.status.value, "error": task.error}
+            return (
+                task.result
+                if task.result
+                else {"status": task.status.value, "error": task.error}
+            )
         # Then check active/pending tasks for status
         elif task_id in self.tasks:
             task = self.tasks[task_id]
-            return task.status # Return status enum for non-completed tasks
+            return task.status  # Return status enum for non-completed tasks
         return None
 
     def get_active_workers(self) -> List[NodeInfo]:
@@ -1006,7 +1092,7 @@ class SniperMasterNode(MasterNode):
             address = payload.get("address")
             hostname = payload.get("hostname", "unknown")
             port = payload.get("port", 5000)
-            
+
             # Create the NodeInfo with proper parameters
             worker_info = NodeInfo(
                 node_id=worker_id,
@@ -1014,9 +1100,9 @@ class SniperMasterNode(MasterNode):
                 hostname=hostname,
                 address=address,
                 port=port,
-                capabilities=capabilities
+                capabilities=capabilities,
             )
-            
+
             # Set status if present in payload
             status_str = payload.get("status")
             if status_str:
@@ -1026,7 +1112,7 @@ class SniperMasterNode(MasterNode):
                     worker_info.status = NodeStatus.ACTIVE
             else:
                 worker_info.status = NodeStatus.ACTIVE
-                
+
             # Set heartbeat from payload or current time
             heartbeat_str = payload.get("heartbeat")
             if heartbeat_str:
@@ -1034,7 +1120,7 @@ class SniperMasterNode(MasterNode):
                     worker_info.heartbeat = datetime.fromisoformat(heartbeat_str)
                 except ValueError:
                     worker_info.heartbeat = datetime.now(timezone.utc)
-            
+
             # Store the worker
             self.workers[worker_id] = worker_info
 
@@ -1046,11 +1132,17 @@ class SniperMasterNode(MasterNode):
                 task_count=0,
                 success_rate=1.0,
                 response_time=0.0,
-                last_heartbeat=time.time()
+                last_heartbeat=time.time(),
             )
 
-            logger.info(f"Worker {worker_id} registered with capabilities: {capabilities}")
-            return {"status": "success", "message": f"Worker {worker_id} registered successfully", "master_id": self.id}
+            logger.info(
+                f"Worker {worker_id} registered with capabilities: {capabilities}"
+            )
+            return {
+                "status": "success",
+                "message": f"Worker {worker_id} registered successfully",
+                "master_id": self.id,
+            }
         except Exception as e:
             logger.error(f"Error registering worker {worker_id}: {e}", exc_info=True)
             return {"status": "error", "message": f"Error registering worker: {e}"}
@@ -1066,23 +1158,25 @@ class SniperMasterNode(MasterNode):
             if worker_id in self.workers:
                 worker_info = self.workers[worker_id]
                 worker_info.status = NodeStatus.ACTIVE
-                
+
                 # Update heartbeat timestamp from payload
                 heartbeat_ts_str = message.payload.get("timestamp")
                 if heartbeat_ts_str:
                     try:
                         worker_info.heartbeat = datetime.fromisoformat(heartbeat_ts_str)
                     except ValueError:
-                        logger.warning(f"Invalid timestamp format from worker {worker_id}: {heartbeat_ts_str}")
+                        logger.warning(
+                            f"Invalid timestamp format from worker {worker_id}: {heartbeat_ts_str}"
+                        )
                         worker_info.heartbeat = datetime.now(timezone.utc)
                 else:
                     worker_info.heartbeat = datetime.now(timezone.utc)
-                
+
                 # Update worker statistics
                 worker_info.stats["load"] = current_load
                 worker_info.stats["task_count"] = current_tasks
                 worker_info.stats["memory_usage"] = memory_usage
-                
+
                 # Update metrics if using the metrics system
                 if worker_id in self.worker_metrics:
                     metrics = self.worker_metrics[worker_id]
@@ -1104,7 +1198,9 @@ class SniperMasterNode(MasterNode):
         worker_id = message.sender_id
 
         if not task_id or not new_status_val:
-            logger.error(f"Task status update from {worker_id} missing task_id or status.")
+            logger.error(
+                f"Task status update from {worker_id} missing task_id or status."
+            )
             return {"status": "error", "message": "Missing task_id or status"}
 
         # Find the task in the main tasks dictionary first
@@ -1113,17 +1209,26 @@ class SniperMasterNode(MasterNode):
         if not task:
             # Check completed tasks as well, although status updates for completed are less common
             if task_id in self.completed_tasks:
-                logger.warning(f"Received status update for completed task {task_id} from {worker_id}.")
-                task = self.completed_tasks[task_id] # Update status on completed task if needed
+                logger.warning(
+                    f"Received status update for completed task {task_id} from {worker_id}."
+                )
+                task = self.completed_tasks[
+                    task_id
+                ]  # Update status on completed task if needed
             else:
-                logger.warning(f"Received status update for unknown task {task_id} from {worker_id}.")
+                logger.warning(
+                    f"Received status update for unknown task {task_id} from {worker_id}."
+                )
                 return {"status": "ignored", "message": f"Task {task_id} not found"}
 
         # Validate the worker reporting the status
         # Task should ideally be assigned to the reporting worker
         if task.assigned_node != worker_id:
             logger.warning(f"Task {task_id} is not assigned to worker {worker_id}.")
-            return {"status": "ignored", "message": f"Task {task_id} is not assigned to worker {worker_id}."}
+            return {
+                "status": "ignored",
+                "message": f"Task {task_id} is not assigned to worker {worker_id}.",
+            }
 
         # Update the task status
         try:
@@ -1131,65 +1236,93 @@ class SniperMasterNode(MasterNode):
             task.status = new_status_enum
             task.updated_at = datetime.now(timezone.utc)
         except ValueError:
-             logger.error(f"Received invalid status '{new_status_val}' in task status update for {task_id} from {worker_id}. Ignoring.")
-             return {"status": "error", "message": f"Invalid status value: {new_status_val}"}
+            logger.error(
+                f"Received invalid status '{new_status_val}' in task status update for {task_id} from {worker_id}. Ignoring."
+            )
+            return {
+                "status": "error",
+                "message": f"Invalid status value: {new_status_val}",
+            }
 
         # Handle task state transitions if necessary
-        if new_status_enum == TaskStatus.RUNNING and task.status in [TaskStatus.PENDING, TaskStatus.ASSIGNED]: # Allow transition from ASSIGNED too
+        if new_status_enum == TaskStatus.RUNNING and task.status in [
+            TaskStatus.PENDING,
+            TaskStatus.ASSIGNED,
+        ]:  # Allow transition from ASSIGNED too
             if not task.started_at:
-                task.started_at = task.updated_at # Set started_at on transition to RUNNING
-        elif new_status_enum in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELED]:
+                task.started_at = (
+                    task.updated_at
+                )  # Set started_at on transition to RUNNING
+        elif new_status_enum in [
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+            TaskStatus.CANCELED,
+        ]:
             # If results are included in the payload, store them
-            if 'result' in payload:
-                task.result = payload['result']
-                
+            if "result" in payload:
+                task.result = payload["result"]
+
             # If task transitions to a terminal state, move it to completed_tasks
             if task_id in self.tasks:
                 # This removes from self.tasks and adds to self.completed_tasks
                 self._handle_completed_task(task)
-                
+
             logger.info(f"Task {task_id} completed successfully on {worker_id}.")
 
-        return {"status": "success", "message": f"Task {task_id} status updated to {new_status_enum.value}"}
+        return {
+            "status": "success",
+            "message": f"Task {task_id} status updated to {new_status_enum.value}",
+        }
 
     def _handle_task_result(self, message: ProtocolMessage) -> Dict[str, Any]:
         """Handles completed task results from workers."""
         payload = message.payload
         task_id = payload.get("task_id")
         status_val = payload.get("status")
-        results = payload.get("results") # Can be None if failed
+        results = payload.get("results")  # Can be None if failed
         worker_id = message.sender_id
 
-
         if not task_id or not status_val:
-             logger.error(f"Task result message from {worker_id} missing task_id or status.")
-             return {"status": "error", "message": "Missing task_id or status"}
+            logger.error(
+                f"Task result message from {worker_id} missing task_id or status."
+            )
+            return {"status": "error", "message": "Missing task_id or status"}
 
-        task = self.tasks.pop(task_id, None) # Try removing from active tasks (self.tasks) first
+        task = self.tasks.pop(
+            task_id, None
+        )  # Try removing from active tasks (self.tasks) first
         if not task:
             # Check if it was already completed (e.g., due to timeout or prior status update)
             if task_id in self.completed_tasks:
-                 logger.warning(f"Received result for already completed task {task_id} from {worker_id}. Updating result.")
-                 task = self.completed_tasks[task_id]
+                logger.warning(
+                    f"Received result for already completed task {task_id} from {worker_id}. Updating result."
+                )
+                task = self.completed_tasks[task_id]
             else:
-                 logger.warning(f"Received result for unknown task {task_id} from {worker_id}. Ignoring.")
-                 return {"status": "ignored", "message": f"Task {task_id} not found"}
-
+                logger.warning(
+                    f"Received result for unknown task {task_id} from {worker_id}. Ignoring."
+                )
+                return {"status": "ignored", "message": f"Task {task_id} not found"}
 
         try:
             status = TaskStatus(status_val)
             if status not in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
-                logger.warning(f"Received task result for task {task_id} from {worker_id} with unexpected status {status.value}. Treating as FAILED.")
-                status = TaskStatus.FAILED # Default to FAILED if status isn't terminal
+                logger.warning(
+                    f"Received task result for task {task_id} from {worker_id} with unexpected status {status.value}. Treating as FAILED."
+                )
+                status = TaskStatus.FAILED  # Default to FAILED if status isn't terminal
         except ValueError:
-            logger.error(f"Received invalid status '{status_val}' in task result for {task_id} from {worker_id}. Treating as FAILED.")
+            logger.error(
+                f"Received invalid status '{status_val}' in task result for {task_id} from {worker_id}. Treating as FAILED."
+            )
             status = TaskStatus.FAILED
 
-
-        logger.info(f"Received result for task {task_id} from worker {worker_id} with status {status.value}.")
+        logger.info(
+            f"Received result for task {task_id} from worker {worker_id} with status {status.value}."
+        )
         task.status = status
         task.completed_at = datetime.now(timezone.utc)
-        task.result = results # Store the results payload
+        task.result = results  # Store the results payload
         task.updated_at = task.completed_at
 
         # Ensure task is moved to completed tasks if it wasn't already (e.g., if it was found in self.tasks)
@@ -1200,18 +1333,18 @@ class SniperMasterNode(MasterNode):
         # Update worker info (remove from current_tasks)
         worker = self.workers.get(worker_id)
         if worker and task_id in worker.current_tasks:
-             try:
-                 worker.current_tasks.remove(task_id)
-             except ValueError:
-                  logger.warning(f"Attempted to remove task {task_id} from worker {worker_id}'s list upon completion, but it wasn't found.")
-
+            try:
+                worker.current_tasks.remove(task_id)
+            except ValueError:
+                logger.warning(
+                    f"Attempted to remove task {task_id} from worker {worker_id}'s list upon completion, but it wasn't found."
+                )
 
         # Aggregate results (optional, could be separate process)
         # try:
         #     self.result_aggregator.add_result(task)
         # except Exception as e:
         #     logger.error(f"Error adding result for task {task_id} to aggregator: {e}", exc_info=True)
-
 
         return {"status": "success", "message": f"Result for task {task_id} processed"}
 
@@ -1223,10 +1356,14 @@ class SniperMasterNode(MasterNode):
                 if task.assigned_node and task.assigned_node in self.worker_metrics:
                     metrics = self.worker_metrics[task.assigned_node]
                     metrics.current_tasks = max(0, metrics.current_tasks - 1)
-                    metrics.total_execution_time += (task.end_time - task.start_time).total_seconds()
+                    metrics.total_execution_time += (
+                        task.end_time - task.start_time
+                    ).total_seconds()
                     total_tasks = metrics.success_count + metrics.failure_count
                     if total_tasks > 0:
-                        metrics.avg_response_time = metrics.total_execution_time / total_tasks
+                        metrics.avg_response_time = (
+                            metrics.total_execution_time / total_tasks
+                        )
 
             # Move to completed tasks
             self.completed_tasks[task.id] = task
@@ -1234,45 +1371,49 @@ class SniperMasterNode(MasterNode):
 
             logger.info(f"Task {task.id} completed successfully on master.")
         except ValueError:
-            logger.warning(f"Attempted to remove task {task.id} from worker {task.assigned_node}'s list, but it wasn't found.")
+            logger.warning(
+                f"Attempted to remove task {task.id} from worker {task.assigned_node}'s list, but it wasn't found."
+            )
 
     def _handle_node_status(self, message: NodeStatusMessage):
         """Handle node status update from worker node."""
         node_id = message.payload.get("node_id")
         status = message.payload.get("status")
-        
+
         if node_id in self.workers:
             # Update node status
             self.workers[node_id].status = NodeStatus(status)
             self.workers[node_id].last_updated = datetime.now()
-            
+
             logger.info(f"Node {node_id} status updated to {status}")
-            
+
             return ProtocolMessage(
                 message_id=f"ns-confirm-{int(time.time())}",
                 message_type=MessageType.NODE_STATUS_CONFIRM,
-                payload={"status": "received"}
+                payload={"status": "received"},
             )
         else:
             return ProtocolMessage(
                 message_id=f"ns-error-{int(time.time())}",
                 message_type=MessageType.ERROR,
-                payload={"error": "Node not registered", "action": "register"}
+                payload={"error": "Node not registered", "action": "register"},
             )
 
     # Add methods to distribute autonomous testing tasks
-    
-    async def submit_autonomous_test(self, 
-                                     target_url: str, 
-                                     vulnerability_type: Optional[Union[str, VulnerabilityType]] = None,
-                                     request_params: Dict[str, Any] = None,
-                                     headers: Dict[str, str] = None,
-                                     cookies: Dict[str, str] = None,
-                                     payload_count: int = 5,
-                                     priority: TaskPriority = TaskPriority.MEDIUM) -> str:
+
+    async def submit_autonomous_test(
+        self,
+        target_url: str,
+        vulnerability_type: Optional[Union[str, VulnerabilityType]] = None,
+        request_params: Dict[str, Any] = None,
+        headers: Dict[str, str] = None,
+        cookies: Dict[str, str] = None,
+        payload_count: int = 5,
+        priority: TaskPriority = TaskPriority.MEDIUM,
+    ) -> str:
         """
         Submit an autonomous testing task to be distributed to worker nodes.
-        
+
         Args:
             target_url: The URL to test
             vulnerability_type: Optional specific vulnerability type to test
@@ -1281,13 +1422,13 @@ class SniperMasterNode(MasterNode):
             cookies: Optional cookies
             payload_count: Number of payloads to test
             priority: Task priority
-            
+
         Returns:
             The task ID of the submitted task
         """
         # Create a unique task ID
         task_id = f"autotest-{int(time.time())}-{random.randint(1000, 9999)}"
-        
+
         # Convert vulnerability type enum to string if needed
         vuln_type_str = None
         if vulnerability_type:
@@ -1295,7 +1436,7 @@ class SniperMasterNode(MasterNode):
                 vuln_type_str = vulnerability_type.value
             else:
                 vuln_type_str = vulnerability_type
-        
+
         # Prepare task parameters
         task_params = {
             "target_url": target_url,
@@ -1303,9 +1444,9 @@ class SniperMasterNode(MasterNode):
             "request_params": request_params or {},
             "headers": headers or {},
             "cookies": cookies or {},
-            "payload_count": payload_count
+            "payload_count": payload_count,
         }
-        
+
         # Create the task
         task = DistributedTask(
             task_id=task_id,
@@ -1314,35 +1455,37 @@ class SniperMasterNode(MasterNode):
             status=TaskStatus.PENDING,
             priority=priority,
             created_at=datetime.now(),
-            last_updated=datetime.now()
+            last_updated=datetime.now(),
         )
-        
+
         # Store the task
         self.tasks[task_id] = task
-        
+
         logger.info(f"Submitted autonomous testing task {task_id} for {target_url}")
-        
+
         # Trigger task distribution
         asyncio.create_task(self._distribute_tasks())
-        
+
         return task_id
-    
-    async def submit_comprehensive_scan(self, 
-                                        target_url: str,
-                                        request_params: Dict[str, Any] = None,
-                                        headers: Dict[str, str] = None,
-                                        cookies: Dict[str, str] = None,
-                                        priority: TaskPriority = TaskPriority.HIGH) -> str:
+
+    async def submit_comprehensive_scan(
+        self,
+        target_url: str,
+        request_params: Dict[str, Any] = None,
+        headers: Dict[str, str] = None,
+        cookies: Dict[str, str] = None,
+        priority: TaskPriority = TaskPriority.HIGH,
+    ) -> str:
         """
         Submit a comprehensive scan task that checks for multiple vulnerability types.
-        
+
         Args:
             target_url: The URL to test
             request_params: Optional parameters for the request
             headers: Optional HTTP headers
             cookies: Optional cookies
             priority: Task priority
-            
+
         Returns:
             The task ID of the submitted task
         """
@@ -1353,36 +1496,37 @@ class SniperMasterNode(MasterNode):
             request_params=request_params,
             headers=headers,
             cookies=cookies,
-            priority=priority
+            priority=priority,
         )
-    
+
     async def get_task_result(self, task_id: str) -> Optional[Dict[str, Any]]:
         """
         Get the result of a completed task.
-        
+
         Args:
             task_id: The task ID to get results for
-            
+
         Returns:
             The task result or None if not available
         """
         if task_id in self.completed_tasks:
             return self.completed_tasks[task_id].results
         return None
-    
+
     async def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
         """
         Get the status of a task.
-        
+
         Args:
             task_id: The task ID to get status for
-            
+
         Returns:
             The task status or None if task not found
         """
         if task_id in self.tasks:
             return self.tasks[task_id].status
         return None
+
 
 class MasterNodeServer:
     """Command-line wrapper for the Sniper Master Node."""
@@ -1442,14 +1586,18 @@ class MasterNodeServer:
             "distribution_strategy", "smart"
         )
         self.worker_timeout = worker_timeout or config.get("worker_timeout", 60)
-        
+
         # Auto-scaling configuration
         self.auto_scaling = auto_scaling or config.get("auto_scaling", False)
         self.min_nodes = min_nodes or config.get("min_nodes", 1)
         self.max_nodes = max_nodes or config.get("max_nodes", 10)
-        self.scaling_policy = scaling_policy or config.get("scaling_policy", "queue_depth")
-        self.scaling_provider = scaling_provider or config.get("scaling_provider", "docker")
-        
+        self.scaling_policy = scaling_policy or config.get(
+            "scaling_policy", "queue_depth"
+        )
+        self.scaling_provider = scaling_provider or config.get(
+            "scaling_provider", "docker"
+        )
+
         # Load provider configuration if specified
         self.provider_config = None
         if provider_config_path:
@@ -1457,7 +1605,9 @@ class MasterNodeServer:
                 with open(provider_config_path, "r") as f:
                     self.provider_config = json.load(f)
             except Exception as e:
-                logger.error(f"Error loading provider config from {provider_config_path}: {e}")
+                logger.error(
+                    f"Error loading provider config from {provider_config_path}: {e}"
+                )
                 self.provider_config = {}
         else:
             self.provider_config = config.get("provider_config", {})
@@ -1472,23 +1622,29 @@ class MasterNodeServer:
                 worker_timeout=self.worker_timeout,
                 result_callback=result_callback,
             )
-            
+
             # Initialize auto-scaling if enabled
             if self.auto_scaling:
-                logger.info(f"Initializing auto-scaling with {self.scaling_provider} provider")
+                logger.info(
+                    f"Initializing auto-scaling with {self.scaling_provider} provider"
+                )
                 success = self.master_node.initialize_auto_scaling(
                     min_nodes=self.min_nodes,
                     max_nodes=self.max_nodes,
                     scaling_policy=self.scaling_policy,
                     provider=self.scaling_provider,
-                    provider_config=self.provider_config
+                    provider_config=self.provider_config,
                 )
-                
+
                 if not success:
-                    logger.warning("Failed to initialize auto-scaling, continuing without it")
+                    logger.warning(
+                        "Failed to initialize auto-scaling, continuing without it"
+                    )
                 else:
-                    logger.info(f"Auto-scaling initialized with {self.min_nodes}-{self.max_nodes} nodes")
-                
+                    logger.info(
+                        f"Auto-scaling initialized with {self.min_nodes}-{self.max_nodes} nodes"
+                    )
+
         except Exception as e:
             logger.error(f"Error creating master node: {e}")
             raise

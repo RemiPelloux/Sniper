@@ -9,16 +9,24 @@ These tests validate:
 5. Server operations and error handling
 """
 
-import pytest
-import time
 import threading
-from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timezone, timedelta
+import time
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, call, patch
 
-from src.distributed.base import NodeStatus, DistributedTask, TaskStatus, TaskPriority, NodeInfo, NodeRole
-from src.distributed.master import SniperMasterNode, MasterNodeServer
-from src.distributed.protocol import ProtocolMessage, MessageType
+import pytest
+
+from src.distributed.base import (
+    DistributedTask,
+    NodeInfo,
+    NodeRole,
+    NodeStatus,
+    TaskPriority,
+    TaskStatus,
+)
 from src.distributed.distribution import DistributionStrategy
+from src.distributed.master import MasterNodeServer, SniperMasterNode
+from src.distributed.protocol import MessageType, ProtocolMessage
 
 
 @pytest.fixture
@@ -37,20 +45,20 @@ def sample_tasks():
             task_type="port_scan",
             target="192.168.1.1",
             parameters={"ports": "1-1000", "scan_type": "SYN"},
-            priority=TaskPriority.HIGH
+            priority=TaskPriority.HIGH,
         ),
         DistributedTask(
             task_type="web_scan",
             target="https://example.com",
             parameters={"depth": 2, "check_xss": True},
-            priority=TaskPriority.MEDIUM
+            priority=TaskPriority.MEDIUM,
         ),
         DistributedTask(
             task_type="vulnerability_scan",
             target="192.168.1.10",
             parameters={"scan_type": "full"},
-            priority=TaskPriority.LOW
-        )
+            priority=TaskPriority.LOW,
+        ),
     ]
 
 
@@ -81,7 +89,7 @@ def sample_workers():
             address="192.168.1.102",
             port=8000,
             capabilities=["port_scan", "web_scan", "vulnerability_scan", "basic"],
-        )
+        ),
     }
     # Set status and stats after initialization if needed for tests
     workers["worker-1"].status = NodeStatus.CONNECTED
@@ -107,7 +115,8 @@ def active_workers(sample_workers):
     sample_workers["worker-2"].status = NodeStatus.ACTIVE
     # worker-3 remains BUSY
     return {
-        wid: w for wid, w in sample_workers.items()
+        wid: w
+        for wid, w in sample_workers.items()
         if w.status in (NodeStatus.IDLE, NodeStatus.ACTIVE)
     }
 
@@ -115,11 +124,11 @@ def active_workers(sample_workers):
 @pytest.fixture
 def master_node(mock_protocol):
     """Create a master node with a mock protocol for testing."""
-    with patch('src.distributed.protocol.create_protocol', return_value=mock_protocol):
+    with patch("src.distributed.protocol.create_protocol", return_value=mock_protocol):
         master = SniperMasterNode(
             host="localhost",
             port=5000,
-            distribution_strategy=DistributionStrategy.ROUND_ROBIN
+            distribution_strategy=DistributionStrategy.ROUND_ROBIN,
         )
         master.protocol = mock_protocol
         yield master
@@ -127,7 +136,7 @@ def master_node(mock_protocol):
 
 class TestMasterNode:
     """Tests for the SniperMasterNode class."""
-    
+
     def test_init(self, master_node):
         """Test master node initialization."""
         assert master_node.host == "localhost"
@@ -136,32 +145,36 @@ class TestMasterNode:
         assert master_node.workers == {}
         assert master_node.tasks == {}
         assert master_node.running is False
-    
+
     def test_add_task(self, master_node, sample_tasks):
         """Test adding tasks to the master node."""
         task = sample_tasks[0]
         result = master_node.add_task(task)
-        
+
         assert result == task.id
         assert task.id in master_node.tasks
         assert master_node.tasks[task.id] == task
         assert task.status == TaskStatus.PENDING
-    
-    @pytest.mark.skip(reason="Async function cannot be tested with synchronous code in this test")
+
+    @pytest.mark.skip(
+        reason="Async function cannot be tested with synchronous code in this test"
+    )
     def test_get_task_status(self, master_node, sample_tasks):
         """Test getting task status."""
         task = sample_tasks[0]
         master_node.add_task(task)
-        
+
         # Test getting status for existing task
         status = master_node.get_task_status(task.id)
         assert status == TaskStatus.PENDING
-        
+
         # Test getting status for non-existent task
         status_nonexistent = master_node.get_task_status("nonexistent-task")
         assert status_nonexistent is None
-    
-    @pytest.mark.skip(reason="Async function cannot be tested with synchronous code in this test")
+
+    @pytest.mark.skip(
+        reason="Async function cannot be tested with synchronous code in this test"
+    )
     def test_get_task_result(self, master_node, sample_tasks):
         """Test getting task results."""
         task = sample_tasks[0]
@@ -172,7 +185,7 @@ class TestMasterNode:
         # Ensure the task is moved to completed_tasks by the system (e.g., via message handler)
         # For testing get_task_status directly on a completed task, we can manually move it:
         if task_id in master_node.tasks:
-             master_node.completed_tasks[task_id] = master_node.tasks.pop(task_id)
+            master_node.completed_tasks[task_id] = master_node.tasks.pop(task_id)
 
         # Test getting results for completed task using get_task_status
         results = master_node.get_task_status(task_id)
@@ -187,24 +200,31 @@ class TestMasterNode:
         # Test getting status for non-existent task
         status_nonexistent = master_node.get_task_status("nonexistent-task")
         assert status_nonexistent is None
-    
+
     def test_distribute_tasks(self, master_node, sample_tasks, active_workers):
         """Test task distribution to workers."""
         # Add tasks and workers
         for task in sample_tasks:
             master_node.add_task(task)
 
-        master_node.workers = active_workers # Use only active workers
+        master_node.workers = active_workers  # Use only active workers
 
         # Mock the distribution algorithm
-        with patch('src.distributed.distribution.create_distribution_algorithm') as mock_create_algo:
+        with patch(
+            "src.distributed.distribution.create_distribution_algorithm"
+        ) as mock_create_algo:
             mock_algo = MagicMock()
             # Adjust expected distribution based on active workers
             mock_algo.distribute.return_value = {
                 "worker-1": [sample_tasks[0].id],  # Use task.id instead of task object
-                "worker-2": [sample_tasks[1].id, sample_tasks[2].id]  # Use task.id instead of task object
+                "worker-2": [
+                    sample_tasks[1].id,
+                    sample_tasks[2].id,
+                ],  # Use task.id instead of task object
             }
-            master_node.distribution_algorithm = mock_algo # Set the mocked algo directly
+            master_node.distribution_algorithm = (
+                mock_algo  # Set the mocked algo directly
+            )
             # mock_create_algo.return_value = mock_algo # No need to mock creation if we set it
 
             # Distribute tasks
@@ -219,7 +239,7 @@ class TestMasterNode:
             assert sample_tasks[2].assigned_node == "worker-2"
             # Check protocol send was called (needs mock_protocol fixture)
             # assert master_node.protocol.send_message.call_count == 3
-    
+
     def test_handle_worker_register(self, master_node):
         """Test handling worker registration messages."""
         # Create a registration message
@@ -241,8 +261,8 @@ class TestMasterNode:
                 "status": "idle",
                 "heartbeat": datetime.now(timezone.utc).isoformat(),
                 "stats": {},
-                "current_tasks": []
-            }
+                "current_tasks": [],
+            },
         )
 
         response = master_node._handle_register(message.payload)
@@ -250,24 +270,24 @@ class TestMasterNode:
         # Verify worker was added
         assert worker_id_test in master_node.workers
         worker_info = master_node.workers[worker_id_test]
-        assert worker_info.id == worker_id_test # Check ID
-        assert worker_info.address == worker_addr # Check address string
-        assert worker_info.port == worker_port # Check port
-        assert worker_info.capabilities == worker_caps # Check capabilities
-        assert worker_info.status == NodeStatus.IDLE # Check status from payload
+        assert worker_info.id == worker_id_test  # Check ID
+        assert worker_info.address == worker_addr  # Check address string
+        assert worker_info.port == worker_port  # Check port
+        assert worker_info.capabilities == worker_caps  # Check capabilities
+        assert worker_info.status == NodeStatus.IDLE  # Check status from payload
         assert worker_info.heartbeat is not None
 
         # Verify successful response structure (assuming _handle_registration returns it)
         assert response["status"] == "success"
         assert response["master_id"] == master_node.id
-    
+
     def test_handle_heartbeat(self, master_node, sample_workers):
         """Test handling worker heartbeat messages."""
         # Add a worker
         worker_id_test = "worker-heartbeat-test"
         master_node.workers = {worker_id_test: sample_workers["worker-1"]}
         old_heartbeat = master_node.workers[worker_id_test].heartbeat
-        
+
         # Create a heartbeat message
         new_load = 0.3
         new_task_count = 2
@@ -284,35 +304,45 @@ class TestMasterNode:
                 "timestamp": heartbeat_time.isoformat(),
                 "load": new_load,
                 "task_count": new_task_count,
-                "memory_usage": new_mem_usage
+                "memory_usage": new_mem_usage,
                 # Add other stats if expected by the handler
-            }
+            },
         )
-        
+
         # Wait briefly to ensure heartbeat time will change
         time.sleep(0.01)
-        
+
         # Handle the message by calling the correct internal handler
-        master_node._handle_heartbeat(message) # Call internal handler
-        
+        master_node._handle_heartbeat(message)  # Call internal handler
+
         # Verify heartbeat was updated
         worker_info = master_node.workers[worker_id_test]
         # Use pytest.approx for timestamp comparison
-        assert worker_info.heartbeat == pytest.approx(heartbeat_time, abs=timedelta(seconds=1))
+        assert worker_info.heartbeat == pytest.approx(
+            heartbeat_time, abs=timedelta(seconds=1)
+        )
 
         # Verify stats were updated based on the message payload
         assert worker_info.stats["load"] == new_load
         assert worker_info.status == new_status
         assert worker_info.stats["task_count"] == new_task_count
         assert worker_info.stats["memory_usage"] == new_mem_usage
-    
+
     def test_handle_task_status(self, master_node, sample_tasks):
         """Test handling task status updates."""
         # Add a task and worker
         task = sample_tasks[0]
         worker_id = "test-worker-status"
         master_node.add_task(task)
-        master_node.workers = {worker_id: NodeInfo(node_id=worker_id, role=NodeRole.WORKER, hostname="h", address="a", port=1)}
+        master_node.workers = {
+            worker_id: NodeInfo(
+                node_id=worker_id,
+                role=NodeRole.WORKER,
+                hostname="h",
+                address="a",
+                port=1,
+            )
+        }
         task.assigned_node = worker_id
         task.status = TaskStatus.ASSIGNED
 
@@ -321,10 +351,7 @@ class TestMasterNode:
             message_type=MessageType.TASK_STATUS,
             sender_id=worker_id,
             receiver_id="master",
-            payload={
-                "task_id": task.id,
-                "status": TaskStatus.RUNNING.value
-            }
+            payload={"task_id": task.id, "status": TaskStatus.RUNNING.value},
         )
 
         response = master_node._handle_task_status(message)
@@ -340,8 +367,8 @@ class TestMasterNode:
             payload={
                 "task_id": task.id,
                 "status": TaskStatus.COMPLETED.value,
-                "result": {"output": "done"}
-            }
+                "result": {"output": "done"},
+            },
         )
         response_completed = master_node._handle_task_status(message_completed)
         assert response_completed["status"] == "success"
@@ -349,7 +376,7 @@ class TestMasterNode:
         assert task.id in master_node.completed_tasks
         assert master_node.completed_tasks[task.id].status == TaskStatus.COMPLETED
         assert master_node.completed_tasks[task.id].result == {"output": "done"}
-    
+
     def test_handle_task_result(self, master_node, sample_tasks):
         """Test handling task results."""
         # Add a task and worker
@@ -357,35 +384,39 @@ class TestMasterNode:
         worker_id = "worker-result-test"
         master_node.add_task(task)
         # Ensure worker is registered before sending result
-        master_node.workers = {worker_id: NodeInfo(node_id=worker_id, role=NodeRole.WORKER, hostname="h", address="a", port=1)}
+        master_node.workers = {
+            worker_id: NodeInfo(
+                node_id=worker_id,
+                role=NodeRole.WORKER,
+                hostname="h",
+                address="a",
+                port=1,
+            )
+        }
         task.assigned_node = worker_id
         task.status = TaskStatus.RUNNING
 
         # Create a task result message
         results_payload = {
             "open_ports": [22, 80, 443],
-            "service_detection": {
-                "22": "ssh",
-                "80": "http",
-                "443": "https"
-            }
+            "service_detection": {"22": "ssh", "80": "http", "443": "https"},
         }
-        
+
         message = ProtocolMessage(
             message_type=MessageType.TASK_RESULT,
             sender_id=worker_id,
             receiver_id="master",
             payload={
                 "task_id": task.id,
-                "status": TaskStatus.COMPLETED.value, # Send COMPLETED status
-                "results": results_payload # Send actual results
+                "status": TaskStatus.COMPLETED.value,  # Send COMPLETED status
+                "results": results_payload,  # Send actual results
                 # 'timestamp' is not expected by _handle_task_result based on its current logic
-            }
+            },
         )
-        
+
         # Handle the message by calling the correct internal handler
         response = master_node._handle_task_result(message)
-        
+
         # Verify results were stored and task moved
         assert task.id not in master_node.tasks
         assert task.id in master_node.completed_tasks
@@ -398,7 +429,7 @@ class TestMasterNode:
         # Verify response
         assert response["status"] == "success"
         assert response["message"] == f"Result for task {task.id} processed"
-    
+
     def test_clean_stale_workers(self, master_node, sample_workers):
         """Test cleaning up stale workers."""
         # Add workers with different heartbeat times
@@ -427,7 +458,7 @@ class TestMasterNode:
                 address="192.168.1.3",
                 port=8000,
                 capabilities=["basic"],
-            )
+            ),
         }
         master_node.workers["current"].status = NodeStatus.CONNECTED
         master_node.workers["current"].heartbeat = now
@@ -436,7 +467,7 @@ class TestMasterNode:
         master_node.workers["very-stale"].status = NodeStatus.CONNECTED
         master_node.workers["very-stale"].heartbeat = now - timedelta(hours=2)
 
-        master_node.worker_timeout = 600 # 10 minutes timeout for test
+        master_node.worker_timeout = 600  # 10 minutes timeout for test
 
         # Clean stale workers - call the correct method
         master_node._cleanup_workers()
@@ -445,7 +476,7 @@ class TestMasterNode:
         assert "current" in master_node.workers
         assert "stale" not in master_node.workers
         assert "very-stale" not in master_node.workers
-    
+
     def test_clean_completed_tasks(self, master_node, sample_tasks):
         """Test that completed tasks are not removed by _cleanup_stale_tasks."""
         now = datetime.now(timezone.utc)
@@ -463,8 +494,10 @@ class TestMasterNode:
         id_recent = master_node.add_task(task_completed_recent)
         id_old = master_node.add_task(task_completed_old)
         # Manually move them to completed_tasks for this test case
-        if id_recent in master_node.tasks: master_node.completed_tasks[id_recent] = master_node.tasks.pop(id_recent)
-        if id_old in master_node.tasks: master_node.completed_tasks[id_old] = master_node.tasks.pop(id_old)
+        if id_recent in master_node.tasks:
+            master_node.completed_tasks[id_recent] = master_node.tasks.pop(id_recent)
+        if id_old in master_node.tasks:
+            master_node.completed_tasks[id_old] = master_node.tasks.pop(id_old)
 
         # Call the cleanup logic for stale tasks - call the correct method
         master_node._cleanup_tasks()
@@ -472,29 +505,37 @@ class TestMasterNode:
         # Assert that completed tasks remain in completed_tasks
         assert id_recent in master_node.completed_tasks
         assert id_old in master_node.completed_tasks
-    
+
     def test_start_stop(self, master_node):
         """Test starting and stopping the master node."""
         # Test start
-        with patch.object(master_node.protocol, 'start_server') as mock_start_server, \
-             patch.object(master_node.executor, 'submit') as mock_submit:
+        with patch.object(
+            master_node.protocol, "start_server"
+        ) as mock_start_server, patch.object(
+            master_node.executor, "submit"
+        ) as mock_submit:
             started = master_node.start()
             assert started is True
             assert master_node.running is True
             assert master_node.status == NodeStatus.ACTIVE
-            mock_submit.assert_called_once() # Check if cleanup routine was submitted
-            mock_start_server.assert_called_once_with(master_node.host, master_node.port, master_node._handle_message)
+            mock_submit.assert_called_once()  # Check if cleanup routine was submitted
+            mock_start_server.assert_called_once_with(
+                master_node.host, master_node.port, master_node._handle_message
+            )
 
         # Test stop
-        with patch.object(master_node.protocol, 'stop_server') as mock_stop_server, \
-             patch.object(master_node.executor, 'shutdown') as mock_shutdown:
+        with patch.object(
+            master_node.protocol, "stop_server"
+        ) as mock_stop_server, patch.object(
+            master_node.executor, "shutdown"
+        ) as mock_shutdown:
             stopped = master_node.stop()
             assert stopped is True
             assert master_node.running is False
             assert master_node.status == NodeStatus.OFFLINE
             mock_stop_server.assert_called_once()
             mock_shutdown.assert_called_once_with(wait=True)
-    
+
     def test_handle_unknown_message(self, master_node):
         """Test handling unknown message types."""
         # Create a message dict with an invalid type string
@@ -502,64 +543,66 @@ class TestMasterNode:
             "message_type": "INVALID_MESSAGE_TYPE",
             "sender_id": "worker-1",
             "receiver_id": "master",
-            "payload": {"some": "data"}
+            "payload": {"some": "data"},
         }
 
         # Test the handler directly - call the correct method
         # Assuming a generic handler might exist or test needs rework
         # For now, let's assume the handler routes based on type
-        master_node._handle_message(ProtocolMessage(**invalid_message_dict)) # Use generic handler
+        master_node._handle_message(
+            ProtocolMessage(**invalid_message_dict)
+        )  # Use generic handler
         # Check logs for warning or assert specific error handling if applicable
 
 
 class TestMasterNodeServer:
     """Tests for the MasterNodeServer wrapper class."""
-    
+
     def test_init(self):
         """Test server initialization with default and custom parameters."""
         # Test with default parameters
-        with patch('src.distributed.master.SniperMasterNode') as mock_master:
+        with patch("src.distributed.master.SniperMasterNode") as mock_master:
             mock_master_instance = MagicMock()
             mock_master.return_value = mock_master_instance
-            
+
             server = MasterNodeServer()
-            
+
             assert server.host == "0.0.0.0"
             assert server.port == 5000
             assert server.protocol_type == "rest"
             assert server.distribution_strategy == "smart"
             assert server.worker_timeout == 60
             mock_master.assert_called_once()
-        
+
         # Test with custom parameters
-        with patch('src.distributed.master.SniperMasterNode') as mock_master:
+        with patch("src.distributed.master.SniperMasterNode") as mock_master:
             mock_master_instance = MagicMock()
             mock_master.return_value = mock_master_instance
-            
+
             server = MasterNodeServer(
                 host="127.0.0.1",
                 port=8080,
                 protocol_type="websocket",
-                distribution_strategy="load_balanced"
+                distribution_strategy="load_balanced",
             )
-            
+
             assert server.host == "127.0.0.1"
             assert server.port == 8080
             assert server.protocol_type == "websocket"
             assert server.distribution_strategy == "load_balanced"
-    
+
     def test_start_stop(self):
         """Test starting and stopping the server."""
-        with patch('src.distributed.master.SniperMasterNode') as mock_master:
+        with patch("src.distributed.master.SniperMasterNode") as mock_master:
             mock_master_instance = MagicMock()
             mock_master.return_value = mock_master_instance
-            
+
             server = MasterNodeServer()
-            
+
             # Test start
             server.start()
             mock_master_instance.start.assert_called_once()
-            
+
             # Test stop
             server.stop()
-            mock_master_instance.stop.assert_called_once() 
+            mock_master_instance.stop.assert_called_once()

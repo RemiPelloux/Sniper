@@ -1,5 +1,9 @@
+import atexit  # Import atexit for cleanup
 import logging
-import atexit # Import atexit for cleanup
+
+# Import Path for absolute path calculation
+from pathlib import Path
+from typing import Any  # Import Any
 
 import typer
 
@@ -7,9 +11,11 @@ import typer
 from src import __version__
 
 # Import subcommand apps
-from src.cli import ml, report, scan, tools, custom_tools
+from src.cli import custom_tools, ml, report, scan, tools
 from src.core.logging import setup_logging
-from app.core.plugin_manager import PluginManager # Import PluginManager
+
+# Update PluginManager import
+from src.sniper.core.plugin_manager import PluginManager
 
 # from importlib import metadata # Removed unused import
 
@@ -21,16 +27,25 @@ from app.core.plugin_manager import PluginManager # Import PluginManager
 log = logging.getLogger(__name__)
 
 # --- Plugin Manager Setup ---
-# Instantiate the Plugin Manager
-# TODO: Consider making plugin_dirs configurable
-plugin_manager = PluginManager()
+# Calculate absolute path to the standard plugins directory
+# Assuming main.py is in src/cli/main.py
+project_root = Path(__file__).resolve().parent.parent.parent
+# Update path to point to src/sniper/plugins
+plugins_dir_abs = project_root / "src" / "sniper" / "plugins"
+
+# Instantiate the Plugin Manager with the absolute path
+log.info(f"Initializing PluginManager with directory: {plugins_dir_abs}")
+plugin_manager = PluginManager(plugin_dirs=[str(plugins_dir_abs)])
+
 
 # Register a cleanup function to unload plugins on exit
 @atexit.register
-def cleanup_plugins():
+def cleanup_plugins() -> None:
     log.info("Unloading plugins before exit...")
     plugin_manager.unload_all_plugins()
     log.info("Plugin cleanup complete.")
+
+
 # --- End Plugin Manager Setup ---
 
 
@@ -57,18 +72,18 @@ app.add_typer(scan.app)
 app.add_typer(report.app)
 app.add_typer(tools.tools_app)
 app.add_typer(ml.ml)
-app.add_typer(custom_tools.custom_tools, name="custom-tools")
+app.add_typer(custom_tools.custom_tools_app, name="custom-tools")
 
 # --- Load Plugins and Register Commands ---
 try:
     log.info("Loading and registering plugins...")
     plugin_manager.load_all_plugins()
-    plugin_manager.register_all_cli_commands(app) # Pass the main app instance
+    plugin_manager.register_all_cli_commands(app)  # Pass the main app instance
     log.info("Plugin loading and registration complete.")
 except Exception as e:
-     log.error(f"Failed during plugin initialization: {e}", exc_info=True)
-     # Decide if the app should fail to start if plugins fail
-     # For now, we log the error and continue
+    log.error(f"Failed during plugin initialization: {e}", exc_info=True)
+    # Decide if the app should fail to start if plugins fail
+    # For now, we log the error and continue
 # --- End Plugin Loading ---
 
 

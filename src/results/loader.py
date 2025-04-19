@@ -203,7 +203,7 @@ def _create_subdomain_finding(data: Dict[str, Any]) -> SubdomainFinding:
     """Create a SubdomainFinding from dictionary data."""
     # Extract subdomain-specific fields
     subdomain = data.get("subdomain", data.get("target", ""))
-    
+
     # Get resolved_ip for description only (not a model field)
     resolved_ip = data.get("resolved_ip")
 
@@ -226,13 +226,17 @@ def _create_subdomain_finding(data: Dict[str, Any]) -> SubdomainFinding:
 def _create_technology_finding(data: Dict[str, Any]) -> TechnologyFinding:
     """Create a TechnologyFinding from dictionary data."""
     # Extract technology-specific fields
-    technology_name = data.get("technology_name", data.get("technology", data.get("name", "")))
+    technology_name = data.get(
+        "technology_name", data.get("technology", data.get("name", ""))
+    )
     version = data.get("version")
     categories = data.get("categories", [])
 
     # Create base fields if not present
     if "title" not in data:
-        data["title"] = f"Detected {technology_name}" + (f" {version}" if version else "")
+        data["title"] = f"Detected {technology_name}" + (
+            f" {version}" if version else ""
+        )
 
     if "description" not in data:
         data["description"] = (
@@ -246,7 +250,12 @@ def _create_technology_finding(data: Dict[str, Any]) -> TechnologyFinding:
         technology_name=technology_name,
         version=version,
         categories=categories,
-        **{k: v for k, v in data.items() if k not in ["technology_name", "technology", "name", "version", "categories"]},
+        **{
+            k: v
+            for k, v in data.items()
+            if k
+            not in ["technology_name", "technology", "name", "version", "categories"]
+        },
     )
 
 

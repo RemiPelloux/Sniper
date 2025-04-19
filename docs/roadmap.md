@@ -39,7 +39,9 @@ This roadmap outlines the planned development trajectory for the Sniper Security
     *   [x] Pre-commit hooks (Black, isort, flake8, mypy)
     *   [x] Initial integration tests for tools
     *   [x] Test coverage for new Plugin system and Sandbox plugin
-    *   [ ] Increase overall test coverage (Target > 85%)
+    *   [/] Increase overall test coverage (Target > 85%) - Currently ~86.7%, but CLI tests (`test_tools.py`, `test_main.py`) are blocked/skipped due to Typer incompatibility.
+    *   [!] Investigate and resolve Typer testing issues.
+    *   [ ] Refactor `src/cli/main.py` to improve testability (related to skipped tests).
 *   **Documentation:**
     *   [x] Initial README
     *   [x] Core Concepts Documentation

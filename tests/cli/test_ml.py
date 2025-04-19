@@ -6,7 +6,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -48,7 +48,7 @@ def sample_findings_file():
         },
     ]
 
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode='w+') as temp:
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w+") as temp:
         json.dump(findings, temp)
         temp_path = temp.name
 
@@ -139,7 +139,9 @@ class TestMlCommands:
             mock_predict.assert_called_once()
 
             # Assert that sample_findings_file is in the call arguments
-            assert str(sample_findings_file) in [str(args[0]) for args, _ in mock_loader.call_args_list]
+            assert str(sample_findings_file) in [
+                str(args[0]) for args, _ in mock_loader.call_args_list
+            ]
 
             # Verify that only findings above threshold are included (first two)
             assert "Finding 1" in result.stdout
@@ -194,7 +196,9 @@ class TestMlCommands:
             mock_risk.assert_called_once()
 
             # Assert that sample_findings_file is in the call arguments
-            assert str(sample_findings_file) in [str(args[0]) for args, _ in mock_loader.call_args_list]
+            assert str(sample_findings_file) in [
+                str(args[0]) for args, _ in mock_loader.call_args_list
+            ]
 
             # Verify all findings are included in the risk assessment
             assert "Finding 1" in result.stdout
@@ -225,7 +229,9 @@ class TestMlCommands:
             },
         ]
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode='w+') as temp:
+        with tempfile.NamedTemporaryFile(
+            suffix=".json", delete=False, mode="w+"
+        ) as temp:
             json.dump(training_data, temp)
             training_file = temp.name
 
@@ -240,7 +246,9 @@ class TestMlCommands:
                 mock_predictor_class.return_value = mock_predictor
 
                 # Mock pandas and train_test_split to avoid loading real data
-                with patch("src.cli.ml.pd") as mock_pd, patch("sklearn.model_selection.train_test_split") as mock_split:
+                with patch("src.cli.ml.pd") as mock_pd, patch(
+                    "sklearn.model_selection.train_test_split"
+                ) as mock_split:
                     # Create a simple DataFrame that will pass validation
                     mock_df = MagicMock()
                     mock_df.columns = ["is_vulnerability", "description", "severity"]
@@ -248,7 +256,7 @@ class TestMlCommands:
                     is_vuln_column.values = [1, 1, 0]
                     mock_df.__getitem__.return_value = is_vuln_column
                     mock_pd.read_json.return_value = mock_df
-                    
+
                     # Simple train/test split
                     mock_split.return_value = (
                         [MagicMock(), MagicMock()],  # train findings
@@ -264,11 +272,19 @@ class TestMlCommands:
                         # Run command
                         result = runner.invoke(
                             ml,
-                            ["train", training_file, "is_vulnerability", "--model-path", model_path],
+                            [
+                                "train",
+                                training_file,
+                                "is_vulnerability",
+                                "--model-path",
+                                model_path,
+                            ],
                         )
 
                         # Check exit code - simplest verification that avoids complex assertion checks
-                        assert result.exit_code == 0, f"Command failed with error: {result.output}"
+                        assert (
+                            result.exit_code == 0
+                        ), f"Command failed with error: {result.output}"
         finally:
             # Cleanup
             if os.path.exists(training_file):
@@ -312,7 +328,9 @@ class TestMlCommands:
             mock_risk.return_value = {"1": 0.85, "2": 0.65, "3": 0.25}
 
             # Create a temporary output file
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False, mode='w+') as temp:
+            with tempfile.NamedTemporaryFile(
+                suffix=".png", delete=False, mode="w+"
+            ) as temp:
                 output_file = temp.name
 
             try:
@@ -339,7 +357,9 @@ class TestMlCommands:
                 mock_plt.savefig.assert_called_once()
 
                 # Assert that sample_findings_file is in the call arguments
-                assert str(sample_findings_file) in [str(args[0]) for args, _ in mock_loader.call_args_list]
+                assert str(sample_findings_file) in [
+                    str(args[0]) for args, _ in mock_loader.call_args_list
+                ]
 
                 # Try another visualization type
                 mock_loader.reset_mock()

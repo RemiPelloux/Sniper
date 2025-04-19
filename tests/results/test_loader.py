@@ -57,9 +57,9 @@ def sample_findings_file():
     # Create a temporary file path
     fd, temp_path = tempfile.mkstemp(suffix=".json")
     os.close(fd)
-    
+
     # Write JSON data in text mode
-    with open(temp_path, 'w', encoding='utf-8') as temp:
+    with open(temp_path, "w", encoding="utf-8") as temp:
         json.dump(findings, temp)
 
     yield temp_path
@@ -123,7 +123,7 @@ class TestFindingsLoader:
             # Verify file exists and contains correct data
             assert os.path.exists(output_path)
 
-            with open(output_path, 'r', encoding='utf-8') as f:
+            with open(output_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             assert len(data) == 1
@@ -225,7 +225,7 @@ class TestFindingsLoader:
         # Single finding
         fd, single_file = tempfile.mkstemp(suffix=".json")
         os.close(fd)
-        with open(single_file, 'w', encoding='utf-8') as temp:
+        with open(single_file, "w", encoding="utf-8") as temp:
             json.dump(
                 {
                     "title": "Single Finding",
@@ -240,7 +240,7 @@ class TestFindingsLoader:
         # Object with findings array
         fd, array_file = tempfile.mkstemp(suffix=".json")
         os.close(fd)
-        with open(array_file, 'w', encoding='utf-8') as temp:
+        with open(array_file, "w", encoding="utf-8") as temp:
             json.dump(
                 {
                     "findings": [
@@ -259,7 +259,7 @@ class TestFindingsLoader:
         # Target-grouped findings
         fd, grouped_file = tempfile.mkstemp(suffix=".json")
         os.close(fd)
-        with open(grouped_file, 'w', encoding='utf-8') as temp:
+        with open(grouped_file, "w", encoding="utf-8") as temp:
             json.dump(
                 {
                     "target": "example.com",
@@ -269,7 +269,7 @@ class TestFindingsLoader:
                             "description": "Test",
                             "severity": "Low",
                             "source_tool": "test",
-                            "target": "example.com"
+                            "target": "example.com",
                         }
                     ],
                 },
@@ -279,7 +279,7 @@ class TestFindingsLoader:
         # Invalid JSON
         fd, invalid_file = tempfile.mkstemp(suffix=".json")
         os.close(fd)
-        with open(invalid_file, 'w', encoding='utf-8') as temp:
+        with open(invalid_file, "w", encoding="utf-8") as temp:
             temp.write("This is not valid JSON")
 
         try:
@@ -312,7 +312,7 @@ class TestFindingsLoader:
         # Create a temporary file with unsupported extension
         fd, unsupported_file = tempfile.mkstemp(suffix=".txt")
         os.close(fd)
-        with open(unsupported_file, 'w', encoding='utf-8') as temp:
+        with open(unsupported_file, "w", encoding="utf-8") as temp:
             temp.write('{"title": "Test"}')
 
         try:

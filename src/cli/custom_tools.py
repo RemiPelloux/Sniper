@@ -2,191 +2,309 @@
 """
 Custom Tools CLI commands for Sniper Security Tool.
 
-This module provides CLI commands for managing custom tools in the Sniper platform.
+This module provides CLI commands for managing custom tools in the Sniper platform using Typer.
 """
 
+import json
+import logging
 import os
 import sys
-import click
-import yaml
-import logging
+import textwrap
 from pathlib import Path
+from typing import List, Optional
+
+import tabulate
+import typer
+import yaml
+from colorama import Fore, Style, init
+from typing_extensions import Annotated
 
 # Add parent directory to path to allow imports from src/
-parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(parent_dir)
+parent_dir = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(parent_dir))
 
-from src.tools.manager import ToolManager, ToolCategory
+from src.cli.tools import print_error, print_info, print_success, print_warning
+from src.tools.manager import ToolCategory, ToolManager
+
+# Initialize colorama
+init(autoreset=True)
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("sniper.cli.custom_tools")
 
-@click.group()
-def custom_tools():
-    """Manage custom tools for Sniper Security Tool."""
-    pass
+# Define the Typer app
+custom_tools_app = typer.Typer(
+    name="custom-tools",
+    help="Manage custom tools for Sniper Security Tool.",
+    no_args_is_help=True,
+)
 
-@custom_tools.command('list')
-@click.option('--category', '-c', help='Filter by tool category')
-@click.option('--available', '-a', is_flag=True, help='Show only available (installed) tools')
-def list_tools(category, available):
-    """List custom tools."""
+
+@custom_tools_app.command("list")
+def list_custom_tools(
+    category: Annotated[
+        Optional[str], typer.Option("--category", "-c", help="Filter by tool category")
+    ] = None,
+    available: Annotated[
+        Optional[bool],
+        typer.Option("--available", "-a", help="Show only available (installed) tools"),
+    ] = None,
+    json_output: Annotated[
+        Optional[bool], typer.Option("--json", help="Output in JSON format")
+    ] = None,
+) -> None:
+    """List all tools, highlighting custom ones."""
     manager = ToolManager()
-    
+    all_tools = {}
+
     if available:
-        tools_dict = manager.get_available_tools(category)
+        print_warning("Filtering by available status might require ToolManager update.")
+        all_tools = manager.get_available_tools(category=category)
     else:
+        all_tools = manager.get_all_tools()
         if category:
             try:
                 category_enum = ToolCategory(category)
-                tools_dict = manager.get_tools_by_category(category_enum)
+                all_tools = manager.get_tools_by_category(category_enum)
             except ValueError:
-                click.echo(f"Invalid category: {category}")
-                click.echo(f"Valid categories: {[c.value for c in ToolCategory]}")
-                return
-        else:
-            tools_dict = manager.get_all_tools()
-    
-    # Count custom tools vs standard tools
-    custom_tools_dir = os.path.join(parent_dir, "config", "custom_tools")
-    custom_tool_files = set([os.path.splitext(f)[0] for f in os.listdir(custom_tools_dir) if f.endswith('.yaml')])
-    custom_tools_count = 0
-    
-    click.echo(f"\nTotal tools: {len(tools_dict)}")
-    click.echo("-" * 60)
-    click.echo(f"{'Name':<20} {'Category':<20} {'Custom':<10} {'Available':<10}")
-    click.echo("-" * 60)
-    
-    for name, info in tools_dict.items():
-        is_custom = name in custom_tool_files
-        if is_custom:
-            custom_tools_count += 1
-        
-        is_available = manager.check_tool_availability(name)
-        category = info.get("category", "unknown")
-        
-        click.echo(f"{name:<20} {category:<20} {'✓' if is_custom else ' ':<10} {'✓' if is_available else ' ':<10}")
-    
-    click.echo("-" * 60)
-    click.echo(f"Custom tools: {custom_tools_count}/{len(tools_dict)}")
+                print_error(f"Invalid category: {category}")
+                print_info(f"Valid categories: {[c.value for c in ToolCategory]}")
+                raise typer.Exit(code=1)
 
-@custom_tools.command('add')
-@click.argument('name')
-@click.option('--category', '-c', default="miscellaneous", help='Tool category')
-@click.option('--description', '-d', help='Tool description')
-@click.option('--binary', '-b', help='Binary name')
-@click.option('--command', help='Check command to verify installation')
-@click.option('--apt', help='APT installation command')
-@click.option('--brew', help='Homebrew installation command')
-@click.option('--pip', help='Pip installation command')
-@click.option('--website', help='Tool website URL')
-@click.option('--docs', help='Documentation URL')
-def add_tool(name, category, description, binary, command, apt, brew, pip, website, docs):
-    """Add a custom tool."""
+    custom_tools_dir = parent_dir / "config" / "custom_tools"
+    custom_tool_names = set()
+    if custom_tools_dir.is_dir():
+        custom_tool_names = {p.stem for p in custom_tools_dir.glob("*.yaml")}
+
+    installation_status = manager.get_installation_status()
+
+    output_data = []
+    for name, info in all_tools.items():
+        is_custom = name in custom_tool_names
+        is_available = installation_status.get(name, False)
+        output_data.append(
+            {
+                "name": name,
+                "category": info.get("category", "unknown"),
+                "description": info.get("description", ""),
+                "is_custom": is_custom,
+                "is_available": is_available,
+            }
+        )
+
+    custom_tools_count = sum(1 for tool in output_data if tool["is_custom"])
+
+    if json_output:
+        print(json.dumps(output_data, indent=2))
+    else:
+        table_data = []
+        for tool in output_data:
+            status = (
+                f"{Fore.GREEN}Available{Style.RESET_ALL}"
+                if tool["is_available"]
+                else f"{Fore.RED}Unavailable{Style.RESET_ALL}"
+            )
+            custom_marker = (
+                f"{Fore.CYAN}✓ Custom{Style.RESET_ALL}" if tool["is_custom"] else ""
+            )
+            desc = tool["description"]
+            short_desc = textwrap.shorten(desc, width=40, placeholder="...")
+            table_data.append(
+                [tool["name"], tool["category"], short_desc, custom_marker, status]
+            )
+
+        headers = ["Name", "Category", "Description", "Type", "Status"]
+        if table_data:
+            print(tabulate.tabulate(table_data, headers=headers, tablefmt="pretty"))
+        else:
+            print_warning("No tools found matching the specified criteria.")
+
+        print(f"\nTotal tools listed: {len(output_data)}")
+        print(f"Custom tools: {custom_tools_count}")
+
+
+@custom_tools_app.command("add")
+def add_custom_tool(
+    name: Annotated[str, typer.Argument(help="Unique name for the custom tool.")],
+    category: Annotated[
+        str, typer.Option("--category", "-c", help="Tool category")
+    ] = ToolCategory.MISCELLANEOUS.value,
+    description: Annotated[
+        Optional[str], typer.Option("--description", "-d", help="Tool description")
+    ] = None,
+    binary: Annotated[
+        Optional[str], typer.Option("--binary", "-b", help="Binary executable name")
+    ] = None,
+    check_command: Annotated[
+        Optional[str],
+        typer.Option("--command", help="Command to check if the tool is installed"),
+    ] = None,
+    install_apt: Annotated[
+        Optional[str], typer.Option(help="APT installation command or package name")
+    ] = None,
+    install_brew: Annotated[
+        Optional[str], typer.Option(help="Homebrew installation command or formula")
+    ] = None,
+    install_pip: Annotated[
+        Optional[str], typer.Option(help="Pip installation command or package name")
+    ] = None,
+    install_script: Annotated[
+        Optional[str], typer.Option(help="Path to a custom installation script")
+    ] = None,
+    website: Annotated[Optional[str], typer.Option(help="Tool website URL")] = None,
+    docs: Annotated[Optional[str], typer.Option(help="Documentation URL")] = None,
+    update: Annotated[
+        bool, typer.Option("--update", help="Update the tool if it already exists.")
+    ] = False,
+) -> None:
+    """Add or update a custom tool definition."""
     manager = ToolManager()
-    
-    # Check if tool already exists
-    if manager.get_tool(name):
-        if not click.confirm(f"Tool '{name}' already exists. Update it?"):
-            click.echo("Aborted.")
-            return
-    
-    # Create tool configuration
+
+    try:
+        ToolCategory(category)
+    except ValueError:
+        print_error(
+            f"Invalid category: {category}. Valid categories: {[c.value for c in ToolCategory]}"
+        )
+        raise typer.Exit(code=1)
+
+    if manager.get_tool(name) and not update:
+        print_error(f"Tool '{name}' already exists. Use --update to overwrite.")
+        raise typer.Exit(code=1)
+    elif manager.get_tool(name) and update:
+        print_info(f"Updating existing custom tool: {name}")
+    else:
+        print_info(f"Adding new custom tool: {name}")
+
     tool_config = {
         "name": name,
         "category": category,
-        "description": description or f"Custom tool: {name}"
+        "description": description or f"Custom tool: {name}",
+        **({"binary": binary} if binary else {}),
+        **({"check_command": check_command} if check_command else {}),
+        **({"website": website} if website else {}),
+        **({"documentation": docs} if docs else {}),
+        "execution_time": "medium",
+        "target_types": ["generic"],
+        "recommendation_score": 50,
     }
-    
-    if binary:
-        tool_config["binary"] = binary
-        
-    if command:
-        tool_config["check_command"] = command
-        
-    # Add installation methods
-    install = {}
-    if apt:
-        install["apt"] = apt
-    if brew:
-        install["brew"] = brew
-    if pip:
-        install["pip"] = pip
-        
-    if install:
-        tool_config["install"] = install
-        
-    # Add optional fields
-    if website:
-        tool_config["website"] = website
-    if docs:
-        tool_config["documentation"] = docs
-        
-    # Default fields
-    tool_config["execution_time"] = "medium"
-    tool_config["target_types"] = ["generic"]
-    tool_config["recommendation_score"] = 50
-    
-    # Add the tool
+
+    install_methods = {}
+    if install_apt:
+        install_methods[ToolInstallMethod.APT.value] = install_apt
+    if install_brew:
+        install_methods[ToolInstallMethod.BREW.value] = install_brew
+    if install_pip:
+        install_methods[ToolInstallMethod.PIP.value] = install_pip
+    if install_script:
+        install_methods["script"] = install_script
+    if install_methods:
+        tool_config["install"] = install_methods
+
     if manager.add_tool(name, tool_config, custom=True):
-        click.echo(f"Successfully added custom tool: {name}")
+        action = "updated" if update else "added"
+        print_success(f"Successfully {action} custom tool: {name}")
+        print_info(f"Configuration saved in {manager.custom_tools_dir}")
     else:
-        click.echo(f"Failed to add custom tool: {name}")
+        action = "update" if update else "add"
+        print_error(f"Failed to {action} custom tool: {name}")
+        raise typer.Exit(code=1)
 
-@custom_tools.command('remove')
-@click.argument('name')
-def remove_tool(name):
-    """Remove a custom tool."""
+
+@custom_tools_app.command("remove")
+def remove_custom_tool(
+    name: Annotated[str, typer.Argument(help="Name of the custom tool to remove.")],
+) -> None:
+    """Remove a custom tool definition."""
     manager = ToolManager()
-    
-    # Check if tool exists
+
     if not manager.get_tool(name):
-        click.echo(f"Tool '{name}' does not exist.")
-        return
-        
-    # Check if it's a custom tool
-    custom_tools_dir = os.path.join(parent_dir, "config", "custom_tools")
-    custom_tool_file = os.path.join(custom_tools_dir, f"{name}.yaml")
-    if not os.path.exists(custom_tool_file):
-        click.echo(f"'{name}' is not a custom tool and cannot be removed.")
-        return
-        
-    if click.confirm(f"Are you sure you want to remove custom tool '{name}'?"):
-        if manager.remove_tool(name):
-            click.echo(f"Successfully removed custom tool: {name}")
-        else:
-            click.echo(f"Failed to remove custom tool: {name}")
+        print_error(f"Tool '{name}' does not exist.")
+        raise typer.Exit(code=1)
 
-@custom_tools.command('import')
-@click.argument('file_path', type=click.Path(exists=True))
-def import_tool(file_path):
-    """Import a custom tool from a YAML file."""
+    custom_tool_file = Path(manager.custom_tools_dir) / f"{name}.yaml"
+    if not custom_tool_file.is_file():
+        print_error(
+            f"'{name}' is not a custom tool defined in {manager.custom_tools_dir}."
+        )
+        print_info("Only tools defined in the custom tools directory can be removed.")
+        raise typer.Exit(code=1)
+
+    if typer.confirm(
+        f"Are you sure you want to remove the custom tool definition for '{name}'?"
+    ):
+        if manager.remove_tool(name):
+            print_success(f"Successfully removed custom tool: {name}")
+        else:
+            print_error(f"Failed to remove custom tool file for: {name}")
+            raise typer.Exit(code=1)
+    else:
+        print_info("Removal aborted.")
+
+
+@custom_tools_app.command("import")
+def import_custom_tool(
+    file_path: Annotated[
+        Path,
+        typer.Argument(
+            ...,
+            help="Path to the YAML file containing custom tool definitions.",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+) -> None:
+    """Import one or more custom tools from a YAML file."""
     manager = ToolManager()
-    
+    print_info(f"Importing tools from: {file_path}")
+
     try:
-        with open(file_path, 'r') as f:
-            tool_data = yaml.safe_load(f)
-            
-        if not tool_data:
-            click.echo("Empty YAML file.")
-            return
-            
+        with open(file_path, "r") as f:
+            imported_data = yaml.safe_load(f)
+
+        if not isinstance(imported_data, dict):
+            print_error(
+                f"Invalid format in {file_path}. Expected a YAML dictionary (mapping) of tool names to configurations."
+            )
+            raise typer.Exit(code=1)
+
         success_count = 0
-        for tool_name, tool_config in tool_data.items():
+        fail_count = 0
+        for tool_name, tool_config in imported_data.items():
+            if not isinstance(tool_config, dict):
+                print_warning(
+                    f"Skipping invalid entry '{tool_name}': configuration is not a dictionary."
+                )
+                fail_count += 1
+                continue
+
             if manager.add_tool(tool_name, tool_config, custom=True):
                 success_count += 1
-                click.echo(f"Successfully imported tool: {tool_name}")
+                print_success(f"Imported and saved tool: {tool_name}")
             else:
-                click.echo(f"Failed to import tool: {tool_name}")
-                
-        click.echo(f"Import complete: {success_count}/{len(tool_data)} tools imported.")
-            
-    except Exception as e:
-        click.echo(f"Error importing tool: {str(e)}")
+                print_error(
+                    f"Failed to import tool: {tool_name}. Check logs or if it already exists."
+                )
+                fail_count += 1
 
-if __name__ == '__main__':
-    custom_tools() 
+        print(f"\nImport Summary:")
+        print_success(f"Successfully imported: {success_count}")
+        if fail_count > 0:
+            print_error(f"Failed/Skipped entries: {fail_count}")
+
+    except yaml.YAMLError as e:
+        print_error(f"Error parsing YAML file {file_path}: {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        print_error(f"An unexpected error occurred during import: {e}")
+        raise typer.Exit(code=1)
+
+
+# Remove the __main__ block if this is meant to be imported
+# if __name__ == '__main__':
+#     custom_tools_app()

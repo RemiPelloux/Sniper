@@ -5,6 +5,6 @@ This module provides functionality for managing security tools used by the Snipe
 including installation, verification, listing, and tool management.
 """
 
-from .manager import ToolManager, ToolCategory, ToolInstallMethod
+from .manager import ToolCategory, ToolInstallMethod, ToolManager
 
-__all__ = ['ToolManager', 'ToolCategory', 'ToolInstallMethod'] 
+__all__ = ["ToolManager", "ToolCategory", "ToolInstallMethod"]

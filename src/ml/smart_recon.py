@@ -132,10 +132,10 @@ class SmartRecon:
     def extract_target_features(self, target: Union[str, Dict[str, Any]]) -> np.ndarray:
         """
         Extract a feature vector from a target for model prediction.
-        
+
         Args:
             target: The target URL, IP, domain or a dictionary with target details
-            
+
         Returns:
             A numpy array of features
         """
@@ -146,40 +146,40 @@ class SmartRecon:
         else:
             target_str = target.get("url", "")
             target_dict = target
-            
+
         # Initialize feature dictionary
         feature_dict = {}
-        
+
         # Process the URL/domain/IP
         hostname_target = target_str
         if hostname_target.startswith(("http://", "https://")):
             parsed_url = urlparse(hostname_target)
             hostname_target = parsed_url.netloc
-            
+
             # Protocol features
             feature_dict["is_https"] = 1 if parsed_url.scheme == "https" else 0
-            
+
             # Add path-related features
             path = parsed_url.path
             feature_dict["has_path"] = 1 if path and path != "/" else 0
             feature_dict["path_length"] = len(path) if path else 0
             feature_dict["path_depth"] = path.count("/") if path else 0
-            
+
             # Query parameters
             query = parsed_url.query
             feature_dict["has_query"] = 1 if query else 0
             feature_dict["query_length"] = len(query) if query else 0
             feature_dict["query_params_count"] = query.count("&") + 1 if query else 0
-        
+
         # IP address features
         is_ip = self._is_ip_address(hostname_target)
         feature_dict["is_ip"] = 1 if is_ip else 0
-        
+
         if is_ip:
             # Private IP feature
             is_private = self._is_private_ip(hostname_target)
             feature_dict["is_private_ip"] = 1 if is_private else 0
-            
+
             # IP range features (useful for understanding the target's network)
             octets = hostname_target.split(".")
             if len(octets) == 4:
@@ -193,20 +193,24 @@ class SmartRecon:
             feature_dict["is_private_ip"] = 0
             feature_dict["first_octet"] = 0
             feature_dict["second_octet"] = 0
-            
+
             # Domain length (more entropy in longer domain names)
             feature_dict["domain_length"] = len(hostname_target)
-            
+
             # Domain entropy (randomness, might suggest algorithmically generated domains)
             try:
-                feature_dict["domain_entropy"] = self._calculate_entropy(hostname_target) / 5.0
+                feature_dict["domain_entropy"] = (
+                    self._calculate_entropy(hostname_target) / 5.0
+                )
             except:
                 feature_dict["domain_entropy"] = 0.0
-            
+
             # Subdomain features
-            subdomain_count = hostname_target.count(".") - 1 if hostname_target.count(".") > 0 else 0
+            subdomain_count = (
+                hostname_target.count(".") - 1 if hostname_target.count(".") > 0 else 0
+            )
             feature_dict["subdomain_count"] = min(subdomain_count, 5) / 5  # normalized
-            
+
             # Handle TLD encoding - convert strings to numerical features
             tld = self._extract_tld(hostname_target)
             # Common TLDs get specific binary flags
@@ -219,15 +223,18 @@ class SmartRecon:
             feature_dict["tld_co"] = 1 if tld == "co" else 0
             # Add a numerical representation of TLD length as an additional feature
             feature_dict["tld_length"] = len(tld) if tld else 0
-            
+
             # Add a hash-based encoding of the TLD for less common TLDs
-            if tld and not any(feature_dict.get(f"tld_{t}") for t in ["com", "org", "net", "edu", "gov", "io", "co"]):
+            if tld and not any(
+                feature_dict.get(f"tld_{t}")
+                for t in ["com", "org", "net", "edu", "gov", "io", "co"]
+            ):
                 # Simple hash function to convert TLD to a number between 0 and 1
                 tld_hash = sum(ord(c) for c in tld) % 100 / 100.0
                 feature_dict["tld_hash"] = tld_hash
             else:
                 feature_dict["tld_hash"] = 0.0
-        
+
         # Convert dictionary to numpy array - ensure all values are numeric
         feature_values = []
         for key, val in feature_dict.items():
@@ -243,7 +250,7 @@ class SmartRecon:
                 # Skip non-numeric values
                 logger.debug(f"Skipping non-numeric feature '{key}': {val}")
                 continue
-            
+
         return np.array(feature_values, dtype=np.float64)
 
     def extract_finding_features(self, findings: List[Dict]) -> np.ndarray:
@@ -333,14 +340,14 @@ class SmartRecon:
             return True
         except ValueError:
             return False
-    
+
     def _is_private_ip(self, ip_str: str) -> bool:
         """
         Check if an IP address is private.
-        
+
         Args:
             ip_str: The IP address string
-            
+
         Returns:
             Whether the IP is private
         """
@@ -373,13 +380,15 @@ class SmartRecon:
         # Extract features from targets
         X = []
         y = []
-        
+
         logger.info(f"Processing {len(targets)} targets for feature extraction")
         for idx, target in enumerate(targets):
             # Extract target features
             target_features = self.extract_target_features(target)
-            logger.info(f"Extracted features for target {idx}: shape={target_features.shape}")
-            
+            logger.info(
+                f"Extracted features for target {idx}: shape={target_features.shape}"
+            )
+
             if len(target_features) > 0:
                 X.append(target_features)
 
@@ -393,11 +402,13 @@ class SmartRecon:
         if not X or not y:
             logger.error("No valid features extracted for tool selector training")
             return
-            
+
         # Train the model
         logger.info("Creating RandomForestClassifier")
-        self.tool_selector_model = RandomForestClassifier(n_estimators=100, random_state=42)
-        
+        self.tool_selector_model = RandomForestClassifier(
+            n_estimators=100, random_state=42
+        )
+
         logger.info(f"Fitting model with {len(X)} samples")
         self.tool_selector_model.fit(X, y)
         logger.info("Trained tool selector model")
@@ -553,7 +564,7 @@ class SmartRecon:
             List of recommended tools
         """
         selected_tools = []
-        
+
         # Convert string target to dictionary if needed
         if isinstance(target, str):
             is_ip = self._is_ip_address(target)
@@ -561,7 +572,7 @@ class SmartRecon:
         else:
             target_dict = target
             is_ip = self._is_ip_address(target_dict.get("host", ""))
-            
+
         # For IP addresses
         if is_ip or target_dict.get("is_ip", False):
             selected_tools.append("nmap")  # Always use nmap for IPs
@@ -571,9 +582,11 @@ class SmartRecon:
             port = target_dict.get("port", 0)
             web_port = port in [80, 443, 8080, 8443]
             web_protocol = protocol in ["http", "https"]
-            
+
             # If it's a public IP with web services, also use ZAP
-            if (not target_dict.get("is_private", False)) and (web_port or web_protocol):
+            if (not target_dict.get("is_private", False)) and (
+                web_port or web_protocol
+            ):
                 selected_tools.append("zap")
 
         # For domains
@@ -586,7 +599,9 @@ class SmartRecon:
 
             # If domain might have a web interface
             has_web = target_dict.get("protocol", "").lower() in ["http", "https"]
-            if has_web or any(s in ["http", "https"] for s in target_dict.get("services", [])):
+            if has_web or any(
+                s in ["http", "https"] for s in target_dict.get("services", [])
+            ):
                 selected_tools.append("dirsearch")
                 selected_tools.append("zap")
 
@@ -627,7 +642,9 @@ class SmartRecon:
 
         try:
             # Predict if this is a vulnerability pattern
-            probability = self.pattern_recognizer_model.predict_proba([group_features])[0][1]
+            probability = self.pattern_recognizer_model.predict_proba([group_features])[
+                0
+            ][1]
 
             # Identify specific patterns if probability is high enough
             patterns = []
@@ -867,10 +884,7 @@ class SmartRecon:
         # Convert to dictionary if string
         if isinstance(target, str):
             is_ip = self._is_ip_address(target)
-            target_dict = {
-                "host": target,
-                "is_ip": is_ip
-            }
+            target_dict = {"host": target, "is_ip": is_ip}
         else:
             # Target is already a dictionary
             target_dict = target
@@ -878,18 +892,18 @@ class SmartRecon:
 
         # Determine scan depth based on target
         scan_depth = "deep"
-        
+
         # For IP targets
         if is_ip:
             # Deep scan for private IPs, standard for public
             if not self._is_private_ip(target_dict.get("host", "")):
                 scan_depth = "standard"
-                
+
             # Adjust nmap scan parameters for IP ranges
             if "-" in target_dict.get("host", "") or "/" in target_dict.get("host", ""):
                 scan_params["nmap"]["port_range"] = "20-25,53,80,443,3306,8080"
                 scan_params["nmap"]["scan_type"] = "SYN"
-        
+
         # For web targets
         else:
             protocol = target_dict.get("protocol", "").lower()
@@ -899,7 +913,7 @@ class SmartRecon:
                 scan_params["zap"]["spider_depth"] = 5
             else:
                 scan_depth = "standard"
-                
+
             # Adjust directory scanning based on server type if known
             server_type = target_dict.get("server", "").lower()
             if "apache" in server_type:
@@ -921,7 +935,7 @@ class SmartRecon:
             # Extract useful paths from previous findings
             priority_paths = []
             vulnerability_types = []
-            
+
             for finding in previous_findings:
                 # Extract paths from URLs if available
                 url = finding.get("url", "")
@@ -932,17 +946,17 @@ class SmartRecon:
                             priority_paths.append(path)
                     except Exception:
                         pass
-                
+
                 # Track vulnerability types
                 vuln_type = finding.get("type", "").lower()
                 if vuln_type and vuln_type not in vulnerability_types:
                     vulnerability_types.append(vuln_type)
-            
+
             strategy["priority_paths"] = priority_paths
-            
+
             # Allocate time to tools based on previous findings
             time_allocation = {}
-            
+
             if "xss" in vulnerability_types or "sqli" in vulnerability_types:
                 # Web vulnerabilities - focus on zap
                 time_allocation["zap"] = 50
@@ -961,9 +975,9 @@ class SmartRecon:
                 time_allocation["nmap"] = 25
                 time_allocation["dirsearch"] = 20
                 time_allocation["wappalyzer"] = 15
-                
+
             strategy["time_allocation"] = time_allocation
-            
+
         return strategy
 
     def generate_statistics(self, findings_history: List[Dict]) -> Dict[str, Any]:
@@ -1100,13 +1114,13 @@ class SmartRecon:
     def load_available_tools(self) -> List[Dict[str, Any]]:
         """
         Load all available tools and their metadata for recommendations.
-        
+
         Returns:
             List of tool dictionaries with metadata
         """
         # This would typically load from a database or configuration file
         # For now, we'll hardcode a representative set of tools
-        
+
         available_tools = [
             # Existing reconnaissance tools
             {
@@ -1116,7 +1130,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["ip", "domain", "network"],
-                "output_formats": ["xml", "json", "text"]
+                "output_formats": ["xml", "json", "text"],
             },
             {
                 "name": "whois",
@@ -1125,7 +1139,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["domain"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "dig",
@@ -1134,7 +1148,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["domain"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "sublist3r",
@@ -1143,7 +1157,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["domain"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "amass",
@@ -1152,7 +1166,7 @@ class SmartRecon:
                 "execution_time": "slow",
                 "thoroughness": "high",
                 "target_types": ["domain"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "subfinder",
@@ -1161,7 +1175,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["domain"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "wappalyzer",
@@ -1170,7 +1184,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["json"]
+                "output_formats": ["json"],
             },
             {
                 "name": "whatweb",
@@ -1179,7 +1193,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "gobuster",
@@ -1188,7 +1202,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp", "domain"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "ffuf",
@@ -1197,7 +1211,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "shodan",
@@ -1206,7 +1220,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["ip", "domain"],
-                "output_formats": ["json"]
+                "output_formats": ["json"],
             },
             {
                 "name": "censys",
@@ -1215,7 +1229,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["ip", "domain"],
-                "output_formats": ["json"]
+                "output_formats": ["json"],
             },
             {
                 "name": "ripe",
@@ -1224,7 +1238,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "low",
                 "target_types": ["ip", "asn"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "swagger-scan",
@@ -1233,7 +1247,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["api", "url"],
-                "output_formats": ["json"]
+                "output_formats": ["json"],
             },
             {
                 "name": "nuclei",
@@ -1242,7 +1256,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["ip", "domain", "url", "webapp"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "nikto",
@@ -1251,7 +1265,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["xml", "json", "text"]
+                "output_formats": ["xml", "json", "text"],
             },
             {
                 "name": "zap",
@@ -1260,7 +1274,7 @@ class SmartRecon:
                 "execution_time": "slow",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["xml", "json", "html"]
+                "output_formats": ["xml", "json", "html"],
             },
             {
                 "name": "burp-scanner",
@@ -1269,7 +1283,7 @@ class SmartRecon:
                 "execution_time": "slow",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp", "api"],
-                "output_formats": ["xml", "html"]
+                "output_formats": ["xml", "html"],
             },
             {
                 "name": "sqlmap",
@@ -1278,16 +1292,16 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "xsstrike",
                 "category": "vulnerability_scanning",
                 "description": "Advanced XSS detection suite",
                 "execution_time": "medium",
-                "thoroughness": "high", 
+                "thoroughness": "high",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "hydra",
@@ -1296,7 +1310,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["service", "webapp"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "medusa",
@@ -1305,16 +1319,16 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["service"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "patator",
                 "category": "vulnerability_scanning",
                 "description": "Multi-purpose brute-forcer",
-                "execution_time": "medium", 
+                "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["service", "webapp"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "metasploit",
@@ -1323,7 +1337,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["ip", "service", "webapp"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
             {
                 "name": "burp-intruder",
@@ -1332,7 +1346,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp", "api"],
-                "output_formats": ["text", "html"]
+                "output_formats": ["text", "html"],
             },
             {
                 "name": "postman",
@@ -1341,7 +1355,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["api"],
-                "output_formats": ["json"]
+                "output_formats": ["json"],
             },
             # Additional reconnaissance tools
             {
@@ -1351,7 +1365,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["domain"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "massdns",
@@ -1360,7 +1374,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "high",
                 "target_types": ["domain"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
             {
                 "name": "masscan",
@@ -1369,7 +1383,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["ip", "network"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
             {
                 "name": "waybackurls",
@@ -1378,7 +1392,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["domain"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "gau",
@@ -1387,9 +1401,8 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["domain"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
-            
             # Additional vulnerability scanning tools
             {
                 "name": "sslscan",
@@ -1398,7 +1411,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "high",
                 "target_types": ["ip", "domain"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
             {
                 "name": "wpscan",
@@ -1407,7 +1420,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["json", "text"]
+                "output_formats": ["json", "text"],
             },
             {
                 "name": "droopescan",
@@ -1416,7 +1429,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
             {
                 "name": "cmseek",
@@ -1425,9 +1438,8 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
-            
             # Advanced exploitation tools
             {
                 "name": "commix",
@@ -1436,7 +1448,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
             {
                 "name": "xsshunter",
@@ -1445,7 +1457,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "nosqlmap",
@@ -1454,7 +1466,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "jwt_tool",
@@ -1463,7 +1475,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp", "api"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "ssrf-sheriff",
@@ -1472,7 +1484,7 @@ class SmartRecon:
                 "execution_time": "medium",
                 "thoroughness": "high",
                 "target_types": ["url", "webapp", "api"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
             {
                 "name": "graphql-voyager",
@@ -1481,7 +1493,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["api"],
-                "output_formats": ["text", "json"]
+                "output_formats": ["text", "json"],
             },
             {
                 "name": "crlfuzz",
@@ -1490,7 +1502,7 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["text"]
+                "output_formats": ["text"],
             },
             {
                 "name": "csrf-poc-generator",
@@ -1499,13 +1511,15 @@ class SmartRecon:
                 "execution_time": "fast",
                 "thoroughness": "medium",
                 "target_types": ["url", "webapp"],
-                "output_formats": ["html"]
-            }
+                "output_formats": ["html"],
+            },
         ]
-        
+
         return available_tools
 
-    def recommend_tools(self, target: Union[str, Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    def recommend_tools(
+        self, target: Union[str, Dict[str, Any]], context: Dict[str, Any] = None
+    ) -> List[Dict[str, Any]]:
         """
         Recommend tools for a given target based on its features and optional context.
 
@@ -1532,7 +1546,7 @@ class SmartRecon:
             assessment_phase = context.get("assessment_phase")
             assessment_type = context.get("assessment_type", assessment_type)
             previous_findings = context.get("previous_findings", previous_findings)
-            
+
         # If tool selector model is not loaded, try to load it
         if not self.tool_selector_model:
             # Try to load models if they exist
@@ -1547,32 +1561,46 @@ class SmartRecon:
 
         # Load all available tools for phase filtering and prioritization
         available_tools = self.load_available_tools()
-        
+
         # Filter tools by assessment phase if specified
         phase_filtered_tools = tools
         if assessment_phase:
             phase_tools = [
-                tool["name"] for tool in available_tools 
+                tool["name"]
+                for tool in available_tools
                 if assessment_phase.lower() in tool.get("phases", [])
             ]
             phase_filtered_tools = [tool for tool in tools if tool in phase_tools]
-            
+
             # If no tools match the phase, fall back to original list
             if not phase_filtered_tools:
                 phase_filtered_tools = tools
-                
+
         # Phase-specific prioritization
         # This ensures different top recommendations for different phases
         phase_priority = {
-            "reconnaissance": ["sublist3r", "nmap", "wappalyzer", "gobuster", "whois", "dig"],
-            "vulnerability_scanning": ["zap", "nikto", "wpscan", "testssl", "feroxbuster"],
-            "exploitation": ["sqlmap", "hydra", "metasploit", "burpsuite", "netcat"]
+            "reconnaissance": [
+                "sublist3r",
+                "nmap",
+                "wappalyzer",
+                "gobuster",
+                "whois",
+                "dig",
+            ],
+            "vulnerability_scanning": [
+                "zap",
+                "nikto",
+                "wpscan",
+                "testssl",
+                "feroxbuster",
+            ],
+            "exploitation": ["sqlmap", "hydra", "metasploit", "burpsuite", "netcat"],
         }
-        
+
         # If we have a specific phase, prioritize tools specifically designed for that phase
         if assessment_phase and assessment_phase in phase_priority:
             priority_order = phase_priority[assessment_phase]
-            
+
             # Sort phase_filtered_tools based on the priority order
             def priority_key(tool_name):
                 try:
@@ -1581,7 +1609,7 @@ class SmartRecon:
                 except ValueError:
                     # Tools not in the priority list go last
                     return len(priority_order)
-                    
+
             phase_filtered_tools = sorted(phase_filtered_tools, key=priority_key)
 
         # Generate recommendations with confidence scores
@@ -1590,55 +1618,60 @@ class SmartRecon:
             # Assign confidence scores based on position in the prioritized list
             # First tool gets highest confidence, diminishing for later positions
             confidence = max(0.95 - (i * 0.1), 0.5)
-            
+
             # Generate reasons for this recommendation
             reasons = self._generate_recommendation_reasons(
                 tool_name, target, assessment_phase, assessment_type
             )
-            
+
             # Generate recommended parameters
             params = self._generate_recommended_params(tool_name, target)
-            
-            recommendations.append({
-                "tool_name": tool_name,
-                "confidence": confidence,
-                "parameters": params,
-                "reasons": reasons
-            })
-        
+
+            recommendations.append(
+                {
+                    "tool_name": tool_name,
+                    "confidence": confidence,
+                    "parameters": params,
+                    "reasons": reasons,
+                }
+            )
+
         # Sort by confidence score and limit to top_n
         recommendations.sort(key=lambda x: x["confidence"], reverse=True)
         return recommendations[:top_n]
 
     def _generate_recommendation_reasons(
-        self, tool_name: str, target: Union[str, Dict[str, Any]], 
-        assessment_phase: Optional[str] = None, assessment_type: Optional[str] = None
+        self,
+        tool_name: str,
+        target: Union[str, Dict[str, Any]],
+        assessment_phase: Optional[str] = None,
+        assessment_type: Optional[str] = None,
     ) -> List[str]:
         """
         Generate reasons for recommending a specific tool based on the target and context.
-        
+
         Args:
             tool_name: Name of the tool
             target: The target information
             assessment_phase: Phase of the assessment (reconnaissance, vulnerability_scanning, exploitation)
             assessment_type: Type of assessment (quick, standard, thorough)
-            
+
         Returns:
             List of reasons for recommending this tool
         """
         reasons = []
-        
+
         # Convert string target to dict format if needed
         if isinstance(target, str):
             target_info = {"host": target}
         else:
             target_info = target
-            
+
         hostname = target_info.get("host", "")
         is_ip = self._is_ip_address(hostname)
         protocol = target_info.get("protocol", "").lower()
         services = target_info.get("services", [])
-        
+
         # Common tools
         if tool_name == "nmap":
             reasons.append("Comprehensive port and service scanning")
@@ -1646,78 +1679,111 @@ class SmartRecon:
                 reasons.append("Effective for IP-based targets")
             if assessment_phase == "reconnaissance":
                 reasons.append("Essential for initial reconnaissance")
-                
+
         elif tool_name == "gobuster" or tool_name == "dirsearch":
-            if "http" in services or "https" in services or protocol in ["http", "https"]:
+            if (
+                "http" in services
+                or "https" in services
+                or protocol in ["http", "https"]
+            ):
                 reasons.append("Directory and file discovery for web applications")
                 if assessment_phase == "reconnaissance":
-                    reasons.append("Useful for identifying hidden directories and files")
-                
+                    reasons.append(
+                        "Useful for identifying hidden directories and files"
+                    )
+
         elif tool_name == "wpscan":
-            if "http" in services or "https" in services or protocol in ["http", "https"]:
+            if (
+                "http" in services
+                or "https" in services
+                or protocol in ["http", "https"]
+            ):
                 reasons.append("Specialized scanner for WordPress installations")
-                
+
         elif tool_name == "sqlmap":
-            if "http" in services or "https" in services or protocol in ["http", "https"]:
+            if (
+                "http" in services
+                or "https" in services
+                or protocol in ["http", "https"]
+            ):
                 reasons.append("Automated SQL injection detection and exploitation")
                 if assessment_phase == "exploitation":
                     reasons.append("Suitable for the exploitation phase")
-                
+
         elif tool_name == "nikto":
-            if "http" in services or "https" in services or protocol in ["http", "https"]:
+            if (
+                "http" in services
+                or "https" in services
+                or protocol in ["http", "https"]
+            ):
                 reasons.append("Comprehensive web server scanning")
-                
+
         elif tool_name == "sublist3r":
             if not is_ip:
                 reasons.append("Subdomain discovery for domain targets")
                 if assessment_phase == "reconnaissance":
                     reasons.append("Essential for expanding the attack surface")
-                
+
         elif tool_name == "dig" or tool_name == "whois":
             if not is_ip:
                 reasons.append("Domain information gathering")
-                
+
         elif tool_name == "testssl":
             if "https" in services or protocol == "https":
                 reasons.append("SSL/TLS configuration and vulnerability analysis")
-                
+
         elif tool_name == "hydra":
             reasons.append("Brute force authentication testing")
             if any(service in services for service in ["ssh", "ftp", "telnet"]):
-                reasons.append(f"Suitable for the detected services: {', '.join(services)}")
-                
+                reasons.append(
+                    f"Suitable for the detected services: {', '.join(services)}"
+                )
+
         elif tool_name == "zap" or tool_name == "owasp-zap":
-            if "http" in services or "https" in services or protocol in ["http", "https"]:
+            if (
+                "http" in services
+                or "https" in services
+                or protocol in ["http", "https"]
+            ):
                 reasons.append("Comprehensive web application security scanner")
                 if assessment_type == "thorough":
                     reasons.append("Thorough scanning capabilities")
-                
+
         # Add a recommendation based on assessment type if applicable
-        if assessment_type == "thorough" and any([
-            tool_name == "nmap" and "--script vuln" in str(self._generate_recommended_params(tool_name, target)),
-            tool_name in ["zap", "owasp-zap", "nikto", "sqlmap"]
-        ]):
+        if assessment_type == "thorough" and any(
+            [
+                tool_name == "nmap"
+                and "--script vuln"
+                in str(self._generate_recommended_params(tool_name, target)),
+                tool_name in ["zap", "owasp-zap", "nikto", "sqlmap"],
+            ]
+        ):
             reasons.append("Well-suited for thorough assessment")
-        elif assessment_type == "quick" and any([
-            tool_name == "nmap" and "-F" in str(self._generate_recommended_params(tool_name, target)),
-            tool_name in ["whatweb", "wafw00f"]
-        ]):
+        elif assessment_type == "quick" and any(
+            [
+                tool_name == "nmap"
+                and "-F" in str(self._generate_recommended_params(tool_name, target)),
+                tool_name in ["whatweb", "wafw00f"],
+            ]
+        ):
             reasons.append("Fast execution time for quick assessments")
-            
+
         # If no specific reasons, add a generic one
         if not reasons:
             reasons.append("General-purpose tool for security assessment")
-            
+
         return reasons
-    
-    def _generate_recommended_params(self, tool_name: str, target: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+
+    def _generate_recommended_params(
+        self, tool_name: str, target: Union[str, Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Generate recommended parameters for a specific tool based on the target.
-        
+
         Args:
             tool_name: Name of the tool
             target: The target information
-            
+
         Returns:
             Dictionary of recommended parameters for the tool
         """
@@ -1726,32 +1792,34 @@ class SmartRecon:
             target_info = {"host": target}
         else:
             target_info = target
-            
+
         # Get hostname
         hostname = target_info.get("host", "")
-        
+
         # Default parameters for common tools
         if tool_name == "nmap":
             return {
                 "target": hostname,
-                "arguments": "-sV -sC -p-" if self._is_ip_address(hostname) else "-sV -sC"
+                "arguments": (
+                    "-sV -sC -p-" if self._is_ip_address(hostname) else "-sV -sC"
+                ),
             }
         elif tool_name == "gobuster":
             return {
                 "target": f"http://{hostname}" if "://" not in hostname else hostname,
                 "wordlist": "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt",
-                "extensions": "php,html,txt"
+                "extensions": "php,html,txt",
             }
         elif tool_name == "wpscan":
             return {
                 "target": f"http://{hostname}" if "://" not in hostname else hostname,
-                "enumerate": "u,t,p"
+                "enumerate": "u,t,p",
             }
         elif tool_name == "sqlmap":
             return {
                 "target": f"http://{hostname}" if "://" not in hostname else hostname,
                 "forms": True,
-                "batch": True
+                "batch": True,
             }
         elif tool_name == "nikto":
             return {
@@ -1764,7 +1832,7 @@ class SmartRecon:
         elif tool_name == "dig":
             return {
                 "domain": hostname.split("://")[-1] if "://" in hostname else hostname,
-                "query_type": "ANY"
+                "query_type": "ANY",
             }
         elif tool_name == "whois":
             return {
@@ -1778,28 +1846,26 @@ class SmartRecon:
             return {
                 "target": hostname,
                 "service": "ssh" if target_info.get("port") == 22 else "http-post-form",
-                "wordlist": "/usr/share/wordlists/rockyou.txt"
+                "wordlist": "/usr/share/wordlists/rockyou.txt",
             }
         else:
             # Generic parameters for other tools
-            return {
-                "target": hostname
-            }
+            return {"target": hostname}
 
     def _extract_tld(self, domain: str) -> str:
         """
         Extract the top-level domain from a domain name.
-        
+
         Args:
             domain: The domain name
-            
+
         Returns:
             The TLD (e.g., com, org, co.uk) or empty string if none
         """
         # Handle special cases
         if domain == "localhost" or domain.startswith("localhost."):
             return ""
-            
+
         # Split by dot and take the last part
         parts = domain.split(".")
         if len(parts) > 1:
@@ -1809,17 +1875,17 @@ class SmartRecon:
     def _calculate_entropy(self, s: str) -> float:
         """
         Calculate the entropy of a string.
-        
+
         Args:
             s: The input string
-            
+
         Returns:
             The entropy of the string
         """
         # Calculate the frequency of each character
         freq = {c: s.count(c) / len(s) for c in set(s)}
-        
+
         # Calculate the entropy using the formula: -sum(p * log2(p))
         entropy = -sum(p * math.log2(p) for p in freq.values())
-        
+
         return entropy

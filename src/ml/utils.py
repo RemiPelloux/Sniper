@@ -75,7 +75,7 @@ def extract_text_features(text: str) -> Dict[str, float]:
 
     # Add word count - splitting on whitespace and handling punctuation correctly
     # This ensures word count matches expectations in tests
-    words = re.findall(r'\b\w+\b', text)
+    words = re.findall(r"\b\w+\b", text)
     features["word_count"] = len(words)
 
     return features
