@@ -29,31 +29,32 @@ Usage:
 """
 
 import logging
+import os
 import shutil
-from typing import Any, Dict, List, Optional
+import sys
+import time
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import ValidationError
 
-from src.core.config import settings
 from src.integrations.base import ToolIntegration, ToolIntegrationError
+from src.integrations.docker_utils import ensure_tool_available
 from src.integrations.executors import SubprocessExecutor
 from src.results.types import BaseFinding, FindingSeverity, WebFinding
+from src.core.config import settings
 
 log = logging.getLogger(__name__)
 
+# Check if ZAP API is available
+ZAP_AVAILABLE = False
 try:
-    from zapv2 import ZAPv2  # type: ignore
+    # Try new package name
+    from zaproxy import ZAPv2  # type: ignore
 
     ZAP_AVAILABLE = True
 except ImportError:
-    try:
-        # Try new package name
-        from zaproxy import ZAPv2  # type: ignore
-
-        ZAP_AVAILABLE = True
-    except ImportError:
-        ZAP_AVAILABLE = False
-        log.warning("ZAP Python API not installed. Install with: pip install zaproxy")
+    ZAP_AVAILABLE = False
+    log.warning("ZAP Python API not installed. Install with: pip install zaproxy")
 
 
 class ZapIntegration(ToolIntegration):
@@ -61,8 +62,30 @@ class ZapIntegration(ToolIntegration):
 
     def __init__(self, executor: Optional[SubprocessExecutor] = None) -> None:
         self._executor = executor or SubprocessExecutor()
-        self._zap_path = shutil.which("zap")  # For ZAP CLI (if available)
+        
+        # Try to find ZAP using our tool availability checker
+        is_available, zap_path = ensure_tool_available("zap")
+        if is_available:
+            self._zap_path = zap_path
+        else:
+            self._zap_path = None
+        
+        # Also check for zap.sh or zap.bat
         self._zap_daemon_path = shutil.which("zap.sh") or shutil.which("zap.bat")
+        
+        # If we have a zap path but not a daemon path, check if our zap path is usable as daemon
+        if self._zap_path and not self._zap_daemon_path:
+            if os.path.isfile(self._zap_path) and os.access(self._zap_path, os.X_OK):
+                # Try to determine if this is a wrapper or the actual ZAP executable
+                with open(self._zap_path, "r") as f:
+                    try:
+                        content = f.read(1024)  # Read first 1KB to check if it's a script
+                        if "#!/bin/bash" in content or "docker" in content:
+                            # This looks like a wrapper script, might be usable as daemon
+                            self._zap_daemon_path = self._zap_path
+                    except UnicodeDecodeError:
+                        # Binary file, not a wrapper script
+                        pass
 
         # Get configuration from settings
         self._zap_config = settings.tool_configs.get("zap", {})
@@ -92,11 +115,18 @@ class ZapIntegration(ToolIntegration):
                 return False
 
         # Otherwise, check if ZAP executable is available
-        if not self._zap_daemon_path:
+        if not self._zap_path and not self._zap_daemon_path:
             log.error("OWASP ZAP executable not found in PATH.")
+            # Try to set up Docker fallback
+            is_available, zap_path = ensure_tool_available("zap")
+            if is_available:
+                self._zap_path = zap_path
+                self._zap_daemon_path = zap_path
+                log.info(f"Using Docker fallback for ZAP at: {zap_path}")
+                return True
             return False
 
-        log.debug(f"Found ZAP executable at: {self._zap_daemon_path}")
+        log.debug(f"Found ZAP executable at: {self._zap_path or self._zap_daemon_path}")
         return True
 
     def _connect_to_zap(self) -> None:

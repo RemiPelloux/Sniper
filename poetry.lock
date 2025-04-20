@@ -2628,6 +2628,21 @@ files = [
 ]
 
 [[package]]
+name = "python-owasp-zap-v2-4"
+version = "0.1.0"
+description = "python-owasp-zap-v2.4 is now zaproxy"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "python-owasp-zap-v2.4-0.1.0.tar.gz", hash = "sha256:2af4252320b3b77a38712081422688e676e038306cf1f2792feed811235afa8b"},
+    {file = "python_owasp_zap_v2.4-0.1.0-py2.py3-none-any.whl", hash = "sha256:d4dc00387b0089d81683be01b8272577ad39fb47674377f65c7da0fd30b8abe9"},
+]
+
+[package.dependencies]
+zaproxy = "*"
+
+[[package]]
 name = "pytz"
 version = "2025.2"
 description = "World timezone definitions, modern and historical"
@@ -3941,10 +3956,9 @@ propcache = ">=0.2.1"
 name = "zaproxy"
 version = "0.4.0"
 description = "ZAP API Client"
-optional = true
+optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
-markers = "extra == \"zap\""
 files = [
     {file = "zaproxy-0.4.0-py3-none-any.whl", hash = "sha256:dd0ae2f12597caf934189ac85e139a9a7239c2623a1051f9613f9356d4ec162c"},
     {file = "zaproxy-0.4.0.tar.gz", hash = "sha256:b25285bc306d1ad91bc4d8b247aecfa06e0cb5e407fb3f5dd2fcf2fe38a67330"},
@@ -3961,4 +3975,4 @@ zap = ["zaproxy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "5b697fd380f44fae1ab3e0f25bea5e5d95faf17069f5ea2ee508eb904f7b469f"
+content-hash = "1a05397cf4b6b93e0401a23a3c3802e051522cdf284126d6ebfbb2af031392bc"

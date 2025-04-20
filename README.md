@@ -135,6 +135,11 @@ Scan with specific modules:
 poetry run sniper scan run --target example.com --module technologies --module ports
 ```
 
+Scan with comma-separated modules:
+```bash
+poetry run sniper scan run --target example.com --module technologies,ports,web
+```
+
 Scan with specific depth:
 ```bash
 poetry run sniper scan run --target example.com --depth COMPREHENSIVE
@@ -144,6 +149,19 @@ Generate a report:
 ```bash
 poetry run sniper scan run --target example.com --output report.json --json
 ```
+
+### Docker Container Fallbacks
+
+Sniper automatically detects if required security tools (like Nmap, OWASP ZAP, etc.) are installed on your system. If a tool is missing, Sniper will:
+
+1. Check if Docker is available on your system
+2. Pull the appropriate Docker image for the missing tool
+3. Create a wrapper script to use the tool via Docker
+4. Use this wrapper for scanning operations
+
+This ensures that you can run scans even if you haven't installed all the required security tools locally. The Docker container fallback is completely transparent - you don't need to modify your commands or configuration.
+
+To use this feature, simply make sure Docker is installed on your system. Everything else happens automatically when needed.
 
 ### Distributed Scanning
 
@@ -204,4 +222,4 @@ custom_mode:
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.

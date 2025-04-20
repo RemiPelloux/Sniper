@@ -25,7 +25,6 @@ from src.integrations import (
     check_and_ensure_tools,
 )
 from src.results.normalizer import ResultNormalizer
-from src.integrations.vulnerability_scanner import VulnerabilityScanner
 
 # Create the typer app
 app = typer.Typer(help="Security scanning commands")
@@ -184,6 +183,7 @@ def scan(
 
     # Initialize scan mode manager
     scan_mode_manager = ScanModeManager()
+    tool_manager = ToolManager()
 
     # If a scan mode was specified, use its configuration
     if scan_mode:
@@ -658,163 +658,3 @@ def validate_target_url(target: str) -> str:
             target = f"http://{target}"
     
     return target 
-
-
-@app.command("juiceshop")
-def scan_juiceshop(
-    target: str = typer.Argument("http://localhost:3000", help="JuiceShop URL (default: http://localhost:3000)"),
-    output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Output file for detailed findings"
-    ),
-    json_format: bool = typer.Option(
-        False, "--json", "-j", help="Output in JSON format"
-    ),
-    max_urls: int = typer.Option(
-        100, "--max-urls", help="Maximum number of URLs to crawl"
-    ),
-    wait_time: int = typer.Option(
-        3, "--wait", help="Wait time in seconds for JavaScript to load"
-    ),
-) -> None:
-    """
-    Run a specialized security scan against OWASP Juice Shop.
-    
-    This command runs a comprehensive vulnerability scan against a Juice Shop instance,
-    focusing on finding common web vulnerabilities like XSS, SQL injection, and more.
-    
-    Examples:
-        sniper scan juiceshop
-        sniper scan juiceshop http://192.168.1.100:3000
-        sniper scan juiceshop --output juiceshop-findings.txt
-        sniper scan juiceshop --json
-        sniper scan juiceshop --max-urls 200 --wait 5
-    """
-    # Validate target
-    try:
-        target = validate_target_url(target)
-    except ValueError as e:
-        typer.echo(f"Error: {str(e)}", err=True)
-        raise typer.Exit(code=1)
-    
-    console.print(f"[bold green]Starting specialized Juice Shop scan against:[/] {target}")
-    console.print("[bold yellow]This scan will test for: XSS, SQLi, Open Redirect, Path Traversal[/]")
-    console.print(f"[bold blue]Crawl settings:[/] Max URLs: {max_urls}, Wait time: {wait_time}s")
-    
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        transient=True,
-    ) as progress:
-        task = progress.add_task("Running vulnerability scan...", total=None)
-        
-        # Create and initialize scanner
-        scanner = VulnerabilityScanner()
-        
-        # Check prerequisites
-        if not scanner.check_prerequisites():
-            console.print("[bold red]Error:[/] Vulnerability scanner prerequisites not met.")
-            raise typer.Exit(code=1)
-        
-        try:
-            # Common paths to check for JuiceShop
-            common_paths = [
-                "/", 
-                "/login", 
-                "/register",
-                "/search",
-                "/rest/products",
-                "/rest/user/login",
-                "/rest/user/registration",
-                "/api/products",
-                "/ftp",
-                "/score-board",
-                "/administration",
-                "/profile",
-                "/contact",
-                "/about",
-                "/#/login",
-                "/#/register",
-                "/#/search",
-                "/#/basket",
-                "/#/contact",
-                "/#/about"
-            ]
-            
-            # Add these paths to our target for scanning
-            urls_to_scan = [f"{target}{path}" for path in common_paths]
-            
-            # Run the scanner
-            loop = asyncio.get_event_loop()
-            scan_options = {
-                "verify_ssl": False,
-                "scan_types": ["xss", "sqli", "open_redirect", "path_traversal"],
-                "scan_depth": "comprehensive",
-                "max_urls": max_urls,
-                "initial_urls": urls_to_scan,
-                "wait_time": wait_time
-            }
-            
-            # Inform about scan approach
-            console.print(f"[bold]Testing {len(urls_to_scan)} known JuiceShop paths[/]")
-            
-            scan_result = loop.run_until_complete(scanner.run(target, options=scan_options))
-            
-            # Parse results
-            findings = scanner.parse_output(scan_result)
-            
-            progress.update(task, completed=True)
-            
-            # Output findings
-            if findings:
-                console.print(f"\n[bold green]Found {len(findings)} potential vulnerabilities:[/]")
-                
-                # Create a table for findings
-                table = Table(show_header=True)
-                table.add_column("Vulnerability", style="bold red")
-                table.add_column("URL", style="blue")
-                table.add_column("Severity", style="yellow")
-                table.add_column("Evidence", style="green", no_wrap=False)
-                
-                for finding in findings:
-                    table.add_row(
-                        finding.title,
-                        finding.url,
-                        str(finding.severity),
-                        finding.evidence[:80] + "..." if len(finding.evidence) > 80 else finding.evidence
-                    )
-                
-                console.print(table)
-                
-                # Save detailed findings if output file specified
-                if output:
-                    save_findings = []
-                    for finding in findings:
-                        save_findings.append(finding.dict())
-                    
-                    with open(output, "w") as f:
-                        if json_format:
-                            json.dump(save_findings, f, indent=2)
-                        else:
-                            f.write(f"# OWASP Juice Shop Scan Results\n")
-                            f.write(f"Target: {target}\n\n")
-                            for i, finding in enumerate(findings, 1):
-                                f.write(f"## Finding {i}: {finding.title}\n")
-                                f.write(f"- Severity: {finding.severity}\n")
-                                f.write(f"- URL: {finding.url}\n")
-                                f.write(f"- Request Method: {finding.request_method}\n")
-                                f.write(f"- Evidence:\n```\n{finding.evidence}\n```\n\n")
-                    
-                    console.print(f"\nDetailed findings saved to: {output}")
-            else:
-                console.print("\n[bold green]No vulnerabilities found.[/]")
-                
-                # Provide some suggestions for manual testing
-                console.print("\n[bold yellow]Suggestions for manual testing:[/]")
-                console.print("1. Try SQL injection on the login form (admin' --)")
-                console.print("2. Try XSS in the search field (<script>alert('xss')</script>)")
-                console.print("3. Check for path traversal in the FTP server (%2e%2e/%2e%2e/etc/passwd)")
-                console.print("4. Try to access /score-board directly for vulnerability tracking")
-                
-        except Exception as e:
-            console.print(f"[bold red]Error during scan:[/] {str(e)}")
-            raise typer.Exit(code=1) 

@@ -182,3 +182,46 @@ api:
       options:
         wordlist: "api-endpoints.txt"
         methods: "GET,POST,PUT,DELETE" 
+
+# JuiceShop mode - Optimized for scanning OWASP Juice Shop
+juiceshop:
+  name: juiceshop
+  description: "Scan mode optimized for testing OWASP Juice Shop vulnerabilities"
+  target_types: ["url", "webapp"]
+  modules:
+    - technologies
+    - web
+    - directories
+  settings:
+    max_threads: 5
+    timeout: 1800  # 30 minutes
+    retries: 2
+    scan_depth: standard
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    nmap:
+      enabled: true
+      options:
+        ports: "3000"
+        timing_template: 3
+        scripts: "http-enum,http-headers"
+    zap:
+      enabled: true
+      options:
+        active_scan: true
+        ajax_spider: true
+        scan_policy: "Default Policy"
+        context_name: "JuiceShop"
+    dirsearch:
+      enabled: true
+      options:
+        wordlist: "common.txt"
+        extensions: "js,json,html"
+    vulnerability_scanner:
+      enabled: true
+      options:
+        scan_types: ["xss", "sqli", "open_redirect", "path_traversal"]
+        scan_depth: "comprehensive"
+        verify_ssl: false 
