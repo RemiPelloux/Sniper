@@ -2,7 +2,15 @@ import json
 import os
 import sys  # Import sys
 from pathlib import Path  # Import Path
-from typing import Optional  # Added Optional
+from typing import (  # Added more type imports
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+)
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,14 +28,14 @@ from src.tools.manager import ToolCategory, ToolManager
 
 
 @pytest.fixture
-def runner():
+def runner() -> CliRunner:
     """Provides a CliRunner instance."""
     return CliRunner()
 
 
 # Mock ToolManager data relevant to custom tools list
 class MockCustomToolManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self._tools_data = {
             "nmap": {
                 "name": "nmap",
@@ -49,19 +57,21 @@ class MockCustomToolManager:
         project_root = Path(__file__).resolve().parent.parent.parent
         self.custom_tools_dir = project_root / "config" / "custom_tools"
 
-    def get_all_tools(self):
+    def get_all_tools(self) -> Dict[str, Dict[str, Any]]:
         return self._tools_data
 
-    def get_installation_status(self):
+    def get_installation_status(self) -> Dict[str, bool]:
         return self._installation_status
 
-    def get_tool(self, name: str):
+    def get_tool(self, name: str) -> Optional[Dict[str, Any]]:
         return self._tools_data.get(name)
 
-    def check_tool_availability(self, name: str):
+    def check_tool_availability(self, name: str) -> bool:
         return self._installation_status.get(name, False)
 
-    def get_tools_by_category(self, category: ToolCategory):
+    def get_tools_by_category(
+        self, category: ToolCategory
+    ) -> Dict[str, Dict[str, Any]]:
         cat_value = category.value
         return {
             name: data
@@ -69,7 +79,9 @@ class MockCustomToolManager:
             if data.get("category") == cat_value
         }
 
-    def get_available_tools(self, category: Optional[str] = None):
+    def get_available_tools(
+        self, category: Optional[str] = None
+    ) -> Dict[str, Dict[str, Any]]:
         # Simplified mock for available tools
         available = {
             name: data
@@ -89,20 +101,20 @@ class MockCustomToolManager:
         return available
 
     # Add mock methods for add/remove if testing those commands
-    def add_tool(self, name: str, config: dict, custom: bool = True):
+    def add_tool(self, name: str, config: dict, custom: bool = True) -> bool:
         # Mock adding logic (e.g., check if exists, save to mock filesystem)
         return True
 
-    def remove_tool(self, name: str):
+    def remove_tool(self, name: str) -> bool:
         # Mock removing logic
         return True
 
-    def get_tool_categories(self) -> set:
+    def get_tool_categories(self) -> Set[str]:
         return {data.get("category", "unknown") for data in self._tools_data.values()}
 
 
 @pytest.fixture
-def mock_custom_tool_manager(monkeypatch):
+def mock_custom_tool_manager(monkeypatch) -> MockCustomToolManager:
     """Fixture to replace ToolManager specifically for custom tool tests."""
     mock_manager = MockCustomToolManager()
     # Patch the ToolManager where it's instantiated in src/cli/custom_tools.py
@@ -115,7 +127,7 @@ def mock_custom_tool_manager(monkeypatch):
     expected_glob_path = project_root / "config" / "custom_tools"
 
     # Accept 'self' as the first argument because glob is an instance method
-    def mock_glob(self, pattern):
+    def mock_glob(self, pattern: str) -> List[Path]:
         # Only return mock files if the path matches where custom_tools looks
         # print(f"Mock glob called with self={self}, pattern={pattern}") # Debug print
         # Use a simple check: if the Path instance being globbed is the expected one
@@ -140,7 +152,7 @@ def mock_custom_tool_manager(monkeypatch):
 import re
 
 
-def strip_ansi(text):
+def strip_ansi(text: str) -> str:
     ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
     return ansi_escape.sub("", text)
 
@@ -148,7 +160,9 @@ def strip_ansi(text):
 # --- Test Cases ---
 
 
-def test_list_custom_tools_table(runner, mock_custom_tool_manager):
+def test_list_custom_tools_table(
+    runner: CliRunner, mock_custom_tool_manager: MockCustomToolManager
+) -> None:
     """Test the 'custom-tools list' command table output."""
     result = runner.invoke(app, ["custom-tools", "list"])
     output = strip_ansi(result.stdout)
@@ -185,7 +199,9 @@ def test_list_custom_tools_table(runner, mock_custom_tool_manager):
     assert "Custom tools: 1" in output
 
 
-def test_list_custom_tools_json(runner, mock_custom_tool_manager):
+def test_list_custom_tools_json(
+    runner: CliRunner, mock_custom_tool_manager: MockCustomToolManager
+) -> None:
     """Test the 'custom-tools list --json' command."""
     result = runner.invoke(app, ["custom-tools", "list", "--json"])
     assert result.exit_code == 0

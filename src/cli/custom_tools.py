@@ -24,7 +24,7 @@ parent_dir = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(parent_dir))
 
 from src.cli.tools import print_error, print_info, print_success, print_warning
-from src.tools.manager import ToolCategory, ToolManager
+from src.tools.manager import ToolCategory, ToolInstallMethod, ToolManager
 
 # Initialize colorama
 init(autoreset=True)

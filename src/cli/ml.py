@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import matplotlib.pyplot as plt
 import pandas as pd
 import typer
+from colorama import Fore, Style
 
 from src.core.config import load_config
 from src.ml.model import (

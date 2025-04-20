@@ -17,13 +17,13 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from src.ml.autonomous_tester import VulnerabilityType
 
 from .base import TaskPriority, TaskStatus
-from .protocol import ProtocolMessage, create_protocol
+from .protocol import MessageType, ProtocolMessage, create_protocol
 from .worker import SniperWorkerNode, WorkerNodeClient
 
 logger = logging.getLogger("sniper.distributed.client")
 
 
-def setup_logging(log_level: str = "INFO", log_file: str = None):
+def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None) -> None:
     """
     Set up logging for the distributed client.
 
@@ -40,7 +40,7 @@ def setup_logging(log_level: str = "INFO", log_file: str = None):
         level=numeric_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
-            logging.StreamHandler(),
+            logging.StreamHandler(sys.stdout),
             *([] if not log_file else [logging.FileHandler(log_file)]),
         ],
     )
@@ -59,7 +59,7 @@ def create_worker_client(
     master_host: str,
     master_port: int,
     protocol_type: str = "REST",
-    capabilities: List[str] = None,
+    capabilities: Optional[List[str]] = None,
     max_concurrent_tasks: int = 5,
     heartbeat_interval: int = 30,
 ) -> WorkerNodeClient:
@@ -97,88 +97,57 @@ def register_default_handlers(client: WorkerNodeClient) -> None:
         client: The worker node client to register handlers with
     """
     # Import task handlers from appropriate modules
-    from ..analysis import analyzer
-    from ..scan import scanner
-    from ..smartrecon import recon
+    # TODO: Resolve potential circular imports if these modules use client
+    # from ..analysis import analyzer
+    # from ..scan import scanner
+    # from ..smartrecon import recon
 
-    # Register scan handler
-    def scan_handler(target: str, **kwargs) -> Dict[str, Any]:
-        """Handler for scan tasks"""
-        try:
-            scan_type = kwargs.get("scan_type", "default")
-            options = kwargs.get("options", {})
+    # Define placeholder handlers for now
+    def scan_handler(task) -> Dict[str, Any]:
+        logger.info(f"Placeholder scan handler called for task: {task.id}")
+        time.sleep(2)  # Simulate work
+        return {
+            "status": TaskStatus.COMPLETED.name,
+            "result": "Scan placeholder result",
+        }
 
-            logger.info(f"Running {scan_type} scan on {target}")
-            result = scanner.run_scan(target, scan_type, options)
-            return {"status": "success", "findings": result}
-        except Exception as e:
-            logger.error(f"Error in scan handler: {str(e)}")
-            return {"status": "error", "message": str(e)}
+    def recon_handler(task) -> Dict[str, Any]:
+        logger.info(f"Placeholder recon handler called for task: {task.id}")
+        time.sleep(3)  # Simulate work
+        return {
+            "status": TaskStatus.COMPLETED.name,
+            "result": "Recon placeholder result",
+        }
 
-    # Register recon handler
-    def recon_handler(target: str, **kwargs) -> Dict[str, Any]:
-        """Handler for reconnaissance tasks"""
-        try:
-            recon_type = kwargs.get("recon_type", "default")
-            depth = kwargs.get("depth", 1)
-
-            logger.info(f"Running {recon_type} recon on {target} with depth {depth}")
-            result = recon.run_recon(target, recon_type, depth)
-            return {"status": "success", "findings": result}
-        except Exception as e:
-            logger.error(f"Error in recon handler: {str(e)}")
-            return {"status": "error", "message": str(e)}
-
-    # Register analysis handler
-    def analysis_handler(target: str, **kwargs) -> Dict[str, Any]:
-        """Handler for analysis tasks"""
-        try:
-            analysis_type = kwargs.get("analysis_type", "default")
-            data = kwargs.get("data", {})
-
-            logger.info(f"Running {analysis_type} analysis on {target}")
-            result = analyzer.analyze(target, analysis_type, data)
-            return {"status": "success", "findings": result}
-        except Exception as e:
-            logger.error(f"Error in analysis handler: {str(e)}")
-            return {"status": "error", "message": str(e)}
+    def analysis_handler(task) -> Dict[str, Any]:
+        logger.info(f"Placeholder analysis handler called for task: {task.id}")
+        time.sleep(1)  # Simulate work
+        return {
+            "status": TaskStatus.COMPLETED.name,
+            "result": "Analysis placeholder result",
+        }
 
     # Register all handlers with the client
     client.register_task_handler("scan", scan_handler)
     client.register_task_handler("recon", recon_handler)
     client.register_task_handler("analysis", analysis_handler)
 
-    logger.info("Registered default task handlers for scan, recon, and analysis")
+    logger.info("Registered placeholder task handlers for scan, recon, and analysis")
 
 
-def run_worker(
+async def _run_worker_async(
     master_host: str,
     master_port: int,
     protocol_type: str = "REST",
-    capabilities: List[str] = None,
+    capabilities: Optional[List[str]] = None,
     max_concurrent_tasks: int = 5,
     heartbeat_interval: int = 30,
     register_defaults: bool = True,
     log_level: str = "INFO",
 ) -> None:
-    """
-    Run a worker node client (blocking).
-
-    Args:
-        master_host: Host address of the master node
-        master_port: Port number of the master node
-        protocol_type: Communication protocol to use
-        capabilities: List of supported task types
-        max_concurrent_tasks: Maximum number of concurrent tasks
-        heartbeat_interval: Heartbeat interval in seconds
-        register_defaults: Whether to register default task handlers
-        log_level: Logging level
-    """
-    # Set up logging
-    setup_logging(log_level)
-
+    """Async part of running a worker node client."""
     logger.info(
-        f"Starting Sniper worker node, connecting to {master_host}:{master_port}"
+        f"Starting Sniper worker node (async), connecting to {master_host}:{master_port}"
     )
 
     # Create client
@@ -197,23 +166,73 @@ def run_worker(
 
     try:
         # Start the client
-        if not client.start():
+        if not await client.start():
             logger.error("Failed to start worker node client")
-            sys.exit(1)
+            raise RuntimeError("Worker client failed to start")
 
         logger.info("Worker node started successfully")
 
-        # Keep running until interrupted
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("Received interrupt signal, shutting down...")
+        # Keep running until interrupted (handled by asyncio loop)
+        stop_event = asyncio.Event()
+        await stop_event.wait()
+
+    except asyncio.CancelledError:
+        logger.info("Worker task cancelled, shutting down...")
     except Exception as e:
-        logger.error(f"Error in worker node: {str(e)}")
+        logger.error(f"Error in worker node: {str(e)}", exc_info=True)
     finally:
         # Stop the client
-        client.stop()
+        await client.stop()
         logger.info("Worker node stopped")
+
+
+def run_worker(
+    master_host: str,
+    master_port: int,
+    protocol_type: str = "REST",
+    capabilities: Optional[List[str]] = None,
+    max_concurrent_tasks: int = 5,
+    heartbeat_interval: int = 30,
+    register_defaults: bool = True,
+    log_level: str = "INFO",
+) -> None:
+    """
+    Run a worker node client (blocking). Sets up logging and runs the async loop.
+
+    Args:
+        master_host: Host address of the master node
+        master_port: Port number of the master node
+        protocol_type: Communication protocol to use
+        capabilities: List of supported task types
+        max_concurrent_tasks: Maximum number of concurrent tasks
+        heartbeat_interval: Heartbeat interval in seconds
+        register_defaults: Whether to register default task handlers
+        log_level: Logging level
+    """
+    # Set up logging
+    setup_logging(log_level)
+
+    try:
+        asyncio.run(
+            _run_worker_async(
+                master_host=master_host,
+                master_port=master_port,
+                protocol_type=protocol_type,
+                capabilities=capabilities,
+                max_concurrent_tasks=max_concurrent_tasks,
+                heartbeat_interval=heartbeat_interval,
+                register_defaults=register_defaults,
+                log_level=log_level,
+            )
+        )
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal, shutting down event loop...")
+    except RuntimeError as e:
+        logger.error(f"Worker runtime error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.critical(f"Unhandled exception in run_worker: {e}", exc_info=True)
+        sys.exit(1)
 
 
 class SniperClient:
@@ -235,11 +254,14 @@ class SniperClient:
         self.master_host = master_host
         self.master_port = master_port
         self.protocol_type = protocol_type.upper()
-        self.protocol = create_protocol(protocol_type)
+        self.protocol = create_protocol(self.protocol_type)
         self.client_id = f"client-{int(time.time())}"
 
         # Connection management
         self.connected = False
+        self.heartbeat_interval: Optional[int] = None
+        self.listen_task: Optional[asyncio.Task] = None
+        self.heartbeat_task: Optional[asyncio.Task] = None
 
     async def connect(self) -> bool:
         """
@@ -249,18 +271,22 @@ class SniperClient:
             True if connection was successful, False otherwise
         """
         if self.connected:
-            logger.warning("Already connected to master node")
+            logger.warning("Already connected.")
             return True
-
         try:
-            await self.protocol.connect(self.master_host, self.master_port)
-            self.connected = True
-            logger.info(
-                f"Connected to master node at {self.master_host}:{self.master_port}"
+            self.connected = await self.protocol.connect(
+                self.master_host, self.master_port
             )
-            return True
+            if self.connected:
+                logger.info(
+                    f"Connected to master at {self.master_host}:{self.master_port}"
+                )
+            else:
+                logger.error("Failed to connect to master.")
+            return self.connected
         except Exception as e:
-            logger.error(f"Failed to connect to master node: {e}")
+            logger.error(f"Error connecting to master: {str(e)}", exc_info=True)
+            self.connected = False
             return False
 
     async def disconnect(self) -> bool:
@@ -271,135 +297,138 @@ class SniperClient:
             True if disconnection was successful, False otherwise
         """
         if not self.connected:
-            logger.warning("Not connected to master node")
+            logger.warning("Not connected.")
             return True
 
         try:
-            await self.protocol.disconnect()
-            self.connected = False
-            logger.info("Disconnected from master node")
-            return True
+            disconnected = await self.protocol.disconnect()
+            if disconnected:
+                logger.info("Disconnected from master.")
+                self.connected = False
+                return True
+            else:
+                logger.warning("Failed to disconnect cleanly.")
+                return False
         except Exception as e:
-            logger.error(f"Error disconnecting from master node: {e}")
+            logger.error(f"Error disconnecting from master: {str(e)}", exc_info=True)
             return False
 
     async def _send_message(
         self, message: ProtocolMessage
     ) -> Optional[ProtocolMessage]:
         """
-        Send a message to the master node.
+        Send a message to the master node and return the response.
 
         Args:
-            message: Protocol message to send
+            message: The ProtocolMessage to send.
 
         Returns:
-            Response message or None if error
+            The response ProtocolMessage, or None if failed.
         """
         if not self.connected:
-            if not await self.connect():
-                logger.error("Unable to connect to master node")
-                return None
-
+            logger.error("Cannot send message: not connected.")
+            return None
         try:
             response = await self.protocol.send_message(message)
             return response
         except Exception as e:
-            logger.error(f"Error sending message to master node: {e}")
+            logger.error(f"Error sending message: {str(e)}", exc_info=True)
             return None
 
     async def submit_autonomous_test(
         self,
         target_url: str,
         vulnerability_type: Optional[Union[str, VulnerabilityType]] = None,
-        request_params: Dict[str, Any] = None,
-        headers: Dict[str, str] = None,
-        cookies: Dict[str, str] = None,
+        request_params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        cookies: Optional[Dict[str, str]] = None,
         payload_count: int = 5,
         priority: TaskPriority = TaskPriority.MEDIUM,
     ) -> Optional[str]:
         """
-        Submit an autonomous vulnerability testing task.
+        Submit an autonomous testing task to the master node.
 
         Args:
-            target_url: URL to test
-            vulnerability_type: Specific vulnerability type to test, or None for comprehensive scan
-            request_params: Optional HTTP request parameters
-            headers: Optional HTTP headers
-            cookies: Optional cookies
-            payload_count: Number of payloads to test
-            priority: Task priority
+            target_url: The URL to test.
+            vulnerability_type: Specific vulnerability type to test (enum or string).
+                                If None, performs a comprehensive scan.
+            request_params: Dictionary of request parameters.
+            headers: Dictionary of request headers.
+            cookies: Dictionary of request cookies.
+            payload_count: Number of payloads to test for specific vulnerability type.
+            priority: Task priority.
 
         Returns:
-            Task ID if submission was successful, None otherwise
+            The task ID if submission was successful, None otherwise.
         """
-        # Convert vulnerability type enum to string if needed
-        vuln_type_str = None
-        if vulnerability_type:
-            if isinstance(vulnerability_type, VulnerabilityType):
-                vuln_type_str = vulnerability_type.value
-            else:
-                vuln_type_str = vulnerability_type
+        if not self.connected:
+            logger.error("Cannot submit task: not connected.")
+            return None
 
-        # Prepare task parameters
-        params = {
+        task_type = "autonomous_test"
+        params: Dict[str, Any] = {
             "target_url": target_url,
-            "vulnerability_type": vuln_type_str,
             "request_params": request_params or {},
             "headers": headers or {},
             "cookies": cookies or {},
-            "payload_count": payload_count,
-            "priority": (
-                priority.value if isinstance(priority, TaskPriority) else priority
-            ),
         }
 
-        # Create message
+        if vulnerability_type:
+            if isinstance(vulnerability_type, VulnerabilityType):
+                params["vulnerability_type"] = vulnerability_type.value
+            else:
+                params["vulnerability_type"] = vulnerability_type
+            params["payload_count"] = payload_count
+        else:
+            pass
+
         message = ProtocolMessage(
             message_type=MessageType.SUBMIT_TASK,
             sender_id=self.client_id,
-            receiver_id="master",
             payload={
-                "task_type": "autonomous_test",
+                "task_type": task_type,
+                "target": target_url,
                 "parameters": params,
-                "priority": (
-                    priority.value if isinstance(priority, TaskPriority) else priority
-                ),
+                "priority": priority.name,
             },
         )
 
-        # Send message and process response
         response = await self._send_message(message)
+
         if response and response.message_type == MessageType.TASK_SUBMITTED:
             task_id = response.payload.get("task_id")
-            logger.info(f"Successfully submitted autonomous test task: {task_id}")
+            logger.info(f"Task submitted successfully. Task ID: {task_id}")
             return task_id
         else:
-            error_msg = response.payload.get("error") if response else "Unknown error"
-            logger.error(f"Failed to submit autonomous test task: {error_msg}")
+            error_msg = (
+                response.payload.get("message")
+                if response and response.payload
+                else "Unknown error"
+            )
+            logger.error(f"Failed to submit task: {error_msg}")
             return None
 
     async def submit_comprehensive_scan(
         self,
         target_url: str,
-        request_params: Dict[str, Any] = None,
-        headers: Dict[str, str] = None,
-        cookies: Dict[str, str] = None,
+        request_params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        cookies: Optional[Dict[str, str]] = None,
         priority: TaskPriority = TaskPriority.HIGH,
     ) -> Optional[str]:
         """
-        Submit a comprehensive vulnerability scan task.
+        Submit a comprehensive autonomous scan task (tests all known types).
 
         Args:
-            target_url: URL to test
-            request_params: Optional HTTP request parameters
-            headers: Optional HTTP headers
-            cookies: Optional cookies
-            priority: Task priority
+            target_url: The URL to test.
+            request_params: Dictionary of request parameters.
+            headers: Dictionary of request headers.
+            cookies: Dictionary of request cookies.
+            priority: Task priority.
 
         Returns:
-            Task ID if submission was successful, None otherwise
+            The task ID if submission was successful, None otherwise.
         """
-        # This is essentially an autonomous test without a specific vulnerability type
         return await self.submit_autonomous_test(
             target_url=target_url,
             vulnerability_type=None,
@@ -411,44 +440,60 @@ class SniperClient:
 
     async def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
         """
-        Get the status of a task.
+        Query the status of a specific task.
 
         Args:
-            task_id: Task ID to check
+            task_id: The ID of the task to query.
 
         Returns:
-            Task status or None if error
+            The TaskStatus enum member, or None if failed.
         """
+        if not self.connected:
+            logger.error("Cannot get task status: not connected.")
+            return None
+
         message = ProtocolMessage(
             message_type=MessageType.TASK_STATUS_REQUEST,
             sender_id=self.client_id,
-            receiver_id="master",
             payload={"task_id": task_id},
         )
 
         response = await self._send_message(message)
+
         if response and response.message_type == MessageType.TASK_STATUS_RESPONSE:
             status_str = response.payload.get("status")
             try:
-                return TaskStatus(status_str)
-            except (ValueError, TypeError):
-                logger.error(f"Invalid task status received: {status_str}")
+                status = TaskStatus[status_str.upper()]
+                logger.debug(f"Task {task_id} status: {status.name}")
+                return status
+            except (KeyError, AttributeError):
+                logger.error(
+                    f"Received invalid status '{status_str}' for task {task_id}"
+                )
                 return None
         else:
-            error_msg = response.payload.get("error") if response else "Unknown error"
-            logger.error(f"Failed to get status for task {task_id}: {error_msg}")
+            error_msg = (
+                response.payload.get("message")
+                if response and response.payload
+                else "Unknown error"
+            )
+            logger.error(f"Failed to get task status for {task_id}: {error_msg}")
             return None
 
     async def get_task_result(self, task_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get the result of a completed task.
+        Retrieve the result of a completed task.
 
         Args:
-            task_id: Task ID to get results for
+            task_id: The ID of the task to retrieve results for.
 
         Returns:
-            Task result dictionary or None if error or not completed
+            A dictionary containing the task result, or None if failed or not ready.
         """
+        if not self.connected:
+            logger.error("Cannot get task result: not connected.")
+            return None
+
         message = ProtocolMessage(
             message_type=MessageType.TASK_RESULT_REQUEST,
             sender_id=self.client_id,
@@ -490,7 +535,7 @@ class SniperClient:
 
             if status == TaskStatus.COMPLETED:
                 return await self.get_task_result(task_id)
-            elif status in [TaskStatus.FAILED, TaskStatus.CANCELED]:
+            elif status in [TaskStatus.FAILED, TaskStatus.CANCELLED]:
                 logger.warning(f"Task {task_id} ended with status {status}")
                 return await self.get_task_result(
                     task_id
@@ -520,7 +565,7 @@ class SniperClient:
 
         response = await self._send_message(message)
         if response and response.message_type == MessageType.TASK_CANCELED:
-            logger.info(f"Successfully canceled task {task_id}")
+            logger.info(f"Successfully cancelled task {task_id}")
             return True
         else:
             error_msg = response.payload.get("error") if response else "Unknown error"

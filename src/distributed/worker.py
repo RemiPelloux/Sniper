@@ -20,7 +20,7 @@ import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 import requests
 
@@ -258,59 +258,70 @@ class SniperWorkerNode(BaseNode):
 
     def _heartbeat_loop(self) -> None:
         """Periodically send heartbeats to the master node."""
-        while self.running:
-            try:
-                self._send_heartbeat()
-                time.sleep(self.heartbeat_interval)
-            except Exception as e:
-                logger.error(f"Error in heartbeat loop: {str(e)}")
-                time.sleep(5)  # Retry after a short delay
 
-    def _send_heartbeat(self) -> None:
+        # Run the async heartbeat function in a separate thread using asyncio
+        async def heartbeat_task():
+            while self.running:
+                try:
+                    await self._send_heartbeat()
+                    await asyncio.sleep(self.heartbeat_interval)
+                except Exception as e:
+                    logger.error(f"Error in heartbeat loop: {str(e)}")
+                    await asyncio.sleep(5)  # Retry after a short delay
+
+        asyncio.run(heartbeat_task())
+
+    async def _send_heartbeat(self) -> None:
         """Send a heartbeat message to the master node."""
         if not self.protocol or not self.master_id:
             logger.warning("Cannot send heartbeat: not connected to master")
             return
 
         try:
-            # Create heartbeat message with metrics
-            metrics = {
+            payload = {
+                "status": self.status.value,
                 "load": (
                     self.active_tasks / self.max_concurrent_tasks
                     if self.max_concurrent_tasks > 0
                     else 0
                 ),
-                "task_count": self.task_count,
-                "success_rate": (
-                    self.success_count / self.task_count if self.task_count > 0 else 1.0
-                ),
-                "active_tasks": self.active_tasks,
+                "capabilities": self.capabilities,
             }
-
-            heartbeat_msg = ProtocolMessage(
+            # Use ProtocolMessage for consistency
+            message = ProtocolMessage(
                 message_type=MessageType.HEARTBEAT,
                 sender_id=self.id,
                 receiver_id=self.master_id,
-                payload=metrics,
+                payload=payload,
             )
-
-            # Send heartbeat
-            response = self.protocol.send_message(heartbeat_msg)
-
-            if response and response.message_type == MessageType.HEARTBEAT_ACK:
+            # Await the async send_message
+            response_dict = await self.protocol.send_message(message)
+            # Check response based on dict structure and HEARTBEAT_RESPONSE
+            if (
+                response_dict
+                and response_dict.get("message_type")
+                == MessageType.HEARTBEAT_RESPONSE.name
+            ):
                 logger.debug("Heartbeat acknowledged by master")
             else:
-                logger.warning("Heartbeat not acknowledged by master")
+                logger.warning(
+                    f"Heartbeat not acknowledged by master. Response: {response_dict}"
+                )
         except Exception as e:
-            logger.error(f"Error sending heartbeat: {str(e)}")
+            logger.error(f"Error sending heartbeat: {str(e)}", exc_info=True)
 
-    def handle_message(self, message: ProtocolMessage) -> Optional[ProtocolMessage]:
+    async def handle_message(
+        self, message: ProtocolMessage
+    ) -> Optional[ProtocolMessage]:
         """Handle incoming messages from the master node."""
         try:
             if message.message_type == MessageType.TASK_ASSIGNMENT:
-                return self._handle_task_assignment(message)
-            elif message.message_type == MessageType.TASK_CANCEL:
-                return self._handle_task_cancel(message)
+                # Use await for async handler
+                return await self._handle_task_assignment(message)
+            elif message.message_type == MessageType.CANCEL_TASK:
+                # Use CANCEL_TASK
+                # Use await for async handler
+                return await self._handle_task_cancel(message)
             else:
                 logger.warning(f"Unknown message type: {message.message_type}")
                 return None
@@ -318,348 +329,402 @@ class SniperWorkerNode(BaseNode):
             logger.error(f"Error handling message: {str(e)}")
             return None
 
-    def _handle_task_assignment(
+    async def _handle_task_assignment(
         self, message: ProtocolMessage
     ) -> Optional[ProtocolMessage]:
         """Handle task assignment messages from the master node."""
         try:
             # Parse task data
-            task_data = json.loads(message.data)
+            task_data = message.payload
+            if not isinstance(task_data, dict):
+                logger.error(
+                    f"Invalid task data format: {type(task_data)}. Expected dict."
+                )
+                # Send back a NACK or error response
+                return ProtocolMessage(
+                    message_type=MessageType.TASK_STATUS,
+                    sender_id=self.id,
+                    receiver_id=message.sender_id,
+                    payload={
+                        "task_id": (
+                            task_data.get("id", "unknown")
+                            if isinstance(task_data, dict)
+                            else "unknown"
+                        ),
+                        "status": TaskStatus.FAILED.name,
+                        "message": "Invalid task data format received by worker.",
+                    },
+                )
+
             task = DistributedTask.from_dict(task_data)
 
-            logger.info(
-                f"Received task assignment: {task.task_id} (Type: {task.task_type})"
-            )
+            logger.info(f"Received task assignment: {task.id} (Type: {task.task_type})")
 
             # Check if we can handle this task type
             if task.task_type not in self.capabilities:
                 logger.warning(f"Cannot handle task type: {task.task_type}")
                 return ProtocolMessage(
-                    sender=self.node_id,
-                    recipient=message.sender,
                     message_type=MessageType.TASK_STATUS,
-                    data=json.dumps(
-                        {
-                            "task_id": task.task_id,
-                            "status": TaskStatus.REJECTED.name,
-                            "reason": f"Worker does not support task type: {task.task_type}",
-                        }
-                    ),
+                    sender_id=self.id,
+                    receiver_id=message.sender_id,
+                    payload={
+                        "task_id": task.id,
+                        "status": TaskStatus.REJECTED.name,
+                        "message": f"Worker does not support task type: {task.task_type}",
+                    },
                 )
 
-            # Check if we have capacity
-            if self.active_tasks >= self.max_concurrent_tasks:
+            # Check if we have capacity (use semaphore)
+            if (
+                self.task_semaphore.locked()
+                and self.active_tasks >= self.max_concurrent_tasks
+            ):
                 logger.warning("Cannot accept task: at maximum capacity")
                 return ProtocolMessage(
-                    sender=self.node_id,
-                    recipient=message.sender,
                     message_type=MessageType.TASK_STATUS,
-                    data=json.dumps(
-                        {
-                            "task_id": task.task_id,
-                            "status": TaskStatus.REJECTED.name,
-                            "reason": "Worker at maximum capacity",
-                        }
-                    ),
+                    sender_id=self.id,
+                    receiver_id=message.sender_id,
+                    payload={
+                        "task_id": task.id,
+                        "status": TaskStatus.REJECTED.name,
+                        "message": "Worker at maximum capacity",
+                    },
                 )
 
-            # Accept and store the task
-            self.tasks[task.task_id] = task
+            # Accept the task
+            task.status = TaskStatus.ACCEPTED
+            self.tasks[task.id] = task
+            self.active_tasks += 1
+            logger.info(f"Accepted task {task.id}. Active tasks: {self.active_tasks}")
 
-            # Submit task for execution
+            # Start task execution in the background
             asyncio.create_task(self._execute_task_wrapper(task))
 
-            # Send acceptance message
+            # Send acceptance confirmation
             return ProtocolMessage(
-                sender=self.node_id,
-                recipient=message.sender,
                 message_type=MessageType.TASK_STATUS,
-                data=json.dumps(
-                    {"task_id": task.task_id, "status": TaskStatus.RUNNING.name}
-                ),
+                sender_id=self.id,
+                receiver_id=message.sender_id,
+                payload={
+                    "task_id": task.id,
+                    "status": TaskStatus.ACCEPTED.name,
+                },
             )
-        except Exception as e:
-            logger.error(f"Error handling task assignment: {str(e)}")
-            return None
 
-    def _handle_task_cancel(
+        except Exception as e:
+            logger.error(f"Error handling task assignment: {str(e)}", exc_info=True)
+            task_id = (
+                message.payload.get("id", "unknown")
+                if isinstance(message.payload, dict)
+                else "unknown"
+            )
+            # Send failure status back
+            return ProtocolMessage(
+                message_type=MessageType.TASK_STATUS,
+                sender_id=self.id,
+                receiver_id=message.sender_id,
+                payload={
+                    "task_id": task_id,
+                    "status": TaskStatus.FAILED.name,
+                    "message": f"Error processing task assignment: {str(e)}",
+                },
+            )
+
+    async def _handle_task_cancel(
         self, message: ProtocolMessage
     ) -> Optional[ProtocolMessage]:
         """Handle task cancellation messages from the master node."""
         try:
-            # Parse cancellation data
-            cancel_data = json.loads(message.data)
-            task_id = cancel_data.get("task_id")
-
-            if not task_id or task_id not in self.tasks:
-                logger.warning(f"Cannot cancel unknown task: {task_id}")
+            task_id = message.payload.get("task_id")
+            if not task_id:
+                logger.warning("Received task cancellation request without task_id")
                 return None
 
-            logger.info(f"Received cancellation for task: {task_id}")
+            logger.info(f"Received request to cancel task: {task_id}")
 
-            # Cancel the task
-            asyncio.create_task(self.cancel_task(task_id))
+            # Attempt to cancel the task
+            cancelled = await self.cancel_task(task_id)
 
-            # Send acknowledgment immediately (cancellation happens in background)
+            # Send cancellation status back to the master
+            status = TaskStatus.CANCELLED if cancelled else TaskStatus.FAILED
+            reason = (
+                "Task cancelled by master."
+                if cancelled
+                else "Failed to cancel task (already completed or not found)."
+            )
+
             return ProtocolMessage(
-                sender=self.node_id,
-                recipient=message.sender,
                 message_type=MessageType.TASK_STATUS,
-                data=json.dumps(
-                    {"task_id": task_id, "status": TaskStatus.CANCELLED.name}
-                ),
+                sender_id=self.id,
+                receiver_id=message.sender_id,
+                payload={
+                    "task_id": task_id,
+                    "status": status.name,
+                    "message": reason,
+                },
             )
         except Exception as e:
-            logger.error(f"Error handling task cancellation: {str(e)}")
-            return None
+            logger.error(f"Error handling task cancellation: {str(e)}", exc_info=True)
+            task_id = (
+                message.payload.get("task_id", "unknown")
+                if isinstance(message.payload, dict)
+                else "unknown"
+            )
+            # Send failure status back
+            return ProtocolMessage(
+                message_type=MessageType.TASK_STATUS,
+                sender_id=self.id,
+                receiver_id=message.sender_id,
+                payload={
+                    "task_id": task_id,
+                    "status": TaskStatus.FAILED.name,
+                    "message": f"Error processing task cancellation: {str(e)}",
+                },
+            )
 
     async def _execute_task_wrapper(self, task: DistributedTask):
-        """Acquires semaphore and wraps the actual task execution with error handling."""
-        task_id = task.id  # Get id early
-        if not self.task_semaphore:
-            logger.error(
-                f"Task semaphore not initialized. Cannot execute task {task_id}."
-            )
-            # Mark task as failed immediately and notify master
-            if task_id in self.tasks:
-                self.tasks[task_id].status = TaskStatus.FAILED
-                self.tasks[task_id].completed_at = datetime.now(timezone.utc)
-            await self.status_update(
-                task_id, TaskStatus.FAILED, message="Worker semaphore not initialized"
-            )
-            return
-
+        """Acquire semaphore, execute task, handle errors, and release semaphore."""
         async with self.task_semaphore:
-            self.active_tasks += 1
-            logger.info(
-                f"Starting execution for task {task_id}... Active tasks: {self.active_tasks}"
-            )
-            task.status = TaskStatus.RUNNING
-            task.started_at = datetime.now(timezone.utc)
-            await self.status_update(task_id, TaskStatus.RUNNING)
-
-            result = None
-            final_status = TaskStatus.FAILED  # Default to failed
-
             try:
-                handler = self.task_handlers.get(task.task_type)
-                if not handler:
-                    raise ValueError(
-                        f"No handler registered for task type: {task.task_type}"
-                    )
+                logger.info(f"Starting execution of task: {task.id}")
+                task.status = TaskStatus.RUNNING
+                task.started_at = datetime.now(timezone.utc)
+                await self._report_task_status_to_master(task.id, TaskStatus.RUNNING)
 
-                logger.debug(
-                    f"Executing task {task_id} ({task.task_type}) with handler {handler.__name__}"
+                # Execute the actual task logic in the thread pool executor
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(
+                    self.executor, self.execute_task, task
                 )
-                # Check if handler is async or sync
-                if asyncio.iscoroutinefunction(handler):
-                    result = await handler(task.target, **task.parameters)
+
+                # Check result format and status
+                if isinstance(result, dict) and "status" in result:
+                    task_status_str = result.get("status", TaskStatus.UNKNOWN.name)
+                    try:
+                        task.status = TaskStatus[task_status_str.upper()]
+                    except KeyError:
+                        logger.error(
+                            f"Task {task.id} returned unknown status: {task_status_str}"
+                        )
+                        task.status = TaskStatus.FAILED
+                        result["error"] = f"Unknown status returned: {task_status_str}"
                 else:
-                    # Run sync handler in thread pool executor
-                    loop = asyncio.get_running_loop()
-                    result = await loop.run_in_executor(
-                        self.executor, handler, task.target, *task.parameters.values()
+                    # Assume success if status is not explicitly set but no error occurred
+                    logger.warning(
+                        f"Task {task.id} result dict missing 'status'. Assuming COMPLETED based on lack of errors."
                     )
-                logger.info(f"Task {task_id} completed successfully by handler.")
-                final_status = TaskStatus.COMPLETED
+                    task.status = TaskStatus.COMPLETED
+
+                task.completed_at = datetime.now(timezone.utc)
+                task.result = result.get("result")
+                task.error = result.get("error")
+
+                logger.info(f"Task {task.id} finished with status: {task.status.name}")
+
+                # Send final result/status to master
+                await self._send_task_result(
+                    task.id, task.result, task.status, task.error
+                )
 
             except Exception as e:
-                logger.error(f"Error executing task {task_id}: {e}", exc_info=True)
-                # Status remains FAILED (or set explicitly)
-                final_status = TaskStatus.FAILED
-                # Store error information if needed
-                # task.error_message = str(e)
+                logger.error(f"Error executing task {task.id}: {str(e)}", exc_info=True)
+                task.status = TaskStatus.FAILED
+                task.completed_at = datetime.now(timezone.utc)
+                task.error = str(e)
+                # Send failure status to master
+                await self._send_task_result(task.id, None, TaskStatus.FAILED, str(e))
 
             finally:
-                self.active_tasks -= 1
-                logger.info(
-                    f"Finished execution for task {task_id}. Final status: {final_status.value}. Active tasks: {self.active_tasks}"
+                # Clean up task reference and decrement active count
+                if task.id in self.tasks:
+                    del self.tasks[task.id]
+                self.active_tasks = max(0, self.active_tasks - 1)
+                logger.debug(
+                    f"Cleaned up task {task.id}. Active tasks: {self.active_tasks}"
                 )
-                # Update task object in worker's memory
-                if task_id in self.tasks:
-                    task_ref = self.tasks[task_id]
-                    task_ref.status = final_status
-                    task_ref.completed_at = datetime.now(timezone.utc)
-                    task_ref.result = (
-                        result if final_status == TaskStatus.COMPLETED else None
-                    )
-                    # Optionally store error details if failed
-                    # task_ref.error_message = str(e) if final_status == TaskStatus.FAILED else None
-                else:
-                    logger.warning(
-                        f"Task {task_id} not found in worker tasks during finally block."
-                    )
-
-                # Send final status/result to master
-                try:
-                    # Send result only if completed successfully
-                    await self._send_task_result(
-                        task_id,
-                        result if final_status == TaskStatus.COMPLETED else None,
-                        final_status,
-                    )
-                except Exception as send_error:
-                    logger.error(
-                        f"Failed to send final status/result for task {task_id} to master: {send_error}",
-                        exc_info=True,
-                    )
+                # Semaphore is released automatically by 'async with'
 
     def execute_task(self, task: DistributedTask) -> Dict[str, Any]:
-        """
-        Execute a distributed task.
+        """Execute a specific task based on its type."""
+        logger.debug(
+            f"Executing task {task.id} (Type: {task.task_type}) in executor thread."
+        )
+        handler = self.task_handlers.get(task.task_type)
+        if not handler:
+            logger.error(f"No handler registered for task type: {task.task_type}")
+            return {
+                "status": TaskStatus.FAILED.name,
+                "error": f"No handler for task type {task.task_type}",
+            }
 
-        Args:
-            task: The task to execute
+        try:
+            # Run the registered handler
+            result_data = handler(task)
+            logger.debug(f"Task handler for {task.id} completed.")
 
-        Returns:
-            Dict[str, Any]: The result of the task execution
+            # Ensure result is a dictionary, default to COMPLETED status if missing
+            if isinstance(result_data, dict):
+                status = result_data.get("status", TaskStatus.COMPLETED.name)
+                return {
+                    "status": status,
+                    "result": result_data.get("result"),
+                    "error": result_data.get("error"),
+                }
+            else:
+                # If handler returns non-dict, wrap it as a result
+                logger.warning(
+                    f"Handler for task {task.id} returned non-dict type: {type(result_data)}. Wrapping."
+                )
+                return {
+                    "status": TaskStatus.COMPLETED.name,
+                    "result": result_data,
+                    "error": None,
+                }
 
-        Raises:
-            ValueError: If the task type is not supported
-        """
-        task_type = task.task_type
-
-        # Check if we have a handler for this task type
-        if task_type not in self.task_handlers:
-            raise ValueError(f"No handler registered for task type: {task_type}")
-
-        # Get the handler function
-        handler = self.task_handlers[task_type]
-
-        # Execute the handler with task parameters
-        logger.info(f"Executing task {task.task_id} (Type: {task_type})")
-        result = handler(task.target, **task.parameters)
-
-        return result
+        except Exception as e:
+            logger.error(
+                f"Exception in task handler for {task.id} (Type: {task.task_type}): {str(e)}",
+                exc_info=True,
+            )
+            return {"status": TaskStatus.FAILED.name, "error": str(e)}
 
     async def _send_task_result(
-        self, task_id: str, result: Dict[str, Any], status: TaskStatus
+        self,
+        task_id: str,
+        result: Optional[Any],
+        status: TaskStatus,
+        error: Optional[str] = None,
     ) -> None:
-        """
-        Send task result to the master node.
-
-        Args:
-            task_id: ID of the completed task
-            result: Result data from the task execution
-            status: Final status of the task
-        """
+        """Send the result of a completed task to the master node."""
         if not self.protocol or not self.master_id:
-            logger.warning("Cannot send result: not connected to master")
+            logger.error("Cannot send task result: protocol or master_id missing.")
             return
 
         try:
-            # Create result message
-            result_payload = {
+            # Construct payload
+            payload = {
                 "task_id": task_id,
-                "status": status.value,
+                "status": status.name,
                 "result": result,
+                "error": error,
             }
 
-            result_msg = ProtocolMessage(
-                message_type=MessageType.TASK_RESULT,
+            # Create message
+            message = ProtocolMessage(
+                message_type=MessageType.TASK_STATUS,
                 sender_id=self.id,
                 receiver_id=self.master_id,
-                payload=result_payload,
+                payload=payload,
             )
 
-            # Send result to master using async executor
-            loop = asyncio.get_running_loop()
-            response = await loop.run_in_executor(
-                self.executor, self.protocol.send_message, result_msg
-            )
+            # Send the message
+            await self.protocol.send_message(message)
+            logger.info(f"Sent final status for task {task_id}: {status.name}")
 
-            if (
-                response
-                and response.get("message_type") == MessageType.TASK_RESULT_ACK.name
-            ):
-                logger.info(f"Result for task {task_id} acknowledged by master")
-            else:
-                logger.warning(f"Result for task {task_id} not acknowledged by master")
         except Exception as e:
-            logger.error(f"Error sending task result: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error sending task result for {task_id}: {str(e)}", exc_info=True
+            )
 
-    async def status_update(
+    async def _report_task_status_to_master(
         self, task_id: str, status: TaskStatus, message: str = ""
     ) -> None:
-        """
-        Update the status of a task and notify the master node.
-
-        Args:
-            task_id: ID of the task to update
-            status: New status for the task
-            message: Optional message with additional information
-        """
-        if task_id not in self.tasks:
-            logger.warning(f"Task {task_id} not found for status update")
+        """Send an intermediate status update for a task to the master node."""
+        if not self.protocol or not self.master_id:
+            logger.warning("Cannot send status update: protocol or master_id missing.")
             return
 
-        # Update task status
-        task = self.tasks[task_id]
-        task.status = status
+        # Avoid sending updates for terminal states here, use _send_task_result instead
+        if status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+            logger.debug(
+                f"Skipping intermediate status update for terminal state {status.name} for task {task_id}"
+            )
+            return
 
-        # Send status update to master
-        if self.protocol and self.master_id:
-            try:
-                # Create status update message using generic ProtocolMessage
-                status_payload = {
-                    "task_id": task_id,
-                    "status": status.value,
-                    "message": message,
-                }
-                status_msg = ProtocolMessage(
-                    message_type=MessageType.TASK_STATUS,
-                    sender_id=self.id,
-                    receiver_id=self.master_id,
-                    payload=status_payload,
-                )
+        try:
+            # Construct payload
+            payload = {
+                "task_id": task_id,
+                "status": status.name,
+                "message": message,
+            }
 
-                # Send status update
-                # Use asyncio to handle potential blocking calls
-                loop = asyncio.get_running_loop()
-                response_dict = await loop.run_in_executor(
-                    self.executor, self.protocol.send_message, status_msg
-                )
+            # Create message
+            update_message = ProtocolMessage(
+                message_type=MessageType.TASK_STATUS,
+                sender_id=self.id,
+                receiver_id=self.master_id,
+                payload=payload,
+            )
 
-                if (
-                    response_dict
-                    and response_dict.get("message_type")
-                    == MessageType.TASK_STATUS_RESPONSE.name
-                ):
-                    logger.debug(
-                        f"Status update for task {task_id} acknowledged by master"
-                    )
-                else:
-                    logger.warning(
-                        f"Status update for task {task_id} not acknowledged by master: {response_dict}"
-                    )
-            except Exception as e:
-                logger.error(f"Error sending status update: {str(e)}", exc_info=True)
+            # Send the message
+            await self.protocol.send_message(update_message)
+            logger.debug(f"Sent status update for task {task_id}: {status.name}")
+
+        except Exception as e:
+            logger.error(
+                f"Error sending status update for {task_id}: {str(e)}", exc_info=True
+            )
 
     async def cancel_task(self, task_id: str) -> bool:
-        """
-        Cancel a task.
+        """Cancel a running task."""
+        logger.info(f"Attempting to cancel task: {task_id}")
+        task = self.tasks.get(task_id)
 
-        Args:
-            task_id: ID of the task to cancel
-
-        Returns:
-            bool: True if cancellation successful, False otherwise
-        """
-        if task_id not in self.tasks:
-            logger.warning(f"Task {task_id} not found for cancellation")
+        if not task:
+            logger.warning(f"Cannot cancel task {task_id}: not found.")
             return False
 
-        task = self.tasks[task_id]
+        if task.status not in [
+            TaskStatus.PENDING,
+            TaskStatus.ACCEPTED,
+            TaskStatus.RUNNING,
+        ]:
+            logger.warning(
+                f"Cannot cancel task {task_id}: task is in terminal state {task.status.name}."
+            )
+            return False
 
-        # Update task status
-        task.status = TaskStatus.CANCELLED
-        task.completed_at = datetime.now(timezone.utc)
+        try:
+            # Update status locally first
+            original_status = task.status
+            task.status = TaskStatus.CANCELLED
+            task.completed_at = datetime.now(timezone.utc)
+            task.error = "Task cancelled by master request."
 
-        # Notify master of cancellation
-        await self.status_update(task_id, TaskStatus.CANCELLED)
+            # If the task was running, attempt to cancel its future (if applicable)
+            # Note: Standard thread pool executor doesn't directly support cancellation
+            # of running tasks. This logic might need adjustment based on how tasks are run.
+            # If using asyncio tasks directly, we could cancel them.
+            # For now, we just mark it cancelled. The wrapper will eventually notice.
+            logger.info(
+                f"Marked task {task_id} as CANCELLED (was {original_status.name})."
+            )
 
-        logger.info(f"Task {task_id} cancelled")
-        return True
+            # Send final cancellation status to master (handled by wrapper on completion/error)
+            # We don't need to send a separate status update here because the wrapper will
+            # send the final CANCELLED status via _send_task_result.
+            # However, the _handle_task_cancel method WILL send a confirmation back immediately.
+
+            # Clean up might happen in the wrapper's finally block
+            # If the task was PENDING/ACCEPTED but not yet running, remove it here.
+            if original_status in [TaskStatus.PENDING, TaskStatus.ACCEPTED]:
+                if task_id in self.tasks:
+                    del self.tasks[task_id]
+                self.active_tasks = max(0, self.active_tasks - 1)
+                logger.debug(
+                    f"Removed non-running cancelled task {task_id}. Active tasks: {self.active_tasks}"
+                )
+                # Since it wasn't running, send the final status now
+                await self._send_task_result(
+                    task_id, None, TaskStatus.CANCELLED, task.error
+                )
+
+            return True
+        except Exception as e:
+            logger.error(f"Error cancelling task {task_id}: {str(e)}", exc_info=True)
+            # Try to revert status if cancellation failed? Probably not necessary.
+            return False
 
     def _handle_autonomous_test(self, task: DistributedTask) -> Dict[str, Any]:
         """
@@ -671,7 +736,7 @@ class SniperWorkerNode(BaseNode):
         Returns:
             Dictionary with test results
         """
-        logger.info(f"Handling autonomous test task: {task.task_id}")
+        logger.info(f"Handling autonomous test task: {task.id}")
 
         try:
             # Extract testing parameters from task data
@@ -776,7 +841,7 @@ class SniperWorkerNode(BaseNode):
 
     def _handle_vulnerability_scan(self, task: DistributedTask) -> Dict[str, Any]:
         """Handle vulnerability scanning task."""
-        logger.info(f"Handling vulnerability scan task: {task.task_id}")
+        logger.info(f"Handling vulnerability scan task: {task.id}")
         # Implementation for vulnerability scanning
         # This could use other components from the Sniper framework
         return {
@@ -787,13 +852,30 @@ class SniperWorkerNode(BaseNode):
 
     def _handle_recon_task(self, task: DistributedTask) -> Dict[str, Any]:
         """Handle reconnaissance task."""
-        logger.info(f"Handling recon task: {task.task_id}")
+        logger.info(f"Handling recon task: {task.id}")
         # Implementation for reconnaissance tasks
         # This could use the SmartRecon component
         return {
             "status": "completed",
             "message": "Reconnaissance completed",
             "results": [],  # Placeholder for actual recon results
+        }
+
+    async def status_update(self) -> Dict[str, Any]:
+        """Get status information about the worker node."""
+        # This should return general node status, not task-specific status
+        return {
+            "node_id": self.id,
+            "status": self.status.name,
+            "load": (
+                self.active_tasks / self.max_concurrent_tasks
+                if self.max_concurrent_tasks > 0
+                else 0
+            ),
+            "active_tasks": self.active_tasks,
+            "capabilities": self.capabilities,
+            "uptime": self.uptime(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
 

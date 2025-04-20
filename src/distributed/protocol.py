@@ -11,7 +11,10 @@ import logging
 import time
 from datetime import datetime, timezone
 from enum import Enum, auto
-from typing import Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+
+if TYPE_CHECKING:
+    from typing import Type
 
 logger = logging.getLogger("sniper.distributed.protocol")
 
@@ -42,6 +45,8 @@ class MessageType(Enum):
     SHUTDOWN = auto()
     PAUSE = auto()
     RESUME = auto()
+    ERROR = auto()
+    NODE_STATUS_CONFIRM = auto()
 
 
 class ProtocolMessage:
@@ -56,7 +61,7 @@ class ProtocolMessage:
         message_type: MessageType,
         sender_id: str,
         receiver_id: str,
-        payload: Dict[str, Any] = None,
+        payload: Optional[Dict[str, Any]] = None,
         message_id: Optional[str] = None,
         timestamp: Optional[str] = None,
     ):
@@ -116,7 +121,10 @@ class ProtocolMessage:
         """
         message_type_str = message_dict.get("message_type")
         try:
-            message_type = MessageType[message_type_str]
+            if message_type_str is not None:
+                message_type = MessageType[message_type_str]
+            else:
+                raise ValueError("Message type is missing")
         except (KeyError, TypeError):
             raise ValueError(f"Invalid message type: {message_type_str}")
 
@@ -158,7 +166,7 @@ class RegisterMessage(ProtocolMessage):
         self,
         sender_id: str,
         receiver_id: str,
-        payload: Dict[str, Any] = None,
+        payload: Optional[Dict[str, Any]] = None,
         message_id: Optional[str] = None,
         timestamp: Optional[str] = None,
     ):
@@ -193,7 +201,7 @@ class HeartbeatMessage(ProtocolMessage):
         self,
         sender_id: str,
         receiver_id: str,
-        payload: Dict[str, Any] = None,
+        payload: Optional[Dict[str, Any]] = None,
         message_id: Optional[str] = None,
         timestamp: Optional[str] = None,
     ):
@@ -228,7 +236,7 @@ class TaskStatusMessage(ProtocolMessage):
         self,
         sender_id: str,
         receiver_id: str,
-        payload: Dict[str, Any] = None,
+        payload: Optional[Dict[str, Any]] = None,
         message_id: Optional[str] = None,
         timestamp: Optional[str] = None,
     ):
@@ -263,7 +271,7 @@ class TaskResultMessage(ProtocolMessage):
         self,
         sender_id: str,
         receiver_id: str,
-        payload: Dict[str, Any] = None,
+        payload: Optional[Dict[str, Any]] = None,
         message_id: Optional[str] = None,
         timestamp: Optional[str] = None,
     ):
@@ -299,7 +307,7 @@ class NodeStatusMessage(ProtocolMessage):
         self,
         sender_id: str,
         receiver_id: str,
-        payload: Dict[str, Any] = None,
+        payload: Optional[Dict[str, Any]] = None,
         message_id: Optional[str] = None,
         timestamp: Optional[str] = None,
     ):
@@ -334,7 +342,7 @@ class TaskAssignmentMessage(ProtocolMessage):
         self,
         sender_id: str,
         receiver_id: str,
-        payload: Dict[str, Any] = None,
+        payload: Optional[Dict[str, Any]] = None,
         message_id: Optional[str] = None,
         timestamp: Optional[str] = None,
     ):
@@ -369,7 +377,7 @@ class TaskCancelMessage(ProtocolMessage):
         self,
         sender_id: str,
         receiver_id: str,
-        payload: Dict[str, Any] = None,
+        payload: Optional[Dict[str, Any]] = None,
         message_id: Optional[str] = None,
         timestamp: Optional[str] = None,
     ):

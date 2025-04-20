@@ -162,7 +162,9 @@ class Sublist3rIntegration(ToolIntegration):
             output_path.unlink(missing_ok=True)  # Clean up
             return None
 
-    def scan(self, target: str) -> List[BaseFinding]:
+    async def scan(
+        self, target: str, options: dict[str, Any] | None = None
+    ) -> List[BaseFinding]:
         """
         Legacy method for backward compatibility.
 
@@ -171,21 +173,16 @@ class Sublist3rIntegration(ToolIntegration):
 
         Args:
             target: The root domain to scan for subdomains.
+            options: Additional options for the scan.
 
         Returns:
             List of findings from the scan.
         """
-        log.warning(
-            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
-        )
-
+        log.warning("The scan method is deprecated. Use run followed by parse_output.")
         try:
-            # Run the scan and get raw results
-            scan_result = self.run(target)
-
-            # Parse the results
+            scan_result = await self.run(target, options=options or {})
             findings = self.parse_output(scan_result)
             return findings if findings is not None else []
         except Exception as e:
-            log.exception(f"Error in scan method: {e}")
+            log.exception(f"Error during Sublist3r scan: {e}")
             return []

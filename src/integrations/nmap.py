@@ -142,7 +142,9 @@ class NmapIntegration(ToolIntegration):
             log.warning("Could not reliably extract target from command string.")
         return None
 
-    def scan(self, target: str, ports: Optional[str] = None) -> List[BaseFinding]:
+    async def scan(
+        self, target: str, ports: Optional[str] = None, options: List[str] = []
+    ) -> List[BaseFinding]:
         """
         Legacy method for backward compatibility.
 
@@ -152,6 +154,7 @@ class NmapIntegration(ToolIntegration):
         Args:
             target: The host or network to scan.
             ports: The ports to scan (e.g., "22,80,443" or "top1000").
+            options: Additional options to pass to the scan.
 
         Returns:
             List of findings from the scan.
@@ -162,7 +165,9 @@ class NmapIntegration(ToolIntegration):
 
         try:
             # Run the scan and get raw results
-            scan_result = self.run(target, options={"ports": ports} if ports else None)
+            scan_result = await self.run(
+                target, options={"ports": ports, "additional_options": options}
+            )
 
             # Parse the results
             findings = self.parse_output(scan_result)

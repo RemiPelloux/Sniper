@@ -338,7 +338,7 @@ def test_discover_plugins_nonexistent_dir(caplog):
     manager = PluginManager(plugin_dirs=["nonexistent/path"])
     with caplog.at_level(logging.WARNING):
         manager.discover_plugins()
-    assert "Plugin directory not found: nonexistent/path" in caplog.text
+    assert "Plugin directory not found or not a directory: nonexistent/path" in caplog.text
     assert len(manager._discovered_plugin_classes) == 0
 
 
@@ -448,7 +448,7 @@ def test_unload_plugin_not_loaded(temp_plugin_dir, caplog):
     # Instantiate but don't load
     manager.instantiate_plugin("GoodPlugin")
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.DEBUG):
         success = manager.unload_plugin("GoodPlugin")
 
     assert success is True  # Should not fail
@@ -527,7 +527,7 @@ def test_unload_all_plugins(temp_plugin_dir, caplog):
     assert "UnloadErrorPlugin" in manager.loaded_plugins  # Failed unload (raises Error)
     assert good_instance.unload_called is True
     # Check the log message for the number successfully unloaded
-    assert "Unloaded 1 plugins." in caplog.text
+    assert "Unloaded 1 plugins successfully." in caplog.text
 
 
 def test_register_all_cli_commands(temp_plugin_dir):
@@ -560,8 +560,8 @@ def test_discover_plugins_duplicate_name(temp_plugin_dir_with_duplicates, caplog
     )  # Only one entry for "GoodPlugin"
     assert "GoodPlugin" in manager._discovered_plugin_classes
 
-    # Check that the warning was logged
-    assert "Duplicate plugin name 'GoodPlugin' found." in caplog.text
+    # Check that the warning was logged - partial match since exact message includes paths
+    assert "Duplicate plugin name 'GoodPlugin' found in" in caplog.text
 
     # Check that the *last* discovered plugin instance is kept (based on dir iteration order)
     # This assertion is removed as os.listdir order is not guaranteed.

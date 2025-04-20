@@ -251,6 +251,46 @@ class VulnerabilityPredictor:
             predictions = self.model.predict(scaled_features)
             return [float(pred) for pred in predictions]
 
+    def predict_risk(self, findings: List[BaseFinding]) -> List[float]:
+        """Predict risk scores for a list of findings."""
+        if not self.model or not self.vectorizer:
+            return []
+
+        # Check if model has been trained
+        if (
+            not hasattr(self.model, "estimators_")
+            or len(getattr(self.model, "estimators_", [])) == 0
+        ):
+            # Model not trained yet, return default scores based on severity
+            return [
+                self._convert_severity_to_value(finding.severity)
+                for finding in findings
+            ]
+
+        features = [self.extract_features(finding) for finding in findings]
+        features_array = np.array(features)
+
+        # Scale features
+        scaled_features = self.scaler.transform(features_array)
+
+        # Make predictions
+        if hasattr(self.model, "predict_proba"):
+            probabilities = self.model.predict_proba(scaled_features)
+            predicted_risks = [prob[1] for prob in probabilities]
+        else:
+            predictions = self.model.predict(scaled_features)
+            predicted_risks = [float(pred) for pred in predictions]
+
+        # Assign risk scores back to findings (example, adjust as needed)
+        risk_scores = []
+        for i, finding in enumerate(findings):
+            # finding.risk_score = predicted_risks[i] # Assuming BaseFinding gets a risk_score field
+            # finding.predicted_severity = FindingSeverity.INFO # Placeholder
+            # log.debug(f"Predicted risk for finding {finding.id}: {predicted_risks[i]}")
+            risk_scores.append(predicted_risks[i])
+
+        return risk_scores
+
 
 def get_prediction_model(model_path: Optional[str] = None) -> VulnerabilityPredictor:
     """

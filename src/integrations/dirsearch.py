@@ -108,7 +108,7 @@ class DirsearchIntegration(ToolIntegration):
             )
             raise ToolIntegrationError(f"Dirsearch execution failed: {e}") from e
 
-    def parse_output(
+    async def parse_output(
         self, raw_output: Path | ExecutionResult
     ) -> list[BaseFinding] | None:
         """Parse Dirsearch JSON report file into WebFinding objects."""
@@ -198,7 +198,7 @@ class DirsearchIntegration(ToolIntegration):
             report_path.unlink(missing_ok=True)
             return None
 
-    def scan(
+    async def scan(
         self, target: str, wordlist_size: str = "medium", verify_ssl: bool = True
     ) -> List[BaseFinding]:
         """
@@ -221,13 +221,13 @@ class DirsearchIntegration(ToolIntegration):
 
         try:
             # Run the scan and get raw results
-            scan_result = self.run(
+            scan_result = await self.run(
                 target,
                 options={"wordlist_size": wordlist_size, "verify_ssl": verify_ssl},
             )
 
             # Parse the results
-            findings = self.parse_output(scan_result)
+            findings = await self.parse_output(scan_result)
             return findings if findings is not None else []
         except Exception as e:
             log.exception(f"Error in scan method: {e}")

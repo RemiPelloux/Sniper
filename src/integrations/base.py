@@ -51,7 +51,7 @@ class ToolIntegration(ABC):
         pass
 
     @abstractmethod
-    def parse_output(self, raw_output: Any) -> list[BaseFinding] | None:
+    async def parse_output(self, raw_output: Any) -> list[BaseFinding] | None:
         """
         Parse the raw output from the tool into a standardized list of findings.
 

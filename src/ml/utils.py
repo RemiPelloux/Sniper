@@ -62,46 +62,93 @@ def extract_text_features(text: str) -> Dict[str, float]:
     if not text or not isinstance(text, str):
         return {}
 
-    features = {}
+    features: Dict[str, float] = {}
 
     # Check for each pattern
     for feature_name, pattern in PATTERNS.items():
         matches = re.findall(pattern, text)
-        features[f"{feature_name}_count"] = len(matches)
+        features[f"{feature_name}_count"] = float(len(matches))
         features[f"{feature_name}_present"] = 1.0 if matches else 0.0
 
     # Add text length as a feature
-    features["text_length"] = len(text)
+    features["text_length"] = float(len(text))
 
     # Add word count - splitting on whitespace and handling punctuation correctly
     # This ensures word count matches expectations in tests
     words = re.findall(r"\b\w+\b", text)
-    features["word_count"] = len(words)
+    features["word_count"] = float(len(words))
 
     return features
 
 
-def normalize_features(features: Dict[str, float]) -> Dict[str, float]:
+def normalize_features(
+    features: Dict[str, float],
+    scaler_params: Optional[Dict[str, Dict[str, float]]] = None,
+    feature_names: Optional[List[str]] = None,
+) -> Dict[str, float]:
     """
-    Normalize numerical features to the 0-1 range.
+    Normalize features using min-max scaling.
+
+    This function normalizes feature values to a range of 0-1 using either default scaling
+    rules or custom scaling parameters provided by the caller.
 
     Args:
-        features: Dictionary of feature names and their raw values
+        features: Dictionary of feature names and their values
+        scaler_params: Optional dictionary mapping feature names to min/max scaling parameters
+                      Format: {feature_name: {"min": min_value, "max": max_value}}
+        feature_names: Optional list of feature names to include in normalization
+                      If None, all features in the features dictionary will be used
 
     Returns:
-        Dictionary of feature names with normalized values
+        Dictionary of normalized feature names and their values in the range [0, 1]
     """
-    normalized = features.copy()
+    if feature_names is None:
+        feature_names = sorted(features.keys())
 
-    # Normalize text length (typical range 10-1000)
-    if "text_length" in normalized:
-        normalized["text_length"] = min(1.0, normalized["text_length"] / 1000.0)
+    if not features or not feature_names:
+        return {}
 
-    # Normalize word count (typical range 2-200)
-    if "word_count" in normalized:
-        normalized["word_count"] = min(1.0, normalized["word_count"] / 200.0)
+    normalized_features: Dict[str, float] = {}
 
-    return normalized
+    if scaler_params is None:
+        # Default scaling with special handling for text_length and word_count
+        for name in feature_names:
+            value: float = features.get(name, 0.0)
+
+            # Special handling for text_length (divide by 1000 to get 0-1 range)
+            if name == "text_length":
+                normalized_features[name] = min(1.0, value / 1000.0)
+
+            # Special handling for word_count (divide by 200 to get 0-1 range)
+            elif name == "word_count":
+                normalized_features[name] = min(1.0, value / 200.0)
+
+            # Default handling for other features
+            else:
+                max_value: float = max(1.0, value)
+                normalized_features[name] = value / max_value
+
+        return normalized_features
+
+    # Apply scaling using provided parameters
+    for name in feature_names:
+        if name not in features or name not in scaler_params:
+            normalized_features[name] = 0.0
+            continue
+
+        value: float = features[name]
+        params: Dict[str, float] = scaler_params[name]
+        min_val: float = params.get("min", 0.0)
+        max_val: float = params.get("max", 1.0)
+
+        # Avoid division by zero
+        if max_val == min_val:
+            normalized_features[name] = 0.0
+        else:
+            normalized_value: float = (value - min_val) / (max_val - min_val)
+            normalized_features[name] = float(normalized_value)
+
+    return normalized_features
 
 
 def calculate_vulnerability_score(features: Dict[str, float]) -> float:
@@ -145,7 +192,7 @@ def get_severity_value(severity: str) -> float:
 
 
 def features_to_vector(
-    features: Dict[str, float], feature_names: List[str] = None
+    features: Dict[str, float], feature_names: Optional[List[str]] = None
 ) -> np.ndarray:
     """
     Convert a features dictionary to a feature vector.

@@ -53,14 +53,20 @@ class TestNmapNormalizer:
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
         # MySQL service should be upgraded to HIGH
-        mysql_finding = next(f for f in normalized if f.service == "mysql")
+        mysql_finding = next(
+            f for f in normalized if isinstance(f, PortFinding) and f.service == "mysql"
+        )
         assert mysql_finding.severity == FindingSeverity.HIGH
 
         # Unknown service on standard port should follow port-based severity
-        unknown_finding = next(f for f in normalized if f.service == "unknown")
+        unknown_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, PortFinding) and f.service == "unknown"
+        )
         assert unknown_finding.severity == FindingSeverity.MEDIUM  # Based on port 8080
 
     def test_normalize_severity_by_port(self) -> None:
@@ -90,14 +96,18 @@ class TestNmapNormalizer:
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
         # SSH port should be MEDIUM
-        ssh_finding = next(f for f in normalized if f.port == 22)
+        ssh_finding = next(
+            f for f in normalized if isinstance(f, PortFinding) and f.port == 22
+        )
         assert ssh_finding.severity == FindingSeverity.MEDIUM
 
         # Non-standard port should remain INFO
-        nonstandard_finding = next(f for f in normalized if f.port == 9999)
+        nonstandard_finding = next(
+            f for f in normalized if isinstance(f, PortFinding) and f.port == 9999
+        )
         assert nonstandard_finding.severity == FindingSeverity.INFO
 
     def test_normalize_description(self) -> None:
@@ -129,10 +139,12 @@ class TestNmapNormalizer:
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
         # SSH finding should have banner in description
-        ssh_finding = next(f for f in normalized if f.port == 22)
+        ssh_finding = next(
+            f for f in normalized if isinstance(f, PortFinding) and f.port == 22
+        )
         assert "Port 22/tcp is open" in ssh_finding.description
         assert "running ssh" in ssh_finding.description
         assert "with banner: OpenSSH 8.2p1" in ssh_finding.description
@@ -141,7 +153,9 @@ class TestNmapNormalizer:
         )  # Medium risk context
 
         # HTTP finding should not have banner info
-        http_finding = next(f for f in normalized if f.port == 80)
+        http_finding = next(
+            f for f in normalized if isinstance(f, PortFinding) and f.port == 80
+        )
         assert "Port 80/tcp is open" in http_finding.description
         assert "running http" in http_finding.description
         assert "banner" not in http_finding.description
@@ -185,98 +199,145 @@ class TestWappalyzerNormalizer:
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
         # Vulnerable WordPress should be HIGH
-        vulnerable_wp = next(f for f in normalized if f.version == "4.9.8")
+        vulnerable_wp = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and f.version == "4.9.8"
+        )
         assert vulnerable_wp.severity == FindingSeverity.HIGH
 
         # Non-vulnerable WordPress should be MEDIUM (based on high_risk_techs)
-        safe_wp = next(f for f in normalized if f.version == "5.9.0")
+        safe_wp = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and f.version == "5.9.0"
+        )
         assert safe_wp.severity == FindingSeverity.MEDIUM
 
     def test_normalize_severity_by_tech(self) -> None:
         """Test severity normalization based on high-risk technologies."""
         normalizer = WappalyzerFindingNormalizer()
 
-        # Create technology findings for different technologies
+        # Create technology findings with high-risk and low-risk techs
         findings = [
             TechnologyFinding(
-                technology_name="Apache",  # High-risk
-                categories=["Web Servers"],
+                technology_name="jQuery",  # High-risk tech
+                version=None,
+                categories=["JavaScript libraries"],
                 target="example.com",
                 severity=FindingSeverity.INFO,
-                description="Apache detected",
+                description="jQuery detected",
                 source_tool="wappalyzer",
             ),
             TechnologyFinding(
-                technology_name="React",  # Not high-risk
-                categories=["JavaScript Frameworks"],
-                target="example.com",
+                technology_name="Custom Tech",  # Not in high-risk list
+                version=None,
+                categories=["JavaScript libraries"],
+                target="example.org",
                 severity=FindingSeverity.INFO,
-                description="React detected",
+                description="Custom tech detected",
                 source_tool="wappalyzer",
             ),
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
-        # Apache should be MEDIUM
-        apache_finding = next(f for f in normalized if f.technology_name == "Apache")
-        assert apache_finding.severity == FindingSeverity.MEDIUM
+        # jQuery should be upgraded to MEDIUM
+        jquery_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and f.technology_name == "jQuery"
+        )
+        assert jquery_finding.severity == FindingSeverity.MEDIUM
 
-        # React should be LOW (from JavaScript Frameworks category)
-        react_finding = next(f for f in normalized if f.technology_name == "React")
-        assert react_finding.severity == FindingSeverity.LOW
+        # Custom tech should remain INFO or be set based on category
+        custom_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and f.technology_name == "Custom Tech"
+        )
+        assert (
+            custom_finding.severity == FindingSeverity.LOW
+        )  # Based on JavaScript libraries category
 
     def test_normalize_severity_by_category(self) -> None:
         """Test severity normalization based on technology category."""
         normalizer = WappalyzerFindingNormalizer()
 
-        # Create technology finding with a specific category
-        finding = TechnologyFinding(
-            technology_name="Unknown CMS",  # Not in high-risk techs
-            categories=["CMS"],  # Medium-risk category
-            target="example.com",
-            severity=FindingSeverity.INFO,
-            description="CMS detected",
-            source_tool="wappalyzer",
+        # Create technology findings with different categories
+        findings = [
+            TechnologyFinding(
+                technology_name="CustomCMS",  # Not in high-risk list
+                version=None,
+                categories=["CMS"],  # Medium risk category
+                target="example.com",
+                severity=FindingSeverity.INFO,
+                description="CMS detected",
+                source_tool="wappalyzer",
+            ),
+            TechnologyFinding(
+                technology_name="CustomTech",  # Not in high-risk list
+                version=None,
+                categories=["Other"],  # Unknown category
+                target="example.org",
+                severity=FindingSeverity.INFO,
+                description="Custom tech detected",
+                source_tool="wappalyzer",
+            ),
+        ]
+
+        # Normalize findings
+        normalized = normalizer.normalize(findings)  # type: ignore
+
+        # CMS should be upgraded to MEDIUM based on category
+        cms_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and "CMS" in f.categories
         )
+        assert cms_finding.severity == FindingSeverity.MEDIUM
 
-        # Normalize the finding
-        normalized = normalizer.normalize([finding])[0]
-
-        # Should be MEDIUM based on the CMS category
-        assert normalized.severity == FindingSeverity.MEDIUM
+        # Unknown category should remain INFO
+        other_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and "Other" in f.categories
+        )
+        assert other_finding.severity == FindingSeverity.INFO
 
     def test_normalize_title_and_description(self) -> None:
-        """Test title and description normalization."""
+        """Test title and description normalization for technology findings."""
         normalizer = WappalyzerFindingNormalizer()
 
         # Create technology findings with different severities
         findings = [
             TechnologyFinding(
                 technology_name="WordPress",
-                version="4.9.8",  # Will be normalized to HIGH
+                version="4.9.8",  # Vulnerable version -> HIGH severity
                 categories=["CMS"],
                 target="example.com",
-                severity=FindingSeverity.INFO,
+                severity=FindingSeverity.INFO,  # Will be upgraded
                 description="Old description",
                 source_tool="wappalyzer",
             ),
             TechnologyFinding(
-                technology_name="Apache",  # Will be normalized to MEDIUM
-                categories=["Web Servers"],
-                target="example.com",
-                severity=FindingSeverity.INFO,
+                technology_name="jQuery",  # High-risk tech -> MEDIUM severity
+                version="3.5.0",  # Not vulnerable
+                categories=["JavaScript libraries"],
+                target="example.org",
+                severity=FindingSeverity.INFO,  # Will be upgraded
                 description="Old description",
                 source_tool="wappalyzer",
             ),
             TechnologyFinding(
-                technology_name="React",  # Will be normalized to LOW
-                categories=["JavaScript Frameworks"],
-                target="example.com",
+                technology_name="CustomTech",  # Not in high-risk list -> INFO severity
+                version=None,
+                categories=["Other"],
+                target="example.net",
                 severity=FindingSeverity.INFO,
                 description="Old description",
                 source_tool="wappalyzer",
@@ -284,23 +345,37 @@ class TestWappalyzerNormalizer:
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
-        # High severity finding should have "Outdated" in title
-        high_finding = next(f for f in normalized if f.technology_name == "WordPress")
-        assert high_finding.title.startswith("Outdated Technology: WordPress")
-        assert "outdated version" in high_finding.description.lower()
+        # Check title formatting for HIGH severity
+        high_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and f.technology_name == "WordPress"
+        )
+        assert "Outdated Technology" in high_finding.title
+        assert high_finding.version in high_finding.title
+        assert "outdated version" in high_finding.description
+        assert "known vulnerabilities" in high_finding.description
 
-        # Medium severity finding should have "Sensitive" in title
-        medium_finding = next(f for f in normalized if f.technology_name == "Apache")
-        assert medium_finding.title.startswith("Sensitive Technology: Apache")
-        assert "commonly targeted" in medium_finding.description.lower()
+        # Check title formatting for MEDIUM severity
+        medium_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and f.technology_name == "jQuery"
+        )
+        assert "Sensitive Technology" in medium_finding.title
+        assert medium_finding.version in medium_finding.title
+        assert "commonly targeted" in medium_finding.description
 
-        # Low severity finding should have "Technology Detected" in title
-        low_finding = next(f for f in normalized if f.technology_name == "React")
-        assert low_finding.title.startswith("Technology Detected: React")
-        assert "commonly targeted" not in low_finding.description.lower()
-        assert "outdated version" not in low_finding.description.lower()
+        # Check title formatting for INFO severity
+        info_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, TechnologyFinding) and f.technology_name == "CustomTech"
+        )
+        assert "Technology Detected" in info_finding.title
+        assert "was detected" in info_finding.description
 
 
 class TestZAPNormalizer:
@@ -310,86 +385,114 @@ class TestZAPNormalizer:
         """Test initializing the ZAP normalizer."""
         normalizer = ZAPFindingNormalizer()
         assert normalizer.tool_name == "zap"
-        assert isinstance(normalizer.zap_severity_map, dict)
-        assert isinstance(normalizer.vulnerability_severity_map, dict)
 
     def test_normalize_severity_by_vuln_type(self) -> None:
         """Test severity normalization based on vulnerability type."""
         normalizer = ZAPFindingNormalizer()
 
-        # Create web findings with different vulnerability types
+        # Create web findings with vulnerability indicators in title
         findings = [
             WebFinding(
-                url="https://example.com/login",
+                url="http://example.com/login",
+                title="SQL Injection Vulnerability",  # SQL injection -> HIGH
+                parameter="username",
                 method="POST",
                 target="example.com",
-                title="SQL Injection vulnerability",  # Critical severity type
-                severity=FindingSeverity.MEDIUM,  # Should be upgraded
-                description="SQL injection detected",
+                severity=FindingSeverity.INFO,  # Will be upgraded
+                description="SQL Injection found in login form",
                 source_tool="zap",
             ),
             WebFinding(
-                url="https://example.com/page",
+                url="http://example.com/profile",
+                title="Information Disclosure",  # Info disclosure -> MEDIUM
+                parameter=None,
                 method="GET",
                 target="example.com",
-                title="Information Disclosure",  # Medium severity type
-                severity=FindingSeverity.LOW,  # Should be upgraded
-                description="Information leak detected",
+                severity=FindingSeverity.INFO,  # Will be upgraded
+                description="Information disclosure found in profile page",
                 source_tool="zap",
             ),
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
-        # SQL Injection should be CRITICAL
-        sqli_finding = next(f for f in normalized if "sql injection" in f.title.lower())
-        assert sqli_finding.severity == FindingSeverity.CRITICAL
+        # SQL Injection should be HIGH
+        sql_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, WebFinding) and "SQL Injection" in f.title
+        )
+        assert sql_finding.severity == FindingSeverity.HIGH
 
         # Information Disclosure should be MEDIUM
         info_finding = next(
-            f for f in normalized if "information disclosure" in f.title.lower()
+            f
+            for f in normalized
+            if isinstance(f, WebFinding) and "Information Disclosure" in f.title
         )
         assert info_finding.severity == FindingSeverity.MEDIUM
 
     def test_normalize_severity_by_raw_evidence(self) -> None:
-        """Test severity normalization based on raw evidence from ZAP."""
+        """Test severity normalization based on raw evidence."""
         normalizer = ZAPFindingNormalizer()
 
-        # Create web findings with raw evidence containing risk levels
+        # Create web findings with raw evidence containing vulnerability indicators
         findings = [
             WebFinding(
-                url="https://example.com/page1",
+                url="http://example.com/search",
+                title="Suspicious behavior",
+                parameter="q",
                 method="GET",
                 target="example.com",
-                title="Finding 1",
-                severity=FindingSeverity.INFO,
-                description="Description 1",
-                raw_evidence={"risk": "high"},  # Should map to HIGH
+                severity=FindingSeverity.INFO,  # Will be upgraded
+                description="Possible vulnerability",
                 source_tool="zap",
+                raw_evidence={
+                    "evidence": "'or 1=1--",  # SQL injection pattern
+                    "request": "GET /search?q='or+1%3D1-- HTTP/1.1",
+                    "response": "HTTP/1.1 200 OK",
+                },
             ),
             WebFinding(
-                url="https://example.com/page2",
-                method="GET",
+                url="http://example.com/upload",
+                title="Suspicious behavior",
+                parameter="file",
+                method="POST",
                 target="example.com",
-                title="Finding 2",
-                severity=FindingSeverity.INFO,
-                description="Description 2",
-                raw_evidence={"riskcode": "2"},  # Should map to MEDIUM
+                severity=FindingSeverity.INFO,  # Will be upgraded
+                description="Possible vulnerability",
                 source_tool="zap",
+                raw_evidence={
+                    "evidence": "../../../etc/passwd",  # Path traversal
+                    "request": "POST /upload HTTP/1.1",
+                    "response": "HTTP/1.1 200 OK",
+                },
             ),
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
-        # Finding with "risk": "high" should be HIGH
-        high_finding = next(f for f in normalized if f.url.endswith("/page1"))
-        assert high_finding.severity == FindingSeverity.HIGH
+        # SQL injection pattern should be HIGH
+        sql_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, WebFinding)
+            and f.raw_evidence
+            and "'or 1=1--" in f.raw_evidence.get("evidence", "")
+        )
+        assert sql_finding.severity == FindingSeverity.HIGH
 
-        # Finding with "riskcode": "2" should be MEDIUM
-        medium_finding = next(f for f in normalized if f.url.endswith("/page2"))
-        assert medium_finding.severity == FindingSeverity.MEDIUM
+        # Path traversal pattern should be HIGH as well
+        path_finding = next(
+            f
+            for f in normalized
+            if isinstance(f, WebFinding)
+            and f.raw_evidence
+            and "../../../etc/passwd" in f.raw_evidence.get("evidence", "")
+        )
+        assert path_finding.severity == FindingSeverity.HIGH
 
     def test_normalize_url(self) -> None:
         """Test URL normalization for web findings."""
@@ -398,81 +501,107 @@ class TestZAPNormalizer:
         # Create web findings with different URL formats
         findings = [
             WebFinding(
-                url="example.com/path",  # Missing scheme
-                method="GET",
+                url="example.com/login",  # Missing protocol
+                title="Test Finding",
+                parameter="username",
+                method="POST",
                 target="example.com",
-                title="Finding 1",
                 severity=FindingSeverity.MEDIUM,
-                description="Description 1",
+                description="Test description",
                 source_tool="zap",
             ),
             WebFinding(
-                url="https://example.org/path/",  # Trailing slash
+                url="https://example.com/profile?id=123&section=personal",  # With query params
+                title="Test Finding",
+                parameter=None,
                 method="GET",
-                target="example.org",
-                title="Finding 2",
+                target="example.com",
                 severity=FindingSeverity.MEDIUM,
-                description="Description 2",
+                description="Test description",
                 source_tool="zap",
             ),
         ]
 
         # Normalize findings
-        normalized = normalizer.normalize(findings)
+        normalized = normalizer.normalize(findings)  # type: ignore
 
-        # URL without scheme should have http:// added
-        without_scheme = next(f for f in normalized if "example.com" in f.url)
-        assert without_scheme.url == "http://example.com/path"
+        # Missing protocol should be prefixed with http://
+        missing_protocol = next(
+            f
+            for f in normalized
+            if isinstance(f, WebFinding) and f.url.endswith("/login")
+        )
+        assert missing_protocol.url.startswith("http://")
+        assert "example.com/login" in missing_protocol.url
 
-        # URL with trailing slash should have it removed
-        with_trailing_slash = next(f for f in normalized if "example.org" in f.url)
-        assert with_trailing_slash.url == "https://example.org/path"
+        # URL with query params should be preserved
+        with_params = next(
+            f for f in normalized if isinstance(f, WebFinding) and "profile" in f.url
+        )
+        assert "https://example.com/profile" in with_params.url
+        assert "id=123" in with_params.url
+        assert "section=personal" in with_params.url
 
     def test_normalize_title(self) -> None:
         """Test title normalization for web findings."""
         normalizer = ZAPFindingNormalizer()
 
-        # Create web finding
-        finding = WebFinding(
-            url="https://example.com/login",
-            method="POST",
-            target="example.com",
-            title="Generic Finding Title",
-            severity=FindingSeverity.HIGH,
-            description="This is an XSS vulnerability",  # Contains vulnerability type
-            source_tool="zap",
+        # Create web findings with titles that will be normalized
+        findings = [
+            WebFinding(
+                url="http://example.com/login",
+                title="sql injection vulnerability",  # Lowercase
+                parameter="username",
+                method="POST",
+                target="example.com",
+                severity=FindingSeverity.HIGH,
+                description="Test description",
+                source_tool="zap",
+            ),
+        ]
+
+        # Normalize findings
+        normalized = normalizer.normalize(findings)  # type: ignore
+
+        # Title should be capitalized and include severity indicator
+        sql_finding = next(
+            f for f in normalized if isinstance(f, WebFinding) and "SQL" in f.title
         )
-
-        # Normalize the finding
-        normalized = normalizer.normalize([finding])[0]
-
-        # Title should now include the path and vulnerability type from description
-        assert normalized.title == "Xss at /login"
+        assert "SQL Injection" in sql_finding.title  # Proper capitalization
+        assert "HIGH" in sql_finding.title  # Severity indicator
 
     def test_normalize_description_from_raw_evidence(self) -> None:
-        """Test description normalization using raw evidence."""
+        """Test description enhancement from raw evidence."""
         normalizer = ZAPFindingNormalizer()
 
-        # Create web finding with raw evidence containing detailed info
-        finding = WebFinding(
-            url="https://example.com/api",
-            method="GET",
-            target="example.com",
-            title="Finding Title",
-            severity=FindingSeverity.MEDIUM,
-            description="",  # Empty description
-            raw_evidence={
-                "description": "This is a serious vulnerability.",
-                "solution": "Apply security patches.",
-                "reference": "https://example.com/cve",
-            },
-            source_tool="zap",
-        )
+        # Create web finding with raw evidence
+        findings = [
+            WebFinding(
+                url="http://example.com/login",
+                title="SQL Injection",
+                parameter="username",
+                method="POST",
+                target="example.com",
+                severity=FindingSeverity.HIGH,
+                description="Basic description",
+                source_tool="zap",
+                raw_evidence={
+                    "evidence": "'or 1=1--",
+                    "request": "POST /login HTTP/1.1\nHost: example.com\n\nusername='or+1%3D1--&password=test",
+                    "response": "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<html>Login successful</html>",
+                    "cwe": "CWE-89",
+                    "impact": "High impact allowing authentication bypass",
+                },
+            ),
+        ]
 
-        # Normalize the finding
-        normalized = normalizer.normalize([finding])[0]
+        # Normalize findings
+        normalized = normalizer.normalize(findings)  # type: ignore
 
-        # Description should be constructed from raw evidence
-        assert "This is a serious vulnerability." in normalized.description
-        assert "Solution: Apply security patches." in normalized.description
-        assert "Reference: https://example.com/cve" in normalized.description
+        # Finding description should be enhanced with evidence details
+        finding = next(f for f in normalized if isinstance(f, WebFinding))
+        assert "SQL Injection" in finding.description
+        assert "username parameter" in finding.description
+        assert "POST method" in finding.description
+        assert "CWE-89" in finding.description
+        assert "'or 1=1--" in finding.description

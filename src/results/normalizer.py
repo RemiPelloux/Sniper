@@ -7,7 +7,7 @@ findings from different security tools into a consistent format.
 
 import logging
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set, Type, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union, cast
 
 from src.results.types import (
     BaseFinding,
@@ -44,7 +44,7 @@ class FindingNormalizer:
         Returns:
             List of normalized BaseFinding objects
         """
-        normalized_findings = []
+        normalized_findings: List[BaseFinding] = []
 
         for finding in raw_findings:
             # Ensure tool name is set correctly
@@ -141,7 +141,7 @@ class ResultNormalizer:
                 tool_groups[finding.source_tool].append(finding)
 
             # Normalize each group separately
-            normalized_findings = []
+            normalized_findings: List[BaseFinding] = []
             for tool, tool_findings in tool_groups.items():
                 normalizer = self.normalizers.get(tool)
                 if normalizer:
@@ -174,11 +174,11 @@ class ResultNormalizer:
             findings_by_type[type(finding)].append(finding)
 
         # Process each type separately using type-specific deduplication
-        deduplicated = []
+        deduplicated: List[BaseFinding] = []
 
         # Handle port findings
         port_findings = [
-            f
+            cast(PortFinding, f)
             for f in findings_by_type.get(PortFinding, [])
             if isinstance(f, PortFinding)
         ]
@@ -186,13 +186,15 @@ class ResultNormalizer:
 
         # Handle web findings
         web_findings = [
-            f for f in findings_by_type.get(WebFinding, []) if isinstance(f, WebFinding)
+            cast(WebFinding, f)
+            for f in findings_by_type.get(WebFinding, [])
+            if isinstance(f, WebFinding)
         ]
         deduplicated.extend(self._deduplicate_web_findings(web_findings))
 
         # Handle subdomain findings
         subdomain_findings = [
-            f
+            cast(SubdomainFinding, f)
             for f in findings_by_type.get(SubdomainFinding, [])
             if isinstance(f, SubdomainFinding)
         ]
@@ -200,7 +202,7 @@ class ResultNormalizer:
 
         # Handle technology findings
         tech_findings = [
-            f
+            cast(TechnologyFinding, f)
             for f in findings_by_type.get(TechnologyFinding, [])
             if isinstance(f, TechnologyFinding)
         ]

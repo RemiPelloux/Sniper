@@ -1,11 +1,13 @@
 """
-Nmap findings normalizer for Sniper CLI.
+Normalizer for NMAP scan findings.
 
-This module defines the normalizer for Nmap port scan findings.
+This module defines a normalizer that converts raw NMAP scan output into
+standardized infrastructure findings format.
 """
 
 import logging
-from typing import Dict, List, Optional
+import re
+from typing import Any, Dict, List, Optional, cast
 
 from src.results.normalizer import FindingNormalizer
 from src.results.types import BaseFinding, FindingSeverity, PortFinding
@@ -14,151 +16,273 @@ log = logging.getLogger(__name__)
 
 
 class NmapFindingNormalizer(FindingNormalizer):
-    """Normalizer for Nmap port scanning findings."""
+    """Normalizer for NMAP scan findings."""
 
     def __init__(self) -> None:
-        """Initialize the Nmap normalizer."""
+        """Initialize the NMAP normalizer with severity mappings."""
         super().__init__("nmap")
-        # Define service-based severity mappings
-        self.service_severity_map: Dict[str, FindingSeverity] = {
-            # Common high-risk services
-            "ssh": FindingSeverity.MEDIUM,
-            "telnet": FindingSeverity.HIGH,
-            "ftp": FindingSeverity.MEDIUM,
-            "mysql": FindingSeverity.HIGH,
-            "mssql": FindingSeverity.HIGH,
-            "oracle": FindingSeverity.HIGH,
-            "postgres": FindingSeverity.HIGH,
-            "mongodb": FindingSeverity.HIGH,
-            "redis": FindingSeverity.HIGH,
-            "memcached": FindingSeverity.HIGH,
-            "vnc": FindingSeverity.HIGH,
-            "rdp": FindingSeverity.HIGH,
-            # Common web services
-            "http": FindingSeverity.MEDIUM,
-            "https": FindingSeverity.LOW,
-            # Default for other services
-            "default": FindingSeverity.INFO,
+
+        # Map service states to severity levels
+        self.severity_map: Dict[str, FindingSeverity] = {
+            "open": FindingSeverity.MEDIUM,  # Open ports are medium severity
+            "filtered": FindingSeverity.LOW,  # Filtered ports are low severity
+            "open|filtered": FindingSeverity.LOW,  # Ambiguous state - low severity
+            "closed|filtered": FindingSeverity.INFO,  # Mostly closed - informational
+            "closed": FindingSeverity.INFO,  # Closed ports are informational
         }
 
-        # Define port-based severity mappings
-        self.port_severity_map: Dict[int, FindingSeverity] = {
-            # SSH port
-            22: FindingSeverity.MEDIUM,
-            # Telnet port
-            23: FindingSeverity.HIGH,
-            # FTP ports
-            20: FindingSeverity.MEDIUM,
-            21: FindingSeverity.MEDIUM,
-            # Database ports
-            1433: FindingSeverity.HIGH,  # MSSQL
-            1521: FindingSeverity.HIGH,  # Oracle
-            3306: FindingSeverity.HIGH,  # MySQL
-            5432: FindingSeverity.HIGH,  # PostgreSQL
-            27017: FindingSeverity.HIGH,  # MongoDB
-            6379: FindingSeverity.HIGH,  # Redis
-            11211: FindingSeverity.HIGH,  # Memcached
-            # Remote access ports
-            3389: FindingSeverity.HIGH,  # RDP
-            5900: FindingSeverity.HIGH,  # VNC
-            # Web ports
-            80: FindingSeverity.MEDIUM,  # HTTP
-            443: FindingSeverity.LOW,  # HTTPS
-            8080: FindingSeverity.MEDIUM,  # HTTP alt
-            8443: FindingSeverity.LOW,  # HTTPS alt
-        }
+        # Services that warrant higher severity if found open
+        self.high_risk_services: List[str] = [
+            "telnet",
+            "ftp",
+            "rsh",
+            "rlogin",
+            "rexec",  # Unencrypted legacy services
+            "mysql",
+            "mssql",
+            "postgresql",
+            "mongodb",
+            "redis",  # Databases
+            "smb",
+            "netbios",
+            "ldap",  # Windows/directory services
+            "vnc",
+            "rdp",  # Remote access
+            "snmp",  # Network management
+        ]
 
-    def _normalize_severity(self, finding: BaseFinding) -> FindingSeverity:
-        """Normalize severity based on port and service information.
+        # Critical severity for these services if found open
+        self.critical_risk_services: List[str] = [
+            "ms-sql-s",
+            "oracle",
+            "mysql-alt",  # Database servers
+            "elasticsearch",  # Search engines that might have data
+            "kibana",
+            "grafana",  # Dashboards
+            "jenkins",
+            "tomcat",  # DevOps and web services
+            "mongodb",
+            "redis",
+            "memcached",  # NoSQL databases
+        ]
 
-        For Nmap findings, severity is determined by:
-        1. The service running on the port (if known)
-        2. The port number itself
-        3. Default to INFO if neither matches
+    def normalize(self, raw_findings: List[BaseFinding]) -> List[BaseFinding]:
+        """
+        Normalize NMAP scan findings.
 
         Args:
-            finding: The finding to normalize
+            raw_findings: List of raw NMAP findings to normalize
+
+        Returns:
+            List of normalized NMAP findings
+        """
+        normalized_findings: List[BaseFinding] = []
+
+        for finding in raw_findings:
+            # Expecting PortFinding, but handle BaseFinding gracefully
+            if not isinstance(finding, PortFinding):
+                log.warning(
+                    f"Expected PortFinding but received {type(finding).__name__}, using BaseFinding logic"
+                )
+                # Fallback: basic normalization for BaseFinding
+                finding.source_tool = self.tool_name
+                finding.severity = self._normalize_severity_base(
+                    finding
+                )  # Use a generic severity logic
+                normalized_findings.append(finding)
+                continue  # Skip PortFinding specific logic
+
+            port_finding = cast(PortFinding, finding)
+
+            # Set correct tool name
+            port_finding.source_tool = self.tool_name
+
+            # Normalize severity based on port state and service
+            port_finding.severity = self._normalize_severity_port(port_finding)
+
+            # Create a standardized description
+            port_finding.description = self._normalize_description_port(port_finding)
+
+            # Store original Nmap metadata if not already present
+            if (
+                port_finding.raw_evidence
+                and isinstance(port_finding.raw_evidence, dict)
+                and "nmap_metadata" not in port_finding.raw_evidence
+            ):
+                # Assuming the original finding data was stored in raw_evidence if needed
+                pass  # Or copy relevant fields if raw_evidence structure is known
+
+            normalized_findings.append(port_finding)
+
+        return normalized_findings
+
+    def _normalize_severity_base(self, finding: BaseFinding) -> FindingSeverity:
+        """
+        Normalize severity for a BaseFinding (fallback).
+
+        Args:
+            finding: The BaseFinding to normalize severity for.
 
         Returns:
             Normalized FindingSeverity
         """
-        if not isinstance(finding, PortFinding):
-            return FindingSeverity.INFO
-
-        # Check service first (more specific)
-        if finding.service:
-            service_lower = finding.service.lower()
-
-            # Look for known service patterns
-            for known_service, severity in self.service_severity_map.items():
-                if known_service in service_lower:
-                    return severity
-
-        # Check port number next
-        if finding.port in self.port_severity_map:
-            return self.port_severity_map[finding.port]
-
-        # Default severity for unrecognized ports
+        # Use existing severity if valid, otherwise default
+        if isinstance(finding.severity, FindingSeverity):
+            return finding.severity
+        log.warning(
+            f"Invalid severity '{finding.severity}' for finding '{finding.title}', defaulting to INFO."
+        )
         return FindingSeverity.INFO
 
-    def normalize(self, raw_findings: List[BaseFinding]) -> List[BaseFinding]:
-        """Normalize a list of Nmap findings.
+    def _normalize_severity_port(self, finding: PortFinding) -> FindingSeverity:
+        """
+        Normalize severity based on port state and service for PortFinding.
 
         Args:
-            raw_findings: List of Nmap findings (as PortFinding objects)
+            finding: The NMAP PortFinding to normalize
 
         Returns:
-            List of normalized port findings
+            Normalized FindingSeverity
         """
-        normalized_findings = []
+        # Default to INFO severity, use existing severity if it's higher
+        current_severity = finding.severity
+        severity = FindingSeverity.INFO
+        if (
+            isinstance(current_severity, FindingSeverity)
+            and current_severity.value > severity.value
+        ):
+            severity = current_severity
 
-        for finding in raw_findings:
-            if not isinstance(finding, PortFinding):
-                log.warning(f"Non-PortFinding found in Nmap results: {finding}")
-                continue
+        # Use raw_evidence if metadata is needed and not directly on PortFinding
+        metadata = (
+            finding.raw_evidence if isinstance(finding.raw_evidence, dict) else {}
+        )
 
-            # Set standard source tool
-            finding.source_tool = self.tool_name
+        # Get port state from metadata (assuming it's in raw_evidence)
+        if "state" in metadata:
+            port_state = str(metadata["state"]).lower()
+            # Get base severity from state
+            base_severity = self.severity_map.get(port_state, FindingSeverity.INFO)
+            severity = base_severity
 
-            # Apply severity normalization
-            finding.severity = self._normalize_severity(finding)
+            # Use finding.service directly if available, otherwise check metadata
+            service_name = finding.service or metadata.get("service")
 
-            # Normalize description to ensure consistency
-            finding.description = self._normalize_description(finding)
+            if port_state == "open" and service_name:
+                service = str(service_name).lower()
 
-            normalized_findings.append(finding)
+                # Check for critical services
+                for critical_service in self.critical_risk_services:
+                    if critical_service in service:
+                        return FindingSeverity.CRITICAL
 
-        return normalized_findings
+                # Check for high risk services
+                for high_risk in self.high_risk_services:
+                    if high_risk in service:
+                        return FindingSeverity.HIGH
 
-    def _normalize_description(self, finding: PortFinding) -> str:
-        """Create a standardized description for port findings.
+                # Check for common web services
+                if any(web_svc in service for web_svc in ["http", "https", "www"]):
+                    severity = FindingSeverity.MEDIUM
+
+        return severity
+
+    def _normalize_description_port(self, finding: PortFinding) -> str:
+        """
+        Create a standardized description for an NMAP finding.
 
         Args:
-            finding: The port finding
+            finding: The NMAP PortFinding to generate a description for
 
         Returns:
-            Normalized description
+            Standardized description
         """
-        description_parts = [f"Port {finding.port}/{finding.protocol} is open"]
+        # target might be domain or IP, PortFinding has port/protocol directly
+        target_info = finding.target or "Unknown Target"
+        port = finding.port
+        protocol = finding.protocol
 
+        # Use finding's title if it exists, otherwise generate one
+        desc = finding.title
+
+        # Use raw_evidence if metadata is needed and not directly on PortFinding
+        metadata = (
+            finding.raw_evidence if isinstance(finding.raw_evidence, dict) else {}
+        )
+
+        # Append service/state info to title if not already there
+        service_name = finding.service or str(
+            metadata.get("service", "Unknown service")
+        )
+        state = str(metadata.get("state", "Unknown state"))
+        port_info_str = f"{service_name} ({state}) on {target_info}:{port}/{protocol}"
+        if port_info_str not in desc:
+            desc = f"{desc} - {port_info_str}"
+
+        # Start description body
+        desc_body = f"\nTarget: {target_info}"
+        desc_body += "\n\nDetails:"
+        desc_body += f"\nPort: {port}"
+        desc_body += f"\nProtocol: {protocol}"
         if finding.service:
-            description_parts.append(f"running {finding.service}")
+            desc_body += f"\nService: {finding.service}"
+        else:
+            desc_body += (
+                f"\nService: {str(metadata.get('service', 'N/A'))}"  # From metadata
+            )
 
-        if finding.banner:
-            # Limit banner length to avoid overly long descriptions
-            banner = finding.banner
-            if len(banner) > 100:
-                banner = banner[:97] + "..."
-            description_parts.append(f"with banner: {banner}")
+        # Add metadata information
+        if finding.metadata:
+            if "state" in metadata:
+                desc_body += f"\nState: {metadata['state']}"
 
-        description = " ".join(description_parts) + "."
+            if "service" in metadata:
+                desc_body += f"\nService: {metadata['service']}"
 
-        # Add risk context based on severity
-        if finding.severity == FindingSeverity.HIGH:
-            description += (
-                " This service may present a significant security risk if exposed."
+            if "product" in metadata:
+                desc_body += f"\nProduct: {metadata['product']}"
+
+            if "version" in metadata:
+                desc_body += f"\nVersion: {metadata['version']}"
+
+            if "extrainfo" in metadata:
+                desc_body += f"\nExtra Info: {metadata['extrainfo']}"
+
+            if "reason" in metadata:
+                desc_body += f"\nReason: {metadata['reason']}"
+
+            if "cpe" in metadata:
+                if isinstance(metadata["cpe"], list):
+                    desc_body += "\n\nCPE:"
+                    for cpe in metadata["cpe"]:
+                        desc_body += f"\n- {cpe}"
+                else:
+                    desc_body += f"\n\nCPE: {metadata['cpe']}"
+
+            if "scripts" in metadata:
+                desc_body += "\n\nScript Output:"
+                scripts = metadata["scripts"]
+                if isinstance(scripts, dict):
+                    for script_name, output in scripts.items():
+                        desc_body += f"\n\n{script_name}:\n{str(output)}"  # Ensure output is string
+
+        # Add severity-specific context to the body
+        if finding.severity == FindingSeverity.CRITICAL:
+            desc_body += (
+                "\n\nThis is a CRITICAL finding that requires immediate attention. "
+                "The service identified is considered high-risk and may provide "
+                "direct access to sensitive systems or data with minimal authentication."
+            )
+        elif finding.severity == FindingSeverity.HIGH:
+            desc_body += (
+                "\n\nThis is a HIGH severity finding. The service identified is "
+                "considered risky and should be properly secured or disabled if not needed."
             )
         elif finding.severity == FindingSeverity.MEDIUM:
-            description += " This service should be properly secured if exposed."
+            desc_body += (
+                "\n\nThis is a MEDIUM severity finding. The service should be reviewed "
+                "to ensure it's properly configured and required for business operations."
+            )
 
-        return description
+        # Combine title and body
+        return f"{desc}{desc_body}"

@@ -107,7 +107,7 @@ class WappalyzerFindingNormalizer(FindingNormalizer):
         Returns:
             List of normalized technology findings
         """
-        normalized_findings = []
+        normalized_findings: List[BaseFinding] = []
 
         for finding in raw_findings:
             if not isinstance(finding, TechnologyFinding):

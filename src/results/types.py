@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -30,7 +30,7 @@ class BaseFinding(BaseModel):
     source_tool: str = Field(
         ..., description="Name of the tool that generated this finding."
     )
-    raw_evidence: Any | None = Field(
+    raw_evidence: Optional[Any] = Field(
         None, description="Raw output or data from the tool for reference."
     )
 
@@ -40,10 +40,10 @@ class PortFinding(BaseFinding):
 
     port: int = Field(..., description="The network port number.")
     protocol: str = Field("tcp", description="Network protocol (e.g., tcp, udp).")
-    service: str | None = Field(
+    service: Optional[str] = Field(
         None, description="Service identified running on the port."
     )
-    banner: str | None = Field(
+    banner: Optional[str] = Field(
         None, description="Service banner information, if available."
     )
 
@@ -60,13 +60,13 @@ class WebFinding(BaseFinding):
     """Model for findings related to web paths or vulnerabilities."""
 
     url: str = Field(..., description="Specific URL where the finding occurred.")
-    method: str | None = Field(
+    method: Optional[str] = Field(
         None, description="HTTP method associated with the finding (GET, POST, etc.)."
     )
-    parameter: str | None = Field(
+    parameter: Optional[str] = Field(
         None, description="Specific parameter involved, if applicable."
     )
-    status_code: int | None = Field(
+    status_code: Optional[int] = Field(
         None, description="HTTP status code observed, if relevant."
     )
 
@@ -98,12 +98,14 @@ class TechnologyFinding(BaseFinding):
     """Model for detected technologies on a web target."""
 
     technology_name: str = Field(..., description="Name of the detected technology.")
-    version: str | None = Field(None, description="Detected version of the technology.")
-    categories: list[str] = Field(
+    version: Optional[str] = Field(
+        None, description="Detected version of the technology."
+    )
+    categories: List[str] = Field(
         default_factory=list, description="Categories the technology belongs to."
     )
     # Wappalyzer often provides confidence scores, could add later
-    # confidence: int | None = Field(None, description="Confidence score (0-100)")
+    # confidence: Optional[int] = Field(None, description="Confidence score (0-100)")
 
     def __init__(self, **data: Any):
         if "title" not in data:
@@ -129,8 +131,8 @@ class TechnologyFinding(BaseFinding):
 
 # We can add more specific finding types later, e.g.:
 # class VulnerabilityFinding(WebFinding):
-#     cwe: str | None = None
-#     cvss_score: float | None = None
+#     cwe: Optional[str] = None
+#     cvss_score: Optional[float] = None
 
 
 class ScanResult(BaseModel):

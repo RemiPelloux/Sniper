@@ -115,7 +115,9 @@ class WappalyzerIntegration(ToolIntegration):
             )
             raise ToolIntegrationError(f"Wappalyzer execution failed: {e}") from e
 
-    def parse_output(self, raw_output: ExecutionResult) -> list[BaseFinding] | None:
+    async def parse_output(
+        self, raw_output: ExecutionResult
+    ) -> list[BaseFinding] | None:
         """Parse Wappalyzer JSON output (expected on stdout) into TechnologyFinding
         objects. Handles the format from the 'wappalyzer' package (s0md3v).
         Expected format: { \"url1\": { \"Tech1\": {...}, \"Tech2\": {...} }, ... }
@@ -230,7 +232,7 @@ class WappalyzerIntegration(ToolIntegration):
             log.exception(f"Error processing Wappalyzer output: {e}")
             return None
 
-    def scan(self, target: str, verify_ssl: bool = True) -> list[BaseFinding]:
+    async def scan(self, target: str, verify_ssl: bool = True) -> list[BaseFinding]:
         """
         Legacy method for backward compatibility.
 
@@ -244,16 +246,14 @@ class WappalyzerIntegration(ToolIntegration):
         Returns:
             List of findings from the scan.
         """
-        log.warning(
-            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
-        )
+        log.warning("The scan method is deprecated. Use run followed by parse_output.")
 
         try:
             # Run the scan and get raw results
-            scan_result = self.run(target, options={"verify_ssl": verify_ssl})
+            scan_result = await self.run(target, options={"verify_ssl": verify_ssl})
 
             # Parse the results
-            findings = self.parse_output(scan_result)
+            findings = await self.parse_output(scan_result)
             return findings if findings is not None else []
         except Exception as e:
             log.exception(f"Error in scan method: {e}")

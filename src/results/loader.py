@@ -77,7 +77,7 @@ def _load_from_json(file_path: Path) -> List[BaseFinding]:
                 return _parse_findings_list([data])
             else:
                 # Try to handle other formats or target-grouped findings
-                findings = []
+                findings: List[BaseFinding] = []
                 for target, target_findings in data.items():
                     if isinstance(target_findings, list):
                         # Target-grouped findings
@@ -87,6 +87,9 @@ def _load_from_json(file_path: Path) -> List[BaseFinding]:
                             finding.target = target
                         findings.extend(parsed)
                 return findings
+
+        # Return empty list for unsupported data format
+        return []
     except Exception as e:
         logger.error(f"Error loading findings from {file_path}: {str(e)}")
         return []
@@ -102,7 +105,7 @@ def _parse_findings_list(data_list: List[Dict[str, Any]]) -> List[BaseFinding]:
     Returns:
         List of BaseFinding objects
     """
-    findings = []
+    findings: List[BaseFinding] = []
 
     for item in data_list:
         try:
@@ -111,7 +114,7 @@ def _parse_findings_list(data_list: List[Dict[str, Any]]) -> List[BaseFinding]:
 
             # Create the appropriate finding object based on type
             if finding_type == "port" or "port" in item:
-                finding = _create_port_finding(item)
+                finding: BaseFinding = _create_port_finding(item)
             elif finding_type == "web" or "url" in item:
                 finding = _create_web_finding(item)
             elif finding_type == "subdomain" or "subdomain" in item:

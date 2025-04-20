@@ -8,7 +8,7 @@ This module provides FastAPI-based REST endpoints for:
 
 import logging
 from threading import Thread
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import uvicorn
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -16,6 +16,9 @@ from pydantic import BaseModel, Field
 
 from src.distributed.base import NodeInfo, NodeRole, NodeStatus
 from src.distributed.protocol import MessageType, ProtocolMessage
+
+if TYPE_CHECKING:
+    from src.distributed.base import BaseNode, DistributedTask, MasterNode, WorkerNode
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +134,8 @@ def create_master_app(master_node) -> FastAPI:
             # Convert to protocol message and process
             message = ProtocolMessage(
                 message_type=MessageType.REGISTER,
-                source_id=registration.node_id or "unknown",
-                destination_id=master_node.id,
+                sender_id=registration.node_id or "unknown",
+                receiver_id=master_node.id,
                 payload=node_info.to_dict(),
             )
 
@@ -154,8 +157,8 @@ def create_master_app(master_node) -> FastAPI:
             # Convert to protocol message and process
             message = ProtocolMessage(
                 message_type=MessageType.HEARTBEAT,
-                source_id=heartbeat.node_id,
-                destination_id=master_node.id,
+                sender_id=heartbeat.node_id,
+                receiver_id=master_node.id,
                 payload={
                     "status": heartbeat.status,
                     "active_tasks": heartbeat.active_tasks,
@@ -179,8 +182,8 @@ def create_master_app(master_node) -> FastAPI:
             # Convert to protocol message and process
             message = ProtocolMessage(
                 message_type=MessageType.TASK_STATUS,
-                source_id=status_update.worker_id,
-                destination_id=master_node.id,
+                sender_id=status_update.worker_id,
+                receiver_id=master_node.id,
                 payload={
                     "task_id": status_update.task_id,
                     "status": status_update.status,
@@ -207,8 +210,8 @@ def create_master_app(master_node) -> FastAPI:
             # Convert to protocol message and process
             message = ProtocolMessage(
                 message_type=MessageType.TASK_RESULT,
-                source_id=result.worker_id,
-                destination_id=master_node.id,
+                sender_id=result.worker_id,
+                receiver_id=master_node.id,
                 payload={
                     "task_id": result.task_id,
                     "status": result.status,
@@ -237,8 +240,8 @@ def create_master_app(master_node) -> FastAPI:
             # Convert to protocol message and process
             message = ProtocolMessage(
                 message_type=MessageType.NODE_STATUS,
-                source_id=status_update.node_id,
-                destination_id=master_node.id,
+                sender_id=status_update.node_id,
+                receiver_id=master_node.id,
                 payload={
                     "status": status_update.status,
                     "uptime": status_update.uptime,
@@ -267,7 +270,7 @@ def create_master_app(master_node) -> FastAPI:
 
             if task:
                 return {
-                    "task_id": task.task_id,
+                    "task_id": task.id,
                     "task_type": task.task_type,
                     "parameters": task.parameters,
                     "priority": task.priority,

@@ -56,7 +56,7 @@ class RiskScorer:
     risk analysis and prioritization of security findings.
     """
 
-    def __init__(self, model_dir: str = None):
+    def __init__(self, model_dir: Optional[str] = None) -> None:
         """
         Initialize the RiskScorer class.
 
@@ -67,8 +67,8 @@ class RiskScorer:
         os.makedirs(self.model_dir, exist_ok=True)
 
         # Initialize models
-        self.risk_model = None
-        self.scaler = StandardScaler()
+        self.risk_model: Optional[Any] = None
+        self.scaler: Optional[StandardScaler] = None
 
         # CVSS scoring components and weights
         self.cvss_weights = {

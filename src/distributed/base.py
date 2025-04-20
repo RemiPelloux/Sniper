@@ -12,7 +12,10 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+
+if TYPE_CHECKING:
+    from .protocol import ProtocolMessage  # For type checking only
 
 # Create module logger
 logger = logging.getLogger(__name__)
@@ -50,14 +53,18 @@ class TaskPriority(Enum):
 
 
 class TaskStatus(Enum):
-    """Enum defining possible status values for tasks."""
+    """Enumeration of possible task statuses."""
 
-    PENDING = "pending"
-    ASSIGNED = "assigned"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELED = "canceled"
+    PENDING = "PENDING"
+    ASSIGNED = "ASSIGNED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    TIMEOUT = "TIMEOUT"  # Corrected case
+    REJECTED = "REJECTED"  # Corrected case
+    ACCEPTED = "ACCEPTED"  # Corrected case
+    CANCELLED = "CANCELLED"  # Corrected case and removed duplicate 'CANCELED'
+    UNKNOWN = "UNKNOWN"  # Corrected case
 
 
 class DistributedTask:
@@ -67,10 +74,11 @@ class DistributedTask:
         self,
         task_type: str,
         target: Dict[str, Any],
-        parameters: Dict[str, Any] = None,
+        parameters: Optional[Dict[str, Any]] = None,
         priority: TaskPriority = TaskPriority.MEDIUM,
         timeout: int = 3600,  # Default timeout of 1 hour
-        dependencies: List[str] = None,
+        dependencies: Optional[List[str]] = None,
+        task_id: Optional[str] = None,  # Allow passing ID
     ):
         """
         Initialize a new distributed task.
@@ -82,8 +90,9 @@ class DistributedTask:
             priority: Priority level for this task
             timeout: Timeout in seconds
             dependencies: List of task IDs that must complete before this task
+            task_id: Optional specific task ID to use.
         """
-        self.id = str(uuid.uuid4())
+        self.id = task_id or str(uuid.uuid4())
         self.task_type = task_type
         self.target = target
         self.parameters = parameters or {}
@@ -92,11 +101,15 @@ class DistributedTask:
         self.dependencies = dependencies or []
         self.status = TaskStatus.PENDING
         self.created_at = datetime.now(timezone.utc)
-        self.started_at = None
-        self.completed_at = None
-        self.assigned_node = None
-        self.result = None
-        self.error = None
+        self.updated_at: Optional[datetime] = self.created_at  # Added
+        self.started_at: Optional[datetime] = None  # Added
+        self.assigned_at: Optional[datetime] = None  # Added
+        self.completed_at: Optional[datetime] = None  # Added
+        self.assigned_node: Optional[str] = None  # Added
+        self.result: Optional[Any] = None  # Added
+        self.error: Optional[str] = None  # Added
+        self.failure_reason: Optional[str] = None  # Added
+        self.retries: int = 0  # Added
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the task to a dictionary for serialization."""
@@ -110,36 +123,67 @@ class DistributedTask:
             "dependencies": self.dependencies,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
+            "updated_at": (
+                self.updated_at.isoformat() if self.updated_at else None
+            ),  # Added
             "started_at": self.started_at.isoformat() if self.started_at else None,
+            "assigned_at": (
+                self.assigned_at.isoformat() if self.assigned_at else None
+            ),  # Added
             "completed_at": (
                 self.completed_at.isoformat() if self.completed_at else None
             ),
             "assigned_node": self.assigned_node,
             "result": self.result,
             "error": self.error,
+            "failure_reason": self.failure_reason,  # Added
+            "retries": self.retries,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DistributedTask":
         """Create a task from a dictionary."""
         task = cls(
+            task_id=data["id"],  # Use task_id param
             task_type=data["task_type"],
             target=data["target"],
-            parameters=data["parameters"],
-            priority=TaskPriority(data["priority"]),
-            timeout=data["timeout"],
-            dependencies=data["dependencies"],
+            parameters=data.get("parameters", {}),  # Use get for optional
+            priority=TaskPriority(
+                data.get("priority", TaskPriority.MEDIUM.value)
+            ),  # Use get, default
+            timeout=data.get("timeout", 3600),  # Use get, default
+            dependencies=data.get("dependencies", []),  # Use get, default
         )
-        task.id = data["id"]
-        task.status = TaskStatus(data["status"])
+        # task.id is set in __init__
+        task.status = TaskStatus(
+            data.get("status", TaskStatus.PENDING.value)
+        )  # Use get, default
         task.created_at = datetime.fromisoformat(data["created_at"])
-        if data["started_at"]:
-            task.started_at = datetime.fromisoformat(data["started_at"])
-        if data["completed_at"]:
-            task.completed_at = datetime.fromisoformat(data["completed_at"])
-        task.assigned_node = data["assigned_node"]
-        task.result = data["result"]
-        task.error = data["error"]
+        task.updated_at = (
+            datetime.fromisoformat(data["updated_at"])
+            if data.get("updated_at")
+            else task.created_at
+        )  # Added
+        task.started_at = (
+            datetime.fromisoformat(data["started_at"])
+            if data.get("started_at")
+            else None
+        )
+        task.assigned_at = (
+            datetime.fromisoformat(data["assigned_at"])
+            if data.get("assigned_at")
+            else None
+        )  # Added
+        task.completed_at = (
+            datetime.fromisoformat(data["completed_at"])
+            if data.get("completed_at")
+            else None
+        )
+        task.assigned_node = data.get("assigned_node")  # Use get
+        task.result = data.get("result")  # Use get
+        task.error = data.get("error")  # Use get
+        task.failure_reason = data.get("failure_reason")  # Added
+        task.retries = data.get("retries", 0)
         return task
 
 
@@ -153,7 +197,7 @@ class NodeInfo:
         hostname: str,
         address: str,
         port: int,
-        capabilities: List[str] = None,
+        capabilities: Optional[List[str]] = None,
     ):
         """
         Initialize node information.
@@ -174,14 +218,16 @@ class NodeInfo:
         self.capabilities = capabilities or []
         self.status = NodeStatus.IDLE
         self.heartbeat = datetime.now(timezone.utc)
+        self.last_updated: Optional[datetime] = self.heartbeat  # Added
         self.stats = {
             "cpu": 0.0,
             "memory": 0.0,
             "tasks_completed": 0,
             "tasks_failed": 0,
             "uptime": 0,
+            "current_load": 0.0,  # Renamed from "load" for clarity
         }
-        self.current_tasks = []
+        self.current_tasks: List[str] = []  # Type hint added
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the node info to a dictionary for serialization."""
@@ -194,6 +240,9 @@ class NodeInfo:
             "capabilities": self.capabilities,
             "status": self.status.value,
             "heartbeat": self.heartbeat.isoformat(),
+            "last_updated": (
+                self.last_updated.isoformat() if self.last_updated else None
+            ),  # Added
             "stats": self.stats,
             "current_tasks": self.current_tasks,
         }
@@ -207,13 +256,53 @@ class NodeInfo:
             hostname=data["hostname"],
             address=data["address"],
             port=data["port"],
-            capabilities=data["capabilities"],
+            capabilities=data.get("capabilities", []),  # Use get
         )
-        node.status = NodeStatus(data["status"])
+        node.status = NodeStatus(data.get("status", NodeStatus.IDLE.value))  # Use get
         node.heartbeat = datetime.fromisoformat(data["heartbeat"])
-        node.stats = data["stats"]
-        node.current_tasks = data["current_tasks"]
+        node.last_updated = (
+            datetime.fromisoformat(data["last_updated"])
+            if data.get("last_updated")
+            else node.heartbeat
+        )  # Added
+        node.stats = data.get("stats", {})  # Use get
+        node.current_tasks = data.get("current_tasks", [])  # Use get
         return node
+
+
+class WorkerMetrics:
+    """Metrics specific to worker performance."""
+
+    def __init__(
+        self,
+        node_id: str,
+        capabilities: List[str],
+        current_load: float = 0.0,
+        task_count: int = 0,
+        success_rate: float = 1.0,
+        response_time: float = 0.0,  # Average response time
+        last_heartbeat: float = 0.0,  # Use timestamp float for easier comparison
+        total_assigned: int = 0,  # Added
+        total_execution_time: float = 0.0,  # Added
+        penalty_score: int = 0,  # Added
+    ):
+        self.node_id = node_id
+        self.capabilities = capabilities
+        self.current_load = current_load
+        self.task_count = task_count
+        self.success_rate = success_rate
+        self.response_time = response_time
+        self.last_heartbeat = last_heartbeat
+        self.total_assigned = total_assigned
+        self.total_execution_time = total_execution_time
+        self.penalty_score = penalty_score
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.__dict__
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "WorkerMetrics":
+        return cls(**data)
 
 
 class BaseNode(abc.ABC):
@@ -225,6 +314,7 @@ class BaseNode(abc.ABC):
         hostname: Optional[str] = None,
         address: Optional[str] = None,
         port: int = 5000,
+        capabilities: Optional[List[str]] = None,
     ):
         """
         Initialize the base node.
@@ -234,6 +324,7 @@ class BaseNode(abc.ABC):
             hostname: Hostname of the node (auto-detected if None)
             address: IP address of the node (auto-detected if None)
             port: Port to listen on
+            capabilities: List of capabilities this node supports
         """
         import socket
 
@@ -252,6 +343,7 @@ class BaseNode(abc.ABC):
         self.port = port
         self.start_time = datetime.now(timezone.utc)
         self.status = NodeStatus.INITIALIZING
+        self.capabilities = capabilities or []
 
     @abc.abstractmethod
     def start(self) -> bool:
@@ -282,15 +374,17 @@ class MasterNode(BaseNode):
         hostname: Optional[str] = None,
         address: Optional[str] = None,
         port: int = 5000,
+        capabilities: Optional[List[str]] = None,
     ):
         """Initialize the master node."""
-        super().__init__(node_id, hostname, address, port)
+        super().__init__(node_id, hostname, address, port, capabilities)
         self.role = NodeRole.MASTER
-        self.workers = {}  # Map of worker IDs to NodeInfo objects
-        self.task_queue = []  # List of pending tasks
-        self.active_tasks = {}  # Map of task IDs to assigned worker IDs
-        self.completed_tasks = {}  # Map of task IDs to results
-        self.failed_tasks = {}  # Map of task IDs to error messages
+        self.workers: Dict[str, NodeInfo] = {}  # Map of worker IDs to NodeInfo objects
+        self.tasks: List["DistributedTask"] = []  # All tasks
+        self.task_queue: List["DistributedTask"] = []  # List of pending tasks
+        self.active_tasks: Dict[str, str] = {}  # Map of task IDs to assigned worker IDs
+        self.completed_tasks: Dict[str, Any] = {}  # Map of task IDs to results
+        self.failed_tasks: Dict[str, str] = {}  # Map of task IDs to error messages
 
     @abc.abstractmethod
     def register_worker(self, worker_info: NodeInfo) -> bool:
@@ -381,6 +475,95 @@ class MasterNode(BaseNode):
         """
         pass
 
+    def _handle_register(self, message: "ProtocolMessage") -> Dict[str, Any]:
+        """
+        Handle a registration message from a worker.
+        Internal method used by protocol handlers.
+
+        Args:
+            message: Registration message
+
+        Returns:
+            Registration response data
+        """
+        # Default implementation - should be overridden by concrete classes
+        logger.warning("Default _handle_register called - this should be overridden")
+        return {"node_id": message.sender_id}
+
+    def _handle_heartbeat(self, message: "ProtocolMessage") -> Dict[str, Any]:
+        """
+        Handle a heartbeat message from a worker.
+        Internal method used by protocol handlers.
+
+        Args:
+            message: Heartbeat message
+
+        Returns:
+            Heartbeat response data
+        """
+        # Default implementation - should be overridden by concrete classes
+        logger.warning("Default _handle_heartbeat called - this should be overridden")
+        return {}
+
+    def _handle_task_status(self, message: "ProtocolMessage") -> Dict[str, Any]:
+        """
+        Handle a task status message from a worker.
+        Internal method used by protocol handlers.
+
+        Args:
+            message: Task status message
+
+        Returns:
+            Task status response data
+        """
+        # Default implementation - should be overridden by concrete classes
+        logger.warning("Default _handle_task_status called - this should be overridden")
+        return {}
+
+    def _handle_task_result(self, message: "ProtocolMessage") -> Dict[str, Any]:
+        """
+        Handle a task result message from a worker.
+        Internal method used by protocol handlers.
+
+        Args:
+            message: Task result message
+
+        Returns:
+            Task result response data
+        """
+        # Default implementation - should be overridden by concrete classes
+        logger.warning("Default _handle_task_result called - this should be overridden")
+        return {}
+
+    def _handle_node_status(self, message: "ProtocolMessage") -> Dict[str, Any]:
+        """
+        Handle a node status message from a worker.
+        Internal method used by protocol handlers.
+
+        Args:
+            message: Node status message
+
+        Returns:
+            Node status response data
+        """
+        # Default implementation - should be overridden by concrete classes
+        logger.warning("Default _handle_node_status called - this should be overridden")
+        return {}
+
+    def get_task_for_worker(self, worker_id: str) -> Optional["DistributedTask"]:
+        """
+        Find a suitable task for a worker.
+
+        Args:
+            worker_id: ID of the worker requesting a task
+
+        Returns:
+            Task to assign to the worker, or None if no suitable task is found
+        """
+        # Default implementation - should be overridden by concrete classes
+        logger.warning("Default get_task_for_worker called - this should be overridden")
+        return None
+
 
 class WorkerNode(BaseNode):
     """Worker node that executes tasks assigned by the master."""
@@ -393,7 +576,7 @@ class WorkerNode(BaseNode):
         hostname: Optional[str] = None,
         address: Optional[str] = None,
         port: int = 5001,
-        capabilities: List[str] = None,
+        capabilities: Optional[List[str]] = None,
     ):
         """
         Initialize the worker node.
@@ -407,13 +590,16 @@ class WorkerNode(BaseNode):
             port: Port to listen on
             capabilities: List of task types this worker can execute
         """
-        super().__init__(node_id, hostname, address, port)
+        super().__init__(node_id, hostname, address, port, capabilities)
         self.role = NodeRole.WORKER
         self.master_address = master_address
         self.master_port = master_port
-        self.capabilities = capabilities or ["port_scan", "web_scan", "subdomain_scan"]
-        self.current_task = None
-        self.task_history = []
+        self.current_task: Optional["DistributedTask"] = None
+        self.task_history: List[str] = []
+        self.active_tasks = 0
+        self.task_count = 0
+        self.success_count = 0
+        self.failure_count = 0
 
     @abc.abstractmethod
     def register_with_master(self) -> bool:
@@ -472,6 +658,54 @@ class WorkerNode(BaseNode):
         """
         pass
 
+    def update_heartbeat(self) -> bool:
+        """
+        Update and send a heartbeat to the master.
+        This is a convenience method that calls send_heartbeat.
+
+        Returns:
+            Whether the heartbeat was sent successfully
+        """
+        return self.send_heartbeat()
+
+    def get_resource_usage(self) -> Dict[str, float]:
+        """
+        Get the current resource usage of the worker.
+
+        Returns:
+            Dictionary containing CPU and memory usage percentages
+        """
+        # Default implementation - real implementations should provide actual metrics
+        return {"cpu": 0.0, "memory": 0.0, "disk": 0.0, "network": 0.0}
+
+    def handle_task(self, task_data: Dict[str, Any]) -> bool:
+        """
+        Handle a task received from the master.
+
+        Args:
+            task_data: Task data from master
+
+        Returns:
+            True if the task was accepted, False otherwise
+        """
+        # Default implementation that should be overridden
+        logger.warning("Default handle_task called - this should be overridden")
+        return False
+
+    def cancel_task(self, task_id: str) -> bool:
+        """
+        Cancel a task that is currently being executed.
+
+        Args:
+            task_id: ID of the task to cancel
+
+        Returns:
+            True if the task was cancelled, False otherwise
+        """
+        # Default implementation that should be overridden
+        logger.warning("Default cancel_task called - this should be overridden")
+        return False
+
 
 class HybridNode(MasterNode, WorkerNode):
     """
@@ -487,7 +721,7 @@ class HybridNode(MasterNode, WorkerNode):
         hostname: Optional[str] = None,
         address: Optional[str] = None,
         port: int = 5000,
-        capabilities: List[str] = None,
+        capabilities: Optional[List[str]] = None,
     ):
         """
         Initialize the hybrid node.
@@ -501,23 +735,45 @@ class HybridNode(MasterNode, WorkerNode):
             port: Port to listen on
             capabilities: List of task types this node can execute
         """
-        BaseNode.__init__(self, node_id, hostname, address, port)
+        BaseNode.__init__(self, node_id, hostname, address, port, capabilities)
         self.role = NodeRole.HYBRID
-        self.capabilities = capabilities or ["port_scan", "web_scan", "subdomain_scan"]
 
         # Master components
-        self.workers = {}
-        self.task_queue = []
-        self.active_tasks = {}
-        self.completed_tasks = {}
-        self.failed_tasks = {}
+        self.workers: Dict[str, NodeInfo] = {}
+        self.tasks: List["DistributedTask"] = []
+        self.task_queue: List["DistributedTask"] = []
+        self.active_tasks: Dict[str, str] = {}
+        self.completed_tasks: Dict[str, Any] = {}
+        self.failed_tasks: Dict[str, str] = {}
 
         # Worker components
         self.parent_master_address = parent_master_address
         self.parent_master_port = parent_master_port
-        self.current_task = None
-        self.task_history = []
+        self.current_task: Optional["DistributedTask"] = None
+        self.task_history: List[str] = []
 
     def is_top_level(self) -> bool:
         """Check if this hybrid node is the top-level master."""
         return self.parent_master_address is None
+
+    def check_heartbeats(self):
+        """Check the heartbeat of all nodes and mark them as OFFLINE if they haven't sent a heartbeat in the last 2 minutes."""
+        current_time = datetime.now(timezone.utc).timestamp()
+        nodes_to_mark_down = []
+
+        for node_id, node in self.workers.items():
+            # Skip if node is already marked as down
+            if node.status == NodeStatus.OFFLINE:
+                continue
+
+            # Convert heartbeat to epoch time for comparison
+            heartbeat_epoch = node.heartbeat.timestamp()
+
+            # Check if heartbeat is too old (> 2 minutes)
+            if current_time - heartbeat_epoch > 120:
+                nodes_to_mark_down.append(node_id)
+
+        # Mark nodes as down
+        for node_id in nodes_to_mark_down:
+            logger.warning(f"Node {node_id} heartbeat timed out, marking as OFFLINE")
+            self.workers[node_id].status = NodeStatus.OFFLINE

@@ -9,7 +9,7 @@ heartbeat monitoring, and recovery strategies.
 import logging
 import threading
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from .base import BaseNode, MasterNode, NodeInfo, NodeRole, NodeStatus, WorkerNode
 from .protocol import ProtocolBase, create_protocol
@@ -58,7 +58,7 @@ class NodeManager:
         self.local_node = MasterNode(
             address=address, port=port, capabilities=capabilities
         )
-        node_id = self.local_node.node_info.node_id
+        node_id = self.local_node.id
 
         # Start the node
         self.local_node.start()
@@ -104,7 +104,7 @@ class NodeManager:
             master_address=master_address,
             master_port=master_port,
         )
-        node_id = self.local_node.node_info.node_id
+        node_id = self.local_node.id
 
         # Start the node
         self.local_node.start()
@@ -132,7 +132,7 @@ class NodeManager:
 
         # Stop the node
         self.local_node.stop()
-        logger.info(f"Stopped node with ID {self.local_node.node_info.node_id}")
+        logger.info(f"Stopped node with ID {self.local_node.id}")
 
         # Reset state
         self.local_node = None
@@ -149,19 +149,17 @@ class NodeManager:
         Returns:
             True if registration was successful, False otherwise.
         """
-        if not self.local_node or self.local_node.node_info.role != NodeRole.MASTER:
+        if not self.local_node or self.local_node.role != NodeRole.MASTER:
             logger.error("Cannot register node: local node is not a master")
             return False
 
         # Check if node already exists
-        if node_info.node_id in self.nodes:
-            logger.warning(
-                f"Node {node_info.node_id} already registered, updating info"
-            )
+        if node_info.id in self.nodes:
+            logger.warning(f"Node {node_info.id} already registered, updating info")
 
         # Register the node
-        self.nodes[node_info.node_id] = node_info
-        logger.info(f"Registered node {node_info.node_id} ({node_info.role.name})")
+        self.nodes[node_info.id] = node_info
+        logger.info(f"Registered node {node_info.id} ({node_info.role.name})")
 
         return True
 
@@ -174,7 +172,7 @@ class NodeManager:
         Returns:
             True if unregistration was successful, False otherwise.
         """
-        if not self.local_node or self.local_node.node_info.role != NodeRole.MASTER:
+        if not self.local_node or self.local_node.role != NodeRole.MASTER:
             logger.error("Cannot unregister node: local node is not a master")
             return False
 
@@ -216,7 +214,7 @@ class NodeManager:
 
     def _start_heartbeat(self) -> None:
         """Start the heartbeat thread for worker nodes."""
-        if not self.local_node or self.local_node.node_info.role != NodeRole.WORKER:
+        if not self.local_node or self.local_node.role != NodeRole.WORKER:
             logger.error("Cannot start heartbeat: local node is not a worker")
             return
 
@@ -224,9 +222,7 @@ class NodeManager:
             while not self.should_stop.is_set():
                 try:
                     self.local_node.update_heartbeat()
-                    logger.debug(
-                        f"Sent heartbeat for node {self.local_node.node_info.node_id}"
-                    )
+                    logger.debug(f"Sent heartbeat for node {self.local_node.id}")
                 except Exception as e:
                     logger.error(f"Error sending heartbeat: {str(e)}")
 
@@ -239,7 +235,7 @@ class NodeManager:
 
     def _start_monitoring(self) -> None:
         """Start the monitoring thread for master nodes."""
-        if not self.local_node or self.local_node.node_info.role != NodeRole.MASTER:
+        if not self.local_node or self.local_node.role != NodeRole.MASTER:
             logger.error("Cannot start monitoring: local node is not a master")
             return
 
@@ -252,7 +248,7 @@ class NodeManager:
 
                     for node_id, node in self.nodes.items():
                         # Skip if node is already marked as down
-                        if node.status == NodeStatus.DOWN:
+                        if node.status == NodeStatus.OFFLINE:
                             continue
 
                         # Convert heartbeat to epoch time for comparison
@@ -265,9 +261,9 @@ class NodeManager:
                     # Mark nodes as down
                     for node_id in nodes_to_mark_down:
                         logger.warning(
-                            f"Node {node_id} heartbeat timed out, marking as DOWN"
+                            f"Node {node_id} heartbeat timed out, marking as OFFLINE"
                         )
-                        self.nodes[node_id].status = NodeStatus.DOWN
+                        self.nodes[node_id].status = NodeStatus.OFFLINE
 
                         # TODO: Implement recovery strategy for node failure
                         # - Reassign tasks from failed node

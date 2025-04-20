@@ -34,6 +34,7 @@ def sample_findings():
             tool_name="zap",
             references=["https://owasp.org/www-project-top-ten/2017/A1_2017-Injection"],
             remediation="Use prepared statements",
+            raw_evidence=None,
         ),
         BaseFinding(
             title="XSS",
@@ -50,6 +51,7 @@ def sample_findings():
                 "https://owasp.org/www-project-top-ten/2017/A7_2017-Cross-Site_Scripting_(XSS)"
             ],
             remediation="Sanitize input",
+            raw_evidence=None,
         ),
         BaseFinding(
             title="Weak TLS",
@@ -66,6 +68,7 @@ def sample_findings():
                 "https://www.owasp.org/index.php/Transport_Layer_Protection_Cheat_Sheet"
             ],
             remediation="Use strong TLS configurations",
+            raw_evidence=None,
         ),
         BaseFinding(
             title="SQL Injection",
@@ -80,6 +83,7 @@ def sample_findings():
             tool_name="manual",
             references=["https://owasp.org/www-project-top-ten/2017/A1_2017-Injection"],
             remediation="Use prepared statements",
+            raw_evidence=None,
         ),
     ]
 
@@ -142,6 +146,7 @@ class TestResultAggregator:
             severity=FindingSeverity.MEDIUM,
             target="example.com",
             source_tool="test-tool",
+            raw_evidence=None,
         )
 
         finding2 = BaseFinding(
@@ -150,6 +155,7 @@ class TestResultAggregator:
             severity=FindingSeverity.HIGH,
             target="example.com",
             source_tool="test-tool",
+            raw_evidence=None,
         )
 
         # Use findings with the same source_tool, title, and target

@@ -462,7 +462,7 @@ class SniperMasterNode(MasterNode):
                             f"Task {task_id} exceeded retry limit ({self.task_retry_limit}), marking as failed"
                         )
                         task.status = TaskStatus.FAILED
-                        task.end_time = datetime.now(timezone.utc)
+                        task.completed_at = datetime.now(timezone.utc)
                         task.failure_reason = (
                             f"Exceeded retry limit after worker {worker_id} failure"
                         )
@@ -566,7 +566,7 @@ class SniperMasterNode(MasterNode):
                             f"Task {task_id} exceeded retry limit, marking as failed"
                         )
                         task.status = TaskStatus.FAILED
-                        task.end_time = current_time
+                        task.completed_at = current_time
                         task.failure_reason = "Exceeded timeout and retry limits"
 
                         # Move to completed (failed) tasks
@@ -610,7 +610,7 @@ class SniperMasterNode(MasterNode):
                             f"Task {task_id} exceeded retry limit after being stuck, marking as failed"
                         )
                         task.status = TaskStatus.FAILED
-                        task.end_time = current_time
+                        task.completed_at = current_time
                         task.failure_reason = (
                             "Exceeded retry limit after being stuck in ASSIGNED state"
                         )
@@ -744,8 +744,8 @@ class SniperMasterNode(MasterNode):
             if task.status == TaskStatus.PENDING:
                 if task in self.pending_tasks:
                     self.pending_tasks.remove(task)
-                task.status = TaskStatus.CANCELED
-                logger.info(f"Canceled pending task {task_id}")
+                task.status = TaskStatus.CANCELLED
+                logger.info(f"Cancelled pending task {task_id}")
                 return True
 
             # If task is assigned or running, we need to notify the worker
@@ -762,7 +762,7 @@ class SniperMasterNode(MasterNode):
 
                 try:
                     self.protocol.send_message(cancel_message)
-                    task.status = TaskStatus.CANCELED
+                    task.status = TaskStatus.CANCELLED
                     logger.info(
                         f"Sent cancellation request for task {task_id} to worker {worker_id}"
                     )
@@ -771,7 +771,7 @@ class SniperMasterNode(MasterNode):
                     logger.error(f"Failed to send cancellation request: {e}")
                     return False
 
-            # If task is already completed or failed, it can't be canceled
+            # If task is already completed or failed, it can't be cancelled
             logger.warning(f"Cannot cancel task {task_id} with status {task.status}")
             return False
 
@@ -851,7 +851,7 @@ class SniperMasterNode(MasterNode):
             task = self.tasks[task_id]
             task.results = result
             task.status = TaskStatus.COMPLETED
-            task.completion_time = datetime.now(timezone.utc)
+            task.completed_at = datetime.now(timezone.utc)
 
             # Move to completed tasks
             self.completed_tasks[task_id] = task
@@ -1256,7 +1256,7 @@ class SniperMasterNode(MasterNode):
         elif new_status_enum in [
             TaskStatus.COMPLETED,
             TaskStatus.FAILED,
-            TaskStatus.CANCELED,
+            TaskStatus.CANCELLED,
         ]:
             # If results are included in the payload, store them
             if "result" in payload:
@@ -1357,7 +1357,7 @@ class SniperMasterNode(MasterNode):
                     metrics = self.worker_metrics[task.assigned_node]
                     metrics.current_tasks = max(0, metrics.current_tasks - 1)
                     metrics.total_execution_time += (
-                        task.end_time - task.start_time
+                        task.completed_at - task.start_time
                     ).total_seconds()
                     total_tasks = metrics.success_count + metrics.failure_count
                     if total_tasks > 0:
@@ -1526,6 +1526,83 @@ class SniperMasterNode(MasterNode):
         if task_id in self.tasks:
             return self.tasks[task_id].status
         return None
+
+    def _update_task_status(
+        self, task_id: str, status: TaskStatus, result: Any = None
+    ) -> Optional[DistributedTask]:
+        """
+        Update the status of a task and store its result if completed or failed.
+
+        Args:
+            task_id: The ID of the task to update.
+            status: The new status of the task.
+            result: The result of the task (if completed or failed).
+
+        Returns:
+            The updated task object if found, otherwise None.
+        """
+        with self.task_lock:
+            if task_id not in self.tasks:
+                logger.warning(f"Task {task_id} not found for status update")
+                return None
+
+            task = self.tasks[task_id]
+            old_status = task.status
+            task.status = status
+            task.updated_at = datetime.now(timezone.utc)
+
+            log_message = f"Task {task_id} status updated: {old_status} -> {status}"
+
+            # Handle terminal states
+            if status in [
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.CANCELLED,
+            ]:
+                task.completed_at = task.updated_at  # Use completed_at
+                task.result = result if result is not None else {}
+                task.assigned_node = None  # Task is no longer assigned
+
+                # Move to completed tasks
+                self.completed_tasks[task_id] = task
+                if task_id in self.tasks:
+                    del self.tasks[task_id]  # Remove from active tasks
+
+                # Remove from pending queue if it was there (e.g., cancellation)
+                if task_id in self.pending_tasks:
+                    self.pending_tasks.remove(task_id)
+
+                if status == TaskStatus.COMPLETED:
+                    log_message += f" (Completed at: {task.completed_at})"
+                    # Trigger result callback if defined
+                    if self.result_callback:
+                        try:
+                            # Consider running callback in executor if it's blocking
+                            self.result_callback(task_id, task.result)
+                        except Exception as e:
+                            logger.error(
+                                f"Error executing result callback for task {task_id}: {e}"
+                            )
+                elif status == TaskStatus.FAILED:
+                    log_message += (
+                        f" (Failed at: {task.completed_at}, Result: {result})"
+                    )
+                elif status == TaskStatus.CANCELLED:
+                    log_message += f" (Cancelled at: {task.completed_at})"
+
+            elif status == TaskStatus.RUNNING:
+                task.started_at = task.updated_at  # Update started time
+                log_message += f" (Started at: {task.started_at})"
+
+            elif status == TaskStatus.PENDING:
+                # Reset relevant fields if moving back to pending (e.g., retry)
+                task.started_at = None
+                task.completed_at = None
+                task.assigned_node = None
+                task.result = None
+
+            logger.info(log_message)
+            return task
 
 
 class MasterNodeServer:
