@@ -8,6 +8,7 @@ import shutil
 import sys
 import tempfile
 from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 import pytest
 import typer
@@ -567,6 +568,26 @@ def test_discover_plugins_duplicate_name(temp_plugin_dir_with_duplicates, caplog
     # This assertion is removed as os.listdir order is not guaranteed.
     # kept_plugin_class = manager._discovered_plugin_classes["GoodPlugin"]
     # assert kept_plugin_class.description == "Good Plugin 2 (Duplicate)"
+
+
+def test_plugin_manager_plugin_dir_resolution():
+    """Test that the PluginManager can handle relative and absolute paths."""
+    # Test with relative path
+    relative_manager = PluginManager(plugin_dirs=["tests/fixtures/plugins"])
+    assert len(relative_manager.plugin_dirs) == 1
+    assert relative_manager.plugin_dirs[0] == "tests/fixtures/plugins"
+    
+    # Test with absolute path
+    project_root = Path(os.getcwd())
+    abs_path = str(project_root / "tests" / "fixtures" / "plugins")
+    abs_manager = PluginManager(plugin_dirs=[abs_path])
+    assert len(abs_manager.plugin_dirs) == 1
+    assert abs_manager.plugin_dirs[0] == abs_path
+    
+    # Test with default path
+    default_manager = PluginManager()
+    assert len(default_manager.plugin_dirs) == 1
+    assert default_manager.plugin_dirs[0] == "app/plugins"
 
 
 # TODO: Add tests for discovery from multiple directories

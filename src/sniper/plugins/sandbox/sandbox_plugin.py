@@ -66,14 +66,31 @@ class SandboxPlugin(PluginInterface):
     def _check_docker_prerequisites(self) -> bool:
         """Check if Docker and Docker Compose (v2) are available."""
         try:
-            subprocess.run(["docker", "--version"], check=True, capture_output=True)
-            # Check for Docker Compose v2 (docker compose ...)
-            subprocess.run(
-                ["docker", "compose", "version"], check=True, capture_output=True
+            # Check Docker
+            docker_result = subprocess.run(
+                ["docker", "--version"], check=True, capture_output=True, text=True
             )
+            logger.debug(f"Docker check successful: {docker_result.stdout.strip()}")
+            
+            # Check Docker Compose v2
+            compose_result = subprocess.run(
+                ["docker", "compose", "version"], check=True, capture_output=True, text=True
+            )
+            logger.debug(f"Docker Compose check successful: {compose_result.stdout.strip()}")
+            
             return True
-        except (FileNotFoundError, subprocess.CalledProcessError) as e:
-            logger.debug(f"Docker prerequisite check failed: {e}")
+        except subprocess.CalledProcessError as e:
+            logger.debug(f"Docker prerequisite check failed (process error): {e}")
+            if e.stdout:
+                logger.debug(f"Process stdout: {e.stdout}")
+            if e.stderr:
+                logger.debug(f"Process stderr: {e.stderr}")
+            return False
+        except FileNotFoundError as e:
+            logger.debug(f"Docker prerequisite check failed (command not found): {e}")
+            return False
+        except Exception as e:
+            logger.debug(f"Docker prerequisite check failed (unexpected error): {e}")
             return False
 
     def _get_compose_file_path(self, environment_name: str) -> Optional[str]:
@@ -225,20 +242,30 @@ def _get_sandbox_plugin_instance() -> Optional[SandboxPlugin]:
     # For now, we instantiate it directly for CLI usage, but this should
     # ideally use the main app's plugin manager instance.
     # TODO: Refactor to use a shared plugin manager context.
-    temp_manager = PluginManager()
-    temp_manager.discover_plugins()
-    instance = temp_manager.instantiate_plugin("Sandbox")
-    if isinstance(instance, SandboxPlugin):
-        # Perform prerequisite check here if needed for CLI commands
-        if not instance._check_docker_prerequisites():
-            typer.echo(
-                "Error: Docker or Docker Compose not found. Cannot manage sandbox.",
-                err=True,
-            )
+    try:
+        temp_manager = PluginManager(plugin_dirs=["src/sniper/plugins"])
+        temp_manager.discover_plugins()
+        logger.debug(f"Discovered plugin classes: {list(temp_manager._discovered_plugin_classes.keys())}")
+        
+        instance = temp_manager.instantiate_plugin("Sandbox")
+        logger.debug(f"Instantiated plugin: {instance}")
+        
+        if isinstance(instance, SandboxPlugin):
+            # Perform prerequisite check here if needed for CLI commands
+            if not instance._check_docker_prerequisites():
+                typer.echo(
+                    "Error: Docker or Docker Compose not found. Cannot manage sandbox.",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+            return instance
+        else:
+            logger.error(f"Instantiated plugin is not a SandboxPlugin: {type(instance)}")
+            typer.echo("Error: Could not load Sandbox Plugin.", err=True)
             raise typer.Exit(code=1)
-        return instance
-    else:
-        typer.echo("Error: Could not load Sandbox Plugin.", err=True)
+    except Exception as e:
+        logger.error(f"Error instantiating Sandbox Plugin: {e}", exc_info=True)
+        typer.echo(f"Error: Could not load Sandbox Plugin: {e}", err=True)
         raise typer.Exit(code=1)
 
 

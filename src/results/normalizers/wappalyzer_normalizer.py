@@ -54,6 +54,7 @@ class WappalyzerFindingNormalizer(FindingNormalizer):
             "databases": FindingSeverity.MEDIUM,
             "security": FindingSeverity.LOW,
             "javascript frameworks": FindingSeverity.LOW,
+            "javascript libraries": FindingSeverity.LOW,
             "default": FindingSeverity.INFO,
         }
 

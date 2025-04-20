@@ -1,0 +1,21 @@
+test-custom-tool:
+  name: test-custom-tool
+  version: 1.0.0
+  description: A custom test tool created for integration testing
+  category: web
+  install_command: echo "Installing test-custom-tool"
+  install_method: shell
+  binary_name: test-custom-tool
+  detection_args: --version
+  run_command: echo "Running test-custom-tool with {TARGET}"
+  run_args:
+    - --target={TARGET}
+    - --output={OUTPUT}
+  output_parser: json
+  url: https://example.com/test-custom-tool
+  tags:
+    - test
+    - integration
+  requirements:
+    - python3
+    - bash 

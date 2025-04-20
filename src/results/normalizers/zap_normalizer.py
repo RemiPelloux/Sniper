@@ -57,7 +57,8 @@ class ZAPFindingNormalizer(FindingNormalizer):
         For ZAP findings, severity is determined by:
         1. Vulnerability type (e.g., SQL injection, XSS)
         2. ZAP's own risk level (if available in raw_evidence)
-        3. Default to the original severity
+        3. Check for patterns in raw evidence (SQL injection, path traversal)
+        4. Default to the original severity
 
         Args:
             finding: The finding to normalize
@@ -83,6 +84,18 @@ class ZAPFindingNormalizer(FindingNormalizer):
                 risk_code = str(finding.raw_evidence["riskcode"])
                 if risk_code in self.zap_severity_map:
                     return self.zap_severity_map[risk_code]
+                
+            # Check for patterns in evidence that indicate specific vulnerabilities
+            if "evidence" in finding.raw_evidence:
+                evidence = str(finding.raw_evidence["evidence"])
+                
+                # SQL Injection patterns
+                if any(pattern in evidence for pattern in ["'or 1=1", "' or '1'='1", "1=1--", "'; --"]):
+                    return FindingSeverity.HIGH
+                
+                # Path Traversal patterns
+                if any(pattern in evidence for pattern in ["../", "..\\", "/etc/passwd", "\\windows\\system32"]):
+                    return FindingSeverity.HIGH
 
         # Default to the original severity
         return finding.severity

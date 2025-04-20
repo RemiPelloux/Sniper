@@ -87,6 +87,13 @@ class MockToolManager:
         else:
             return False  # Tool not installed
 
+    def add_tool(self, name: str, config: dict[str, Any], custom: bool = True) -> bool:
+        """Mock add_tool method for testing."""
+        self.install_attempts.append(name)
+        self._tools_data[name] = config
+        self._installation_status[name] = True
+        return True
+
 
 @pytest.fixture(autouse=True)
 def mock_tool_manager(monkeypatch):
@@ -416,3 +423,48 @@ def test_update_tool_failure(mock_tool_manager: MockToolManager, monkeypatch) ->
 
 
 # TODO: Add tests for install/update with --all and --category flags
+
+def test_add_tool_command(mock_tool_manager: MockToolManager, monkeypatch, tmp_path) -> None:
+    """Test the 'sniper tools add' command with a mock YAML file."""
+    # Create a temporary YAML file with the correct structure - tools are defined as a dictionary
+    tool_yaml = tmp_path / "test-tool.yaml"
+    tool_yaml.write_text("""
+test-tool:
+  name: test-tool
+  version: 1.0.0
+  description: A test tool for unit testing
+  category: vulnerability_scanning
+  install_command: apt-get install test-tool
+  install_method: apt
+  binary_name: test-tool
+  detection_args: --version
+  run_command: test-tool scan {TARGET}
+  run_args:
+    - --output={OUTPUT}
+  output_parser: json
+  url: https://example.com/test-tool
+  tags:
+    - test
+    - unit-test
+  requirements:
+    - python3
+""")
+    
+    # Mock the add_tool method in ToolManager
+    def mock_add_tool(self, name, config, custom=True):
+        # Add to our tracking for verification
+        self.install_attempts.append(name)
+        # Update internal state for future checks
+        self._tools_data[name] = config
+        return True
+    
+    monkeypatch.setattr(MockToolManager, "add_tool", mock_add_tool)
+    
+    # Run the command
+    result = runner.invoke(app, ["tools", "add", str(tool_yaml)])
+    
+    # Verify the result
+    assert result.exit_code == 0
+    output = strip_ansi(result.stdout)
+    assert "Successfully added custom tool: test-tool" in output
+    assert "test-tool" in mock_tool_manager.install_attempts

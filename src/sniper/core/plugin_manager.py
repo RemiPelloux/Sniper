@@ -69,10 +69,10 @@ class PluginManager:
 
         Args:
             plugin_dirs: A list of directories to search for plugins.
-                         If None, defaults to ["app/plugins"].
+                         If None, defaults to ["src/sniper/plugins"].
         """
-        # Use a simple relative path as the default
-        default_plugin_dir = "app/plugins"
+        # Use project standard path as the default
+        default_plugin_dir = "src/sniper/plugins"
 
         self.plugin_dirs = (
             plugin_dirs if plugin_dirs is not None else [default_plugin_dir]

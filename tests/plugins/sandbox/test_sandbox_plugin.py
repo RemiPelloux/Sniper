@@ -114,7 +114,7 @@ def test_sandbox_plugin_load_fail(mock_docker_prereqs_fail, caplog):
     assert "Docker or Docker Compose not found" in caplog.text
 
 
-@patch("app.plugins.sandbox.sandbox_plugin.SandboxPlugin._stop_environment")
+@patch("src.sniper.plugins.sandbox.sandbox_plugin.SandboxPlugin._stop_environment")
 def test_sandbox_plugin_unload(mock_stop_env):
     """Test unloading the SandboxPlugin calls stop on known environments."""
     plugin = SandboxPlugin()
@@ -390,3 +390,77 @@ def test_cli_start_sandbox_docker_fail(runner, mock_docker_prereqs_fail):
         # The error message is echoed by the patched helper before exiting
         # runner.invoke captures stderr, but verifying exact message is tricky
         # Check exit code is sufficient here.
+
+
+@patch("subprocess.run")
+def test_docker_check_with_compose_missing(mock_run):
+    """Test Docker check when Docker is installed but compose is missing."""
+    def side_effect(*args, **kwargs):
+        cmd = args[0]
+        if cmd == ["docker", "--version"]:
+            return MagicMock(returncode=0, stdout="Docker version 24.0.5", stderr="")
+        elif cmd == ["docker", "compose", "version"]:
+            raise FileNotFoundError("No docker compose")
+        return MagicMock(returncode=0)
+
+    mock_run.side_effect = side_effect
+    plugin = SandboxPlugin()
+    assert plugin._check_docker_prerequisites() is False
+
+
+@patch("subprocess.run")
+def test_docker_check_with_compose_error(mock_run):
+    """Test Docker check when compose command returns error."""
+    def side_effect(*args, **kwargs):
+        cmd = args[0]
+        if cmd == ["docker", "--version"]:
+            return MagicMock(returncode=0, stdout="Docker version 24.0.5", stderr="")
+        elif cmd == ["docker", "compose", "version"]:
+            raise subprocess.CalledProcessError(1, ["docker", "compose"], "Error")
+        return MagicMock(returncode=0)
+    
+    mock_run.side_effect = side_effect
+    plugin = SandboxPlugin()
+    assert plugin._check_docker_prerequisites() is False
+
+
+@patch("subprocess.run")
+def test_docker_check_with_docker_missing(mock_run):
+    """Test Docker check when Docker itself is missing."""
+    mock_run.side_effect = FileNotFoundError("docker command not found")
+    plugin = SandboxPlugin()
+    assert plugin._check_docker_prerequisites() is False
+
+
+@patch("os.path.exists", return_value=True)
+@patch("subprocess.run")
+def test_get_access_info(mock_run, mock_exists):
+    """Test getting access info for different environments."""
+    plugin = SandboxPlugin()
+    
+    # Case 1: DVWA access info
+    assert "http://localhost:80" in plugin._get_access_info("dvwa")
+    
+    # Case 2: Juice Shop access info
+    assert "http://localhost:3000" in plugin._get_access_info("juiceshop")
+    
+    # Case 3: Unknown environment
+    assert plugin._get_access_info("unknown") is None
+
+
+@patch("os.path.join")
+def test_get_compose_file_path(mock_join):
+    """Test path construction for compose files."""
+    plugin = SandboxPlugin()
+    plugin.plugin_dir = "/fake/path"
+    
+    # Set up mock return values
+    mock_join.side_effect = lambda *args: "/".join(args)
+    
+    # Case 1: Valid environment
+    path = plugin._get_compose_file_path("dvwa")
+    mock_join.assert_called_with("/fake/path", "docker-compose.dvwa.yml")
+    
+    # Case 2: Unknown environment
+    path = plugin._get_compose_file_path("unknown")
+    assert path is None

@@ -168,7 +168,9 @@ class NmapFindingNormalizer(FindingNormalizer):
             # Use finding.service directly if available, otherwise check metadata
             service_name = finding.service or metadata.get("service")
 
-            if port_state == "open" and service_name:
+            if port_state == "open":
+                # If service is identified, check it against our lists
+                if service_name:
                 service = str(service_name).lower()
 
                 # Check for critical services
@@ -184,6 +186,18 @@ class NmapFindingNormalizer(FindingNormalizer):
                 # Check for common web services
                 if any(web_svc in service for web_svc in ["http", "https", "www"]):
                     severity = FindingSeverity.MEDIUM
+                else:
+                    # No service identified, check port number
+                    port = finding.port
+                    
+                    # Common/important ports should remain MEDIUM
+                    common_ports = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 389, 443, 445, 993, 995, 1433, 1521, 3306, 3389, 5432, 8080, 8443]
+                    
+                    if port in common_ports:
+                        severity = FindingSeverity.MEDIUM
+                    else:
+                        # Non-standard ports with no identified service revert to original severity or INFO
+                        severity = current_severity if current_severity != FindingSeverity.MEDIUM else FindingSeverity.INFO
 
         return severity
 
@@ -231,8 +245,7 @@ class NmapFindingNormalizer(FindingNormalizer):
                 f"\nService: {str(metadata.get('service', 'N/A'))}"  # From metadata
             )
 
-        # Add metadata information
-        if finding.metadata:
+        # Add metadata information from raw_evidence
             if "state" in metadata:
                 desc_body += f"\nState: {metadata['state']}"
 

@@ -308,6 +308,18 @@ class ToolManager:
         """
         return self.tools.copy()
 
+    def get_installation_status(self) -> Dict[str, bool]:
+        """
+        Get the installation status of all tools.
+        
+        Returns:
+            Dict[str, bool]: Dictionary mapping tool names to their installation status
+        """
+        status = {}
+        for name in self.tools.keys():
+            status[name] = self.check_tool_availability(name)
+        return status
+
     def check_tool_availability(self, tool_name: str) -> bool:
         """
         Check if a tool is installed and available.
