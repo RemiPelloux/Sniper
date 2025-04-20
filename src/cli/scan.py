@@ -89,10 +89,10 @@ def configure_scan_parameters(
 # Helper function to convert string to ScanDepth enum
 def str_to_scan_depth(depth_str: str) -> ScanDepth:
     """Convert a string to a ScanDepth enum value.
-    
+
     Args:
         depth_str: String representation of the scan depth
-    
+
     Returns:
         ScanDepth enum value
     """
@@ -106,10 +106,10 @@ def str_to_scan_depth(depth_str: str) -> ScanDepth:
 # Helper function to convert strings to ScanModule list
 def str_list_to_scan_modules(module_strs: List[str]) -> List[ScanModule]:
     """Convert a list of string module names to ScanModule enum values.
-    
+
     Args:
         module_strs: List of module names as strings
-    
+
     Returns:
         List of ScanModule enum values
     """
@@ -120,7 +120,7 @@ def str_list_to_scan_modules(module_strs: List[str]) -> List[ScanModule]:
             result.append(module)
         except ValueError:
             log.warning(f"Invalid module string: {module_str}, skipping")
-    
+
     return result if result else [ScanModule.ALL]
 
 
@@ -137,7 +137,9 @@ def scan(
         ScanDepth.STANDARD, "--depth", "-d", help="Scan depth"
     ),
     scan_mode: str = typer.Option(
-        None, "--mode", help="Predefined scan mode to use (e.g., quick, comprehensive, stealth)"
+        None,
+        "--mode",
+        help="Predefined scan mode to use (e.g., quick, comprehensive, stealth)",
     ),
     ignore_ssl: bool = typer.Option(
         False, "--ignore-ssl", help="Ignore SSL certificate errors"
@@ -175,34 +177,41 @@ def scan(
     # Initialize scan mode manager
     scan_mode_manager = ScanModeManager()
     tool_manager = ToolManager()
-    
+
     # If a scan mode was specified, use its configuration
     if scan_mode:
         mode_config = scan_mode_manager.get_scan_mode(scan_mode)
         if not mode_config:
-            typer.echo(f"Error: Scan mode '{scan_mode}' not found. Run 'sniper scan modes' to list available modes.", err=True)
+            typer.echo(
+                f"Error: Scan mode '{scan_mode}' not found. Run 'sniper scan modes' to list available modes.",
+                err=True,
+            )
             raise typer.Exit(code=1)
-        
+
         # Apply the scan mode configuration
-        typer.echo(f"Using scan mode: {scan_mode} - {mode_config.get('description', '')}")
-        
+        typer.echo(
+            f"Using scan mode: {scan_mode} - {mode_config.get('description', '')}"
+        )
+
         # Override modules and depth if specified by scan mode
         if "modules" in mode_config:
             # Convert string module names to ScanModule enum values
             modules = str_list_to_scan_modules(mode_config["modules"])
-        
+
         # Get settings from the scan mode
         settings = mode_config.get("settings", {})
         if "scan_depth" in settings:
             # Convert string depth to ScanDepth enum
             depth = str_to_scan_depth(settings["scan_depth"])
-        
+
         # Log the scan configuration from the scan mode
         max_threads = settings.get("max_threads", 10)
         timeout_value = settings.get("timeout", 3600)
         retries = settings.get("retries", 2)
-        log.info(f"Scan configuration from mode '{scan_mode}': threads={max_threads}, timeout={timeout_value}s, retries={retries}")
-    
+        log.info(
+            f"Scan configuration from mode '{scan_mode}': threads={max_threads}, timeout={timeout_value}s, retries={retries}"
+        )
+
     # Resolve full list of modules to run
     module_list = resolve_scan_modules(modules)
     typer.echo(f"Target: {target}")
@@ -233,9 +242,13 @@ def scan(
                 if scan_mode:
                     # Get tool configurations for this module from the scan mode
                     mode_tools = scan_mode_manager.get_tools_for_scan_mode(scan_mode)
-                    if "wappalyzer" in mode_tools and mode_tools["wappalyzer"].get("enabled", True):
-                        tech_tools["wappalyzer"] = mode_tools["wappalyzer"].get("options", {})
-                
+                    if "wappalyzer" in mode_tools and mode_tools["wappalyzer"].get(
+                        "enabled", True
+                    ):
+                        tech_tools["wappalyzer"] = mode_tools["wappalyzer"].get(
+                            "options", {}
+                        )
+
                 technology_findings = asyncio.run(
                     run_technology_scan(target, ignore_ssl, tech_tools)
                 )
@@ -249,8 +262,10 @@ def scan(
                     for tool in ["sublist3r", "amass", "subfinder"]:
                         if tool in mode_tools and mode_tools[tool].get("enabled", True):
                             subdomain_tools[tool] = mode_tools[tool].get("options", {})
-                
-                subdomain_findings = asyncio.run(run_subdomain_scan(target, subdomain_tools))
+
+                subdomain_findings = asyncio.run(
+                    run_subdomain_scan(target, subdomain_tools)
+                )
                 all_findings.extend(subdomain_findings)
 
             if ScanModule.PORTS.value in module_list:
@@ -260,7 +275,7 @@ def scan(
                     mode_tools = scan_mode_manager.get_tools_for_scan_mode(scan_mode)
                     if "nmap" in mode_tools and mode_tools["nmap"].get("enabled", True):
                         port_tools["nmap"] = mode_tools["nmap"].get("options", {})
-                
+
                 port_findings = asyncio.run(run_port_scan(target, depth, port_tools))
                 all_findings.extend(port_findings)
 
@@ -271,8 +286,10 @@ def scan(
                     mode_tools = scan_mode_manager.get_tools_for_scan_mode(scan_mode)
                     if "zap" in mode_tools and mode_tools["zap"].get("enabled", True):
                         web_tools["zap"] = mode_tools["zap"].get("options", {})
-                
-                web_findings = asyncio.run(run_web_scan(target, depth, ignore_ssl, web_tools))
+
+                web_findings = asyncio.run(
+                    run_web_scan(target, depth, ignore_ssl, web_tools)
+                )
                 all_findings.extend(web_findings)
 
             if ScanModule.DIRECTORIES.value in module_list:
@@ -280,9 +297,13 @@ def scan(
                 if scan_mode:
                     # Get tool configurations for this module from the scan mode
                     mode_tools = scan_mode_manager.get_tools_for_scan_mode(scan_mode)
-                    if "dirsearch" in mode_tools and mode_tools["dirsearch"].get("enabled", True):
-                        dir_tools["dirsearch"] = mode_tools["dirsearch"].get("options", {})
-                
+                    if "dirsearch" in mode_tools and mode_tools["dirsearch"].get(
+                        "enabled", True
+                    ):
+                        dir_tools["dirsearch"] = mode_tools["dirsearch"].get(
+                            "options", {}
+                        )
+
                 directory_findings = asyncio.run(
                     run_directory_scan(target, depth, ignore_ssl, dir_tools)
                 )
@@ -306,30 +327,30 @@ def scan(
 def list_scan_modes() -> None:
     """
     List available scan modes with their descriptions.
-    
+
     Displays all predefined scan modes that can be used with the 'scan run' command.
     """
     scan_mode_manager = ScanModeManager()
     all_modes = scan_mode_manager.get_all_scan_modes()
-    
+
     if not all_modes:
         typer.echo("No scan modes are currently defined.")
         return
-    
+
     # Create a rich table for displaying scan modes
     table = Table(title="Available Scan Modes")
     table.add_column("Name", style="cyan")
     table.add_column("Description", style="green")
     table.add_column("Modules", style="yellow")
     table.add_column("Target Types", style="magenta")
-    
+
     for name, config in all_modes.items():
         description = config.get("description", "")
         modules = ", ".join(config.get("modules", []))
         target_types = ", ".join(config.get("target_types", []))
-        
+
         table.add_row(name, description, modules, target_types)
-    
+
     console.print(table)
 
 
@@ -338,77 +359,82 @@ def resolve_scan_modules(modules: List[ScanModule]) -> List[str]:
     if isinstance(modules, list) and len(modules) > 0 and isinstance(modules[0], str):
         # If we received strings, convert them to ScanModule
         modules = str_list_to_scan_modules(modules)
-    
+
     if ScanModule.ALL in modules:
         return [m.value for m in ScanModule if m != ScanModule.ALL]
     return [m.value for m in modules]
 
 
-async def run_technology_scan(target: str, ignore_ssl: bool, tool_options: Dict = None) -> List:
+async def run_technology_scan(
+    target: str, ignore_ssl: bool, tool_options: Dict = None
+) -> List:
     """Run technology detection scan using Wappalyzer."""
     log.debug(f"Running technology scan against {target}")
     scanner = WappalyzerIntegration()
-    
+
     # Default options
     options = {"verify_ssl": not ignore_ssl}
-    
+
     # Update with tool-specific options if available
     if tool_options and "wappalyzer" in tool_options:
         options.update(tool_options["wappalyzer"])
-    
+
     execution_result = await scanner.run(target, options=options)
-    return scanner.parse_output(execution_result) or []
+    findings = await scanner.parse_output(execution_result)
+    return findings or []
 
 
 async def run_subdomain_scan(target: str, tool_options: Dict = None) -> List:
     """Run subdomain discovery using Sublist3r or other tools based on configuration."""
     log.debug(f"Running subdomain scan against {target}")
     findings = []
-    
+
     # Determine which subdomain tools to use based on configuration
     use_sublist3r = True
     use_amass = False
     use_subfinder = False
-    
+
     sublist3r_options = {}
     amass_options = {}
     subfinder_options = {}
-    
+
     if tool_options:
         # Override default tool selection based on provided options
         if "sublist3r" in tool_options:
             sublist3r_options = tool_options["sublist3r"]
         else:
             use_sublist3r = False
-            
+
         if "amass" in tool_options:
             use_amass = True
             amass_options = tool_options["amass"]
-            
+
         if "subfinder" in tool_options:
             use_subfinder = True
             subfinder_options = tool_options["subfinder"]
-    
+
     # Run tools based on configuration
     if use_sublist3r:
         scanner = Sublist3rIntegration()
         execution_result = await scanner.run(target, options=sublist3r_options)
         findings.extend(scanner.parse_output(execution_result) or [])
-    
+
     # Additional tools would be implemented similarly
     # For now, we'll log that they would run but not implement them fully
     if use_amass:
         log.info(f"Would run Amass with options: {amass_options}")
         # Integration would be implemented here
-        
+
     if use_subfinder:
         log.info(f"Would run Subfinder with options: {subfinder_options}")
         # Integration would be implemented here
-    
+
     return findings
 
 
-async def run_port_scan(target: str, depth: ScanDepth, tool_options: Dict = None) -> List:
+async def run_port_scan(
+    target: str, depth: ScanDepth, tool_options: Dict = None
+) -> List:
     """Run port scan using Nmap with configured options."""
     log.debug(f"Running port scan against {target} with depth {depth.value}")
     scanner = NmapIntegration()
@@ -420,7 +446,7 @@ async def run_port_scan(target: str, depth: ScanDepth, tool_options: Dict = None
     elif depth == ScanDepth.STANDARD:
         options["ports"] = "top1000"
     # Comprehensive uses default (all ports)
-    
+
     # Override with tool-specific options if available
     if tool_options and "nmap" in tool_options:
         options.update(tool_options["nmap"])
@@ -429,7 +455,9 @@ async def run_port_scan(target: str, depth: ScanDepth, tool_options: Dict = None
     return scanner.parse_output(execution_result) or []
 
 
-async def run_web_scan(target: str, depth: ScanDepth, ignore_ssl: bool, tool_options: Dict = None) -> List:
+async def run_web_scan(
+    target: str, depth: ScanDepth, ignore_ssl: bool, tool_options: Dict = None
+) -> List:
     """Run web vulnerability scan using OWASP ZAP with configured options."""
     log.debug(f"Running web scan against {target} with depth {depth.value}")
     scanner = ZapIntegration()
@@ -440,7 +468,7 @@ async def run_web_scan(target: str, depth: ScanDepth, ignore_ssl: bool, tool_opt
         "ajax_spider": depth == ScanDepth.COMPREHENSIVE,
         "verify_ssl": not ignore_ssl,
     }
-    
+
     # Override with tool-specific options if available
     if tool_options and "zap" in tool_options:
         options.update(tool_options["zap"])
@@ -449,14 +477,16 @@ async def run_web_scan(target: str, depth: ScanDepth, ignore_ssl: bool, tool_opt
     return scanner.parse_output(execution_result) or []
 
 
-async def run_directory_scan(target: str, depth: ScanDepth, ignore_ssl: bool, tool_options: Dict = None) -> List:
+async def run_directory_scan(
+    target: str, depth: ScanDepth, ignore_ssl: bool, tool_options: Dict = None
+) -> List:
     """Run directory/file discovery scan using Dirsearch with configured options."""
     log.debug(f"Running directory scan against {target} with depth {depth.value}")
     scanner = DirsearchIntegration()
 
     # Configure scan parameters based on depth
     options = {"verify_ssl": not ignore_ssl}
-    
+
     if depth == ScanDepth.QUICK:
         options["wordlist"] = "common.txt"
         options["extensions"] = "php,html"
@@ -466,7 +496,7 @@ async def run_directory_scan(target: str, depth: ScanDepth, ignore_ssl: bool, to
     else:  # COMPREHENSIVE
         options["wordlist"] = "big.txt"
         options["extensions"] = "php,html,js,txt,bak,old,sql,zip"
-    
+
     # Override with tool-specific options if available
     if tool_options and "dirsearch" in tool_options:
         options.update(tool_options["dirsearch"])
@@ -481,26 +511,31 @@ def output_scan_results(
     """Output scan results to console and/or file in the specified format."""
     # Output to console
     if correlated_findings:
-        typer.echo(f"\nFound {len(correlated_findings)} issues:")
-        for i, finding in enumerate(correlated_findings, 1):
-            severity = finding.get("severity", "Unknown").upper()
-            severity_color = {
-                "CRITICAL": typer.colors.BRIGHT_RED,
-                "HIGH": typer.colors.RED,
-                "MEDIUM": typer.colors.YELLOW,
-                "LOW": typer.colors.GREEN,
-                "INFO": typer.colors.BLUE,
-            }.get(severity, typer.colors.WHITE)
+        # Count total findings across all targets
+        total_findings = sum(len(findings) for findings in correlated_findings.values())
+        typer.echo(f"\nFound {total_findings} issues:")
+        
+        # Process each target and its findings
+        for target_url, findings in correlated_findings.items():
+            typer.echo(f"\nTarget: {target_url}")
+            for i, finding in enumerate(findings, 1):
+                # Get severity as string and convert to uppercase
+                severity_str = str(finding.severity).split('.')[-1]
+                severity_color = {
+                    "CRITICAL": typer.colors.BRIGHT_RED,
+                    "HIGH": typer.colors.RED,
+                    "MEDIUM": typer.colors.YELLOW,
+                    "LOW": typer.colors.GREEN,
+                    "INFO": typer.colors.BLUE,
+                }.get(severity_str, typer.colors.WHITE)
 
-            typer.echo(
-                f"{i}. "
-                + typer.style(f"[{severity}] ", fg=severity_color, bold=True)
-                + typer.style(finding.get("title", "Unnamed Issue"), bold=True)
-            )
-            typer.echo(f"   {finding.get('description', 'No description')}")
-            if "location" in finding:
-                typer.echo(f"   Location: {finding['location']}")
-            typer.echo("")
+                typer.echo(
+                    f"{i}. "
+                    + typer.style(f"[{severity_str}] ", fg=severity_color, bold=True)
+                    + typer.style(finding.title, bold=True)
+                )
+                typer.echo(f"   {finding.description}")
+                typer.echo("")
     else:
         typer.echo("No issues found.")
 
@@ -511,19 +546,22 @@ def output_scan_results(
         try:
             with open(output_file, "w") as f:
                 if json_format:
-                    json.dump(correlated_findings, f, indent=2)
+                    # Convert findings to serializable format
+                    serializable_findings = {}
+                    for target, findings in correlated_findings.items():
+                        serializable_findings[target] = [finding.dict() for finding in findings]
+                    json.dump(serializable_findings, f, indent=2)
                 else:
                     f.write("# Scan Results\n\n")
-                    for i, finding in enumerate(correlated_findings, 1):
-                        f.write(
-                            f"## {i}. [{finding.get('severity', 'Unknown').upper()}] {finding.get('title', 'Unnamed Issue')}\n\n"
-                        )
-                        f.write(
-                            f"{finding.get('description', 'No description')}\n\n"
-                        )
-                        if "location" in finding:
-                            f.write(f"**Location**: {finding['location']}\n\n")
-                        f.write("---\n\n")
+                    for target_url, findings in correlated_findings.items():
+                        f.write(f"## Target: {target_url}\n\n")
+                        for i, finding in enumerate(findings, 1):
+                            severity_str = str(finding.severity).split('.')[-1]
+                            f.write(
+                                f"### {i}. [{severity_str}] {finding.title}\n\n"
+                            )
+                            f.write(f"{finding.description}\n\n")
+                            f.write("---\n\n")
             typer.echo(f"Results written to {output_file}")
         except Exception as e:
             typer.echo(f"Error writing results to file: {e}", err=True)

@@ -101,7 +101,9 @@ def test_sandbox_plugin_load_success(mock_docker_prereqs_success):
     assert mock_docker_prereqs_success.call_count >= 2
     calls = [
         call(["docker", "--version"], check=True, capture_output=True, text=True),
-        call(["docker", "compose", "version"], check=True, capture_output=True, text=True),
+        call(
+            ["docker", "compose", "version"], check=True, capture_output=True, text=True
+        ),
     ]
     mock_docker_prereqs_success.assert_has_calls(calls, any_order=True)
 

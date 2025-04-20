@@ -120,14 +120,16 @@ class PluginManager:
                     self._load_plugin_from_file(item_path)
                 elif item_path.is_dir() and (item_path / "__init__.py").exists():
                     # Case 2: Directory as a plugin package
-                    
+
                     # First check __init__.py itself for plugins
                     init_file = item_path / "__init__.py"
                     self._load_plugin_from_file(init_file)
-                    
+
                     # Then check other .py files in the directory
                     for py_file in item_path.glob("*.py"):
-                        if py_file.stem != "__init__":  # Skip __init__ itself since we already processed it
+                        if (
+                            py_file.stem != "__init__"
+                        ):  # Skip __init__ itself since we already processed it
                             self._load_plugin_from_file(py_file)
                 elif (
                     item_path.is_dir()

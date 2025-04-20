@@ -134,7 +134,7 @@ def test_subdomain_scan_function(mock_sublist3r_class):
 
     # Verify the instance was created and methods called with right args
     mock_sublist3r_class.assert_called_once()
-    mock_instance.run.assert_called_once_with(target)
+    mock_instance.run.assert_called_once_with(target, options={})
     mock_instance.parse_output.assert_called_once()
     assert result == []
 
@@ -223,7 +223,12 @@ def test_directory_scan_function(mock_dirsearch_class):
     # Verify the instance was created and methods called with right args
     mock_dirsearch_class.assert_called_once()
     mock_instance.run.assert_called_once_with(
-        target, options={"wordlist_size": "medium", "verify_ssl": True}
+        target,
+        options={
+            "wordlist": "medium.txt",
+            "extensions": "php,html,js,txt",
+            "verify_ssl": True,
+        },
     )
     mock_instance.parse_output.assert_called_once()
     assert result == []
@@ -250,10 +255,23 @@ def test_scan_command_integration(
     # Set up the normalizer mock
     normalizer_instance = MagicMock()
     mock_normalizer_class.return_value = normalizer_instance
-    normalizer_instance.correlate_findings.return_value = {"https://example.com": []}
+
+    # Create a valid return structure (list of findings dictionaries)
+    normalizer_instance.correlate_findings.return_value = [
+        {
+            "title": "Test Finding",
+            "severity": "medium",
+            "description": "A test finding for the scan test",
+            "location": "https://example.com/test",
+        }
+    ]
 
     # Test with invoke
-    result = runner.invoke(app, ["https://example.com"])
+    result = runner.invoke(app, ["run", "https://example.com"])
+    print(f"Exit code: {result.exit_code}")
+    print(f"Output: {result.stdout}")
+    if result.exception:
+        print(f"Exception: {result.exception}")
     assert result.exit_code == 0
 
     # Verify all scan functions were called
@@ -281,10 +299,21 @@ def test_scan_command_specific_module(
     # Set up the normalizer mock
     normalizer_instance = MagicMock()
     mock_normalizer_class.return_value = normalizer_instance
-    normalizer_instance.correlate_findings.return_value = {"https://example.com": []}
+
+    # Create a valid return structure (list of findings dictionaries)
+    normalizer_instance.correlate_findings.return_value = [
+        {
+            "title": "Test Finding",
+            "severity": "medium",
+            "description": "A test finding for the scan test",
+            "location": "https://example.com/test",
+        }
+    ]
 
     # Test with invoke - specify only PORT and WEB modules
-    result = runner.invoke(app, ["https://example.com", "-m", "ports", "-m", "web"])
+    result = runner.invoke(
+        app, ["run", "https://example.com", "-m", "ports", "-m", "web"]
+    )
     assert result.exit_code == 0
 
     # Verify only specified scan functions were called
@@ -315,16 +344,29 @@ def test_scan_command_with_ignore_ssl(
     # Set up the normalizer mock
     normalizer_instance = MagicMock()
     mock_normalizer_class.return_value = normalizer_instance
-    normalizer_instance.correlate_findings.return_value = {"https://example.com": []}
+
+    # Create a valid return structure (list of findings dictionaries)
+    normalizer_instance.correlate_findings.return_value = [
+        {
+            "title": "Test Finding",
+            "severity": "medium",
+            "description": "A test finding for the scan test",
+            "location": "https://example.com/test",
+        }
+    ]
 
     # Test with invoke - with ignore-ssl flag
-    result = runner.invoke(app, ["https://example.com", "--ignore-ssl"])
+    result = runner.invoke(app, ["run", "https://example.com", "--ignore-ssl"])
     assert result.exit_code == 0
 
     # Verify scan functions that should handle SSL verification were called with ignore_ssl=True
-    mock_tech_scan.assert_called_once_with("https://example.com", True)
-    mock_web_scan.assert_called_once_with("https://example.com", ANY, True)
-    mock_dir_scan.assert_called_once_with("https://example.com", ANY, True)
+    mock_tech_scan.assert_called_once_with("https://example.com", True, {})
+    mock_web_scan.assert_called_once_with(
+        "https://example.com", ScanDepth.STANDARD, True, {}
+    )
+    mock_dir_scan.assert_called_once_with(
+        "https://example.com", ScanDepth.STANDARD, True, {}
+    )
 
 
 def test_scan_command_with_exception():

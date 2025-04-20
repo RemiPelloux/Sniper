@@ -58,7 +58,9 @@ class ScanModeManager:
         try:
             config_file = Path(file_path)
             if not config_file.exists():
-                logger.warning(f"Scan modes configuration file does not exist: {file_path}")
+                logger.warning(
+                    f"Scan modes configuration file does not exist: {file_path}"
+                )
                 return
 
             # Load the YAML file
@@ -109,7 +111,9 @@ class ScanModeManager:
         """
         return list(self.scan_modes.keys())
 
-    def get_scan_mode_by_target_type(self, target_type: str) -> Dict[str, Dict[str, Any]]:
+    def get_scan_mode_by_target_type(
+        self, target_type: str
+    ) -> Dict[str, Dict[str, Any]]:
         """
         Get scan modes suitable for a specific target type.
 
@@ -124,7 +128,7 @@ class ScanModeManager:
             for name, config in self.scan_modes.items()
             if "target_types" in config and target_type in config["target_types"]
         }
-        
+
     def get_modules_for_scan_mode(self, mode_name: str) -> List[str]:
         """
         Get the list of modules enabled for a specific scan mode.
@@ -139,7 +143,7 @@ class ScanModeManager:
         if not mode or "modules" not in mode:
             return []
         return mode["modules"]
-        
+
     def get_tools_for_scan_mode(self, mode_name: str) -> Dict[str, Dict[str, Any]]:
         """
         Get the tools configuration for a specific scan mode.
@@ -155,7 +159,7 @@ class ScanModeManager:
         if not mode or "tools" not in mode:
             return {}
         return mode["tools"]
-        
+
     def get_settings_for_scan_mode(self, mode_name: str) -> Dict[str, Any]:
         """
         Get the general settings for a specific scan mode.
@@ -169,4 +173,4 @@ class ScanModeManager:
         mode = self.get_scan_mode(mode_name)
         if not mode or "settings" not in mode:
             return {}
-        return mode["settings"] 
+        return mode["settings"]

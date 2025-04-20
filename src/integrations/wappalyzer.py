@@ -79,9 +79,13 @@ class WappalyzerIntegration(ToolIntegration):
         threads = options.get("threads", 5)
         scan_type = options.get("scan_type", "full")  # Default to full for accuracy
 
+        # Create a temporary file for JSON output
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as temp_file:
+            temp_path = temp_file.name
+            
         # Command structure for 'wappalyzer' package:
-        # wappalyzer -i <url> --scan-type <type> -t <threads>
-        # It outputs JSON to stdout by default when used non-interactively.
+        # wappalyzer -i <url> --scan-type <type> -t <threads> -oJ <temp_file>
         command = [
             self._tool_path,
             "-i",
@@ -90,7 +94,8 @@ class WappalyzerIntegration(ToolIntegration):
             scan_type,
             "-t",
             str(threads),
-            # Add cookie support? -c option - Maybe later
+            "-oJ",
+            temp_path,
         ]
 
         log.info(f"Running Wappalyzer scan ({scan_type}) on {target}...")
@@ -107,6 +112,28 @@ class WappalyzerIntegration(ToolIntegration):
             else:
                 log.info(f"Wappalyzer scan completed for {target}.")
 
+            # Read the JSON output from the temp file if it exists
+            try:
+                with open(temp_path, 'r') as f:
+                    json_content = f.read()
+                    # Create a new ExecutionResult with the JSON content as stdout
+                    result = ExecutionResult(
+                        return_code=result.return_code,
+                        stdout=json_content,
+                        stderr=result.stderr,
+                        command=result.command,
+                        timed_out=result.timed_out
+                    )
+            except Exception as e:
+                log.error(f"Failed to read Wappalyzer output from temp file: {e}")
+            
+            # Clean up temp file
+            try:
+                import os
+                os.unlink(temp_path)
+            except:
+                pass
+
             return result  # Return the raw execution result
 
         except Exception as e:
@@ -118,14 +145,19 @@ class WappalyzerIntegration(ToolIntegration):
     async def parse_output(
         self, raw_output: ExecutionResult
     ) -> list[BaseFinding] | None:
-        """Parse Wappalyzer JSON output (expected on stdout) into TechnologyFinding
-        objects. Handles the format from the 'wappalyzer' package (s0md3v).
-        Expected format: { \"url1\": { \"Tech1\": {...}, \"Tech2\": {...} }, ... }
-
-        New Expected format (from wappalyzer-cli):
+        """Parse Wappalyzer JSON output (expected on stdout) into TechnologyFinding objects.
+        
+        The Wappalyzer CLI produces JSON in the format:
         {
-          \"urls\": { \"https://example.com\": { \"status\": 200 } },
-          \"technologies\": [ { \"name\": \"Nginx\", ... }, ... ]
+          "http://example.com": {
+            "TechnologyName": {
+              "version": "1.0",
+              "confidence": 100,
+              "categories": ["Category1", "Category2"],
+              "groups": ["Group1"]
+            },
+            ...more technologies
+          }
         }
         """
         # Don't parse if execution failed or timed out
@@ -141,7 +173,7 @@ class WappalyzerIntegration(ToolIntegration):
         findings: list[BaseFinding] = []
 
         try:
-            # The 'wappalyzer' package (s0md3v) outputs a dict where keys are URLs
+            # Parse the JSON output
             data = json.loads(raw_output.stdout)
 
             if not isinstance(data, dict):
@@ -150,72 +182,48 @@ class WappalyzerIntegration(ToolIntegration):
                 )
                 return None
 
-            # Extract target URL - assumes only one URL is scanned per execution
-            target_url = None
-            urls_data = data.get("urls", {})
-            if isinstance(urls_data, dict) and urls_data:
-                # Get the first URL key found
-                target_url = next(iter(urls_data.keys()), None)
-            if not target_url:
-                log.warning("Could not determine target URL from Wappalyzer output.")
-                # Attempt to extract from the command if needed (fallback)
-                # target_url = self._extract_target_from_command(raw_output.command)
-                # For now, return None if URL isn't in output
+            # The dict keys are URLs
+            if not data:
+                log.warning("Wappalyzer output contained no URLs.")
                 return None
-
-            log.debug(f"Target URL identified from Wappalyzer output: {target_url}")
-
-            technologies = data.get("technologies", [])
-            if not isinstance(technologies, list):
-                log.warning(
-                    f"Expected 'technologies' to be a list at the top level, got {type(technologies)}"
-                )
-                return None
-
-            # Iterate through technologies found
-            for tech_details in technologies:
-                if not isinstance(tech_details, dict):
-                    log.warning("Skipping non-dict item in technologies list.")
+                
+            # Process each URL in the output
+            for target_url, technologies in data.items():
+                if not isinstance(technologies, dict):
+                    log.warning(f"Unexpected format for URL {target_url}, skipping.")
                     continue
-
-                tech_name = tech_details.get("name")
-                if not tech_name or not isinstance(tech_name, str):
-                    log.warning(
-                        "Skipping technology entry with missing or invalid name."
-                    )
-                    continue
-
-                # Extract categories - Ensure it's a list of dictionaries
-                categories_raw = tech_details.get("categories", [])
-                categories_list = []
-                if isinstance(categories_raw, list):
-                    # Categories are dicts like {'id': 1, 'slug': 'cms', 'name': 'CMS'}
-                    categories_list = [
-                        cat.get("name", "Unknown")
-                        for cat in categories_raw
-                        if isinstance(cat, dict) and "name" in cat
-                    ]
-
-                try:
-                    finding = TechnologyFinding(
-                        target=target_url,  # Use the URL extracted from 'urls' key
-                        technology_name=tech_name,
-                        version=tech_details.get("version")
-                        or None,  # Ensure None if empty/null
-                        categories=categories_list,
-                        # Severity/description handled by model __init__
-                        source_tool=self.tool_name,
-                        raw_evidence=tech_details,  # Store original tech details dict
-                    )
-                    findings.append(finding)
-                except Exception as e:  # Catch potential Pydantic validation errors
-                    log.warning(
-                        "Could not create TechnologyFinding for %s at %s: %s",
-                        tech_name,
-                        target_url,
-                        e,
-                    )
-                    continue
+                    
+                log.debug(f"Processing technologies for {target_url}")
+                
+                # Process each technology found for this URL
+                for tech_name, tech_details in technologies.items():
+                    if not isinstance(tech_details, dict):
+                        log.warning(f"Unexpected format for technology {tech_name}, skipping.")
+                        continue
+                        
+                    # Extract categories from the details
+                    categories_list = tech_details.get("categories", [])
+                    if not isinstance(categories_list, list):
+                        log.warning(f"Invalid categories format for {tech_name}, using empty list.")
+                        categories_list = []
+                    
+                    # Create a TechnologyFinding
+                    try:
+                        finding = TechnologyFinding(
+                            target=target_url,
+                            technology_name=tech_name,
+                            version=tech_details.get("version") or None,
+                            categories=categories_list,
+                            # Severity/description handled by model __init__
+                            source_tool=self.tool_name,
+                            raw_evidence=tech_details,
+                        )
+                        findings.append(finding)
+                    except Exception as e:
+                        log.warning(
+                            f"Could not create TechnologyFinding for {tech_name} at {target_url}: {e}"
+                        )
+                        continue
 
             if not findings:
                 log.info("No technologies parsed from Wappalyzer output.")

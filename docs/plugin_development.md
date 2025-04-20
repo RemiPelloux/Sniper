@@ -15,31 +15,30 @@ The system relies on a `PluginManager` that discovers, loads, and manages plugin
 
 ## 2. Plugin Structure
 
-Plugins reside within the `app/plugins/` directory. Each plugin should have its own subdirectory.
+Plugins reside within the `src/sniper/plugins/` directory. Each plugin should have its own subdirectory.
 
 ```
 sniper/
-├── app/
-│   ├── plugins/
-│   │   ├── __init__.py
-│   │   ├── <your_plugin_name>/
-│   │   │   ├── __init__.py
-│   │   │   ├── <plugin_module>.py  # Contains your plugin class
-│   │   │   └── ... (other plugin files)
-│   │   └── sandbox/             # Example: Sandbox plugin
-│   │       ├── __init__.py
-│   │       ├── sandbox_plugin.py
-│   │       └── docker-compose.yml
-│   └── ...
 ├── src/
-│   ├── core/
-│   │   ├── plugin_interface.py # Defines the base class
-│   │   └── plugin_manager.py   # Handles plugin loading
+│   ├── sniper/
+│   │   ├── plugins/
+│   │   │   ├── __init__.py
+│   │   │   ├── <your_plugin_name>/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── <plugin_module>.py  # Contains your plugin class
+│   │   │   │   └── ... (other plugin files)
+│   │   │   └── sandbox/             # Example: Sandbox plugin
+│   │   │       ├── __init__.py
+│   │   │       ├── sandbox_plugin.py
+│   │   │       └── docker-compose.yml
+│   │   └── core/
+│   │       ├── plugin_interface.py # Defines the base class
+│   │       └── plugin_manager.py   # Handles plugin loading
 │   └── ...
 └── ...
 ```
 
-*   **`app/plugins/<your_plugin_name>/`**: The main directory for your plugin.
+*   **`src/sniper/plugins/<your_plugin_name>/`**: The main directory for your plugin.
 *   **`__init__.py`**: Standard Python package marker files.
 *   **`<plugin_module>.py`**: The Python file containing your main plugin class implementation.
 
@@ -87,7 +86,7 @@ class PluginInterface(ABC):
 
 ```
 
-**Example (`app/plugins/my_scanner/scanner_plugin.py`):**
+**Example (`src/sniper/plugins/my_scanner/scanner_plugin.py`):**
 
 ```python
 import typer
@@ -129,12 +128,12 @@ class MyScannerPlugin(PluginInterface):
 
 ### 3.2. Plugin Discovery
 
-The `PluginManager` (in `src.core.plugin_manager.py`) automatically discovers plugins located in subdirectories within `app/plugins/`. It looks for Python files and attempts to instantiate classes that:
+The `PluginManager` (in `src.sniper.core.plugin_manager.py`) automatically discovers plugins located in subdirectories within `src/sniper/plugins/`. It looks for Python files and attempts to instantiate classes that:
 
 1.  Inherit from `PluginInterface`.
 2.  Are not `PluginInterface` itself.
 
-Ensure your plugin class is defined within a `.py` file directly inside your plugin's directory (e.g., `app/plugins/my_scanner/scanner_plugin.py`).
+Ensure your plugin class is defined within a `.py` file directly inside your plugin's directory (e.g., `src/sniper/plugins/my_scanner/scanner_plugin.py`).
 
 ### 3.3 Registering CLI Commands
 
@@ -188,7 +187,7 @@ Plugins currently run within the main Sniper application process. They can impor
 
 ## 6. Example: Sandbox Plugin
 
-Refer to the `app/plugins/sandbox/` directory for a working example. It demonstrates:
+Refer to the `src/sniper/plugins/sandbox/` directory for a working example. It demonstrates:
 
 *   Implementing `PluginInterface`.
 *   Registering CLI commands (`list`, `start`, `stop`, `status`).
