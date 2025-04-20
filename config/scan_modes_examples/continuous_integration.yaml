@@ -1,0 +1,58 @@
+# Continuous Integration Scan Mode for Sniper
+# This mode is designed to be run in CI/CD pipelines as part of automated security testing
+
+continuous_integration:
+  name: continuous_integration
+  description: "Fast security scan for CI/CD pipelines that balances speed and thoroughness"
+  target_types: ["url", "webapp", "api", "domain", "ip"]
+  modules:
+    - technologies
+    - ports
+    - web
+  settings:
+    max_threads: 10
+    timeout: 900  # 15 minutes maximum to avoid long CI runs
+    retries: 1
+    scan_depth: standard
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    
+    # Fast port scan of essential services
+    nmap:
+      enabled: true
+      options:
+        ports: "80,443,8080,8443,3000,5000,9000"
+        timing_template: 4
+        # Skip scripts to keep scan times down
+    
+    # Web scanning focused on critical issues
+    zap:
+      enabled: true
+      options:
+        active_scan: true
+        ajax_spider: false
+        scan_policy: "CI-Policy"
+        max_scan_duration: 600  # 10 minute max for ZAP
+    
+    # Template-based vulnerability detection
+    nuclei:
+      enabled: true
+      options:
+        templates: "cves,exposures"
+        severity: "critical,high"  # Only scan for serious issues
+        timeout: 5  # Shorter timeout per template
+        rate_limit: 150  # Higher rate to complete faster
+    
+    # Skip directory scanning in CI to save time
+    # Skip subdomain enumeration to save time
+    
+    # Additional CI-specific tool settings
+    dependency_check:
+      enabled: true
+      options:
+        scan_type: "quick"
+        check_for_outdated: false  # Speed optimization
+        check_for_vulnerabilities: true
+        scan_depth: 1  # How deep to scan nested dependencies 

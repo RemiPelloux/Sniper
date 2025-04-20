@@ -311,7 +311,7 @@ class ToolManager:
     def get_installation_status(self) -> Dict[str, bool]:
         """
         Get the installation status of all tools.
-        
+
         Returns:
             Dict[str, bool]: Dictionary mapping tool names to their installation status
         """
@@ -624,75 +624,116 @@ class ToolManager:
             return False
 
         install_methods = tool_info["install"]
-        
+
         # Try to update using the available package managers
         # APT update
-        if ToolInstallMethod.APT.value in install_methods and "apt" in self._package_managers:
+        if (
+            ToolInstallMethod.APT.value in install_methods
+            and "apt" in self._package_managers
+        ):
             package = install_methods[ToolInstallMethod.APT.value]
             try:
-                cmd = ["apt-get", "update", "&&", "apt-get", "install", "--only-upgrade", "-y", package]
+                cmd = [
+                    "apt-get",
+                    "update",
+                    "&&",
+                    "apt-get",
+                    "install",
+                    "--only-upgrade",
+                    "-y",
+                    package,
+                ]
                 logger.info(f"Updating {tool_name} ({package}) with apt-get")
-                subprocess.run(" ".join(cmd), shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(
+                    " ".join(cmd),
+                    shell=True,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
                 return True
             except Exception as e:
                 logger.error(f"Error updating {tool_name} with apt-get: {e}")
                 return False
-                
+
         # Homebrew update
-        elif ToolInstallMethod.BREW.value in install_methods and "brew" in self._package_managers:
+        elif (
+            ToolInstallMethod.BREW.value in install_methods
+            and "brew" in self._package_managers
+        ):
             package = install_methods[ToolInstallMethod.BREW.value]
             try:
                 cmd = ["brew", "upgrade", package]
                 logger.info(f"Updating {tool_name} ({package}) with Homebrew")
-                subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(
+                    cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
                 return True
             except Exception as e:
                 logger.error(f"Error updating {tool_name} with Homebrew: {e}")
                 return False
-                
+
         # PIP update
-        elif ToolInstallMethod.PIP.value in install_methods and "pip" in self._package_managers:
+        elif (
+            ToolInstallMethod.PIP.value in install_methods
+            and "pip" in self._package_managers
+        ):
             package = install_methods[ToolInstallMethod.PIP.value]
             try:
                 cmd = ["pip", "install", "--upgrade", package]
                 logger.info(f"Updating {tool_name} ({package}) with pip")
-                subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(
+                    cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
                 return True
             except Exception as e:
                 logger.error(f"Error updating {tool_name} with pip: {e}")
                 return False
-                
+
         # NPM update
-        elif ToolInstallMethod.NPM.value in install_methods and "npm" in self._package_managers:
+        elif (
+            ToolInstallMethod.NPM.value in install_methods
+            and "npm" in self._package_managers
+        ):
             package = install_methods[ToolInstallMethod.NPM.value]
             try:
                 cmd = ["npm", "update", "-g", package]
                 logger.info(f"Updating {tool_name} ({package}) with npm")
-                subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(
+                    cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
                 return True
             except Exception as e:
                 logger.error(f"Error updating {tool_name} with npm: {e}")
                 return False
-                
+
         # GIT update
         elif ToolInstallMethod.GIT.value in install_methods:
             repository = install_methods[ToolInstallMethod.GIT.value]
             update_commands = tool_info.get("update_commands", ["git pull"])
-            
+
             try:
                 # Find the tool directory (assuming it's in a standard location)
                 # This is a simplification - in a real implementation, you'd need to track
                 # where git-installed tools are located
                 tool_dir = os.path.join("/usr/local/src", tool_name)
                 if not os.path.exists(tool_dir):
-                    logger.error(f"Tool directory not found for git-installed tool: {tool_name}")
+                    logger.error(
+                        f"Tool directory not found for git-installed tool: {tool_name}"
+                    )
                     return False
-                    
+
                 # Run update commands
                 for command in update_commands:
                     cmd = f"cd {tool_dir} && {command}"
                     logger.info(f"Running update command: {cmd}")
-                    subprocess.run(cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    subprocess.run(
+                        cmd,
+                        shell=True,
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
                 return True
             except Exception as e:
                 logger.error(f"Error updating git-installed tool {tool_name}: {e}")
@@ -716,88 +757,120 @@ class ToolManager:
             if "install" not in info:
                 update_status[name] = False
                 continue
-                
+
             install_methods = info["install"]
-            
+
             # Check based on the installation method
             needs_update = False
-            
+
             # APT package
-            if ToolInstallMethod.APT.value in install_methods and "apt" in self._package_managers:
+            if (
+                ToolInstallMethod.APT.value in install_methods
+                and "apt" in self._package_managers
+            ):
                 package = install_methods[ToolInstallMethod.APT.value]
                 try:
                     # Update APT cache
-                    subprocess.run(["apt-get", "update"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    
+                    subprocess.run(
+                        ["apt-get", "update"],
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+
                     # Check if package needs upgrading
                     result = subprocess.run(
-                        ["apt-get", "-s", "upgrade", package], 
-                        check=True, 
-                        stdout=subprocess.PIPE, 
+                        ["apt-get", "-s", "upgrade", package],
+                        check=True,
+                        stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        text=True
+                        text=True,
                     )
-                    
+
                     # If the package is in the list of packages to upgrade
-                    needs_update = f"{package} " in result.stdout and "upgraded," in result.stdout
+                    needs_update = (
+                        f"{package} " in result.stdout and "upgraded," in result.stdout
+                    )
                 except Exception as e:
-                    logger.warning(f"Error checking for updates for {name} with apt-get: {e}")
-                    
+                    logger.warning(
+                        f"Error checking for updates for {name} with apt-get: {e}"
+                    )
+
             # Homebrew formula
-            elif ToolInstallMethod.BREW.value in install_methods and "brew" in self._package_managers:
+            elif (
+                ToolInstallMethod.BREW.value in install_methods
+                and "brew" in self._package_managers
+            ):
                 package = install_methods[ToolInstallMethod.BREW.value]
                 try:
                     # Update brew and check for outdated packages
-                    subprocess.run(["brew", "update"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    result = subprocess.run(
-                        ["brew", "outdated"], 
-                        check=True, 
-                        stdout=subprocess.PIPE, 
+                    subprocess.run(
+                        ["brew", "update"],
+                        check=True,
+                        stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        text=True
                     )
-                    
+                    result = subprocess.run(
+                        ["brew", "outdated"],
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+
                     # If the package is in the list of outdated packages
                     needs_update = package in result.stdout
                 except Exception as e:
-                    logger.warning(f"Error checking for updates for {name} with Homebrew: {e}")
-                    
+                    logger.warning(
+                        f"Error checking for updates for {name} with Homebrew: {e}"
+                    )
+
             # PIP package
-            elif ToolInstallMethod.PIP.value in install_methods and "pip" in self._package_managers:
+            elif (
+                ToolInstallMethod.PIP.value in install_methods
+                and "pip" in self._package_managers
+            ):
                 package = install_methods[ToolInstallMethod.PIP.value]
                 try:
                     # Check outdated packages
                     result = subprocess.run(
-                        ["pip", "list", "--outdated"], 
-                        check=True, 
-                        stdout=subprocess.PIPE, 
+                        ["pip", "list", "--outdated"],
+                        check=True,
+                        stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        text=True
+                        text=True,
                     )
-                    
+
                     # Parse pip output to check if our package is outdated
                     needs_update = package in result.stdout
                 except Exception as e:
-                    logger.warning(f"Error checking for updates for {name} with pip: {e}")
-                    
+                    logger.warning(
+                        f"Error checking for updates for {name} with pip: {e}"
+                    )
+
             # NPM package
-            elif ToolInstallMethod.NPM.value in install_methods and "npm" in self._package_managers:
+            elif (
+                ToolInstallMethod.NPM.value in install_methods
+                and "npm" in self._package_managers
+            ):
                 package = install_methods[ToolInstallMethod.NPM.value]
                 try:
                     # Check outdated global packages
                     result = subprocess.run(
-                        ["npm", "outdated", "-g"], 
-                        check=True, 
-                        stdout=subprocess.PIPE, 
+                        ["npm", "outdated", "-g"],
+                        check=True,
+                        stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        text=True
+                        text=True,
                     )
-                    
+
                     # If package is mentioned in the outdated list
                     needs_update = package in result.stdout
                 except Exception as e:
-                    logger.warning(f"Error checking for updates for {name} with npm: {e}")
-                    
+                    logger.warning(
+                        f"Error checking for updates for {name} with npm: {e}"
+                    )
+
             # GIT repository
             elif ToolInstallMethod.GIT.value in install_methods:
                 # Assume git repository is at /usr/local/src/tool_name
@@ -806,24 +879,32 @@ class ToolManager:
                     try:
                         # Fetch remote updates
                         fetch_cmd = f"cd {tool_dir} && git fetch"
-                        subprocess.run(fetch_cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        
+                        subprocess.run(
+                            fetch_cmd,
+                            shell=True,
+                            check=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                        )
+
                         # Check if local is behind remote
                         status_cmd = f"cd {tool_dir} && git status -uno"
                         result = subprocess.run(
-                            status_cmd, 
+                            status_cmd,
                             shell=True,
-                            check=True, 
-                            stdout=subprocess.PIPE, 
+                            check=True,
+                            stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,
-                            text=True
+                            text=True,
                         )
-                        
+
                         # If the branch is behind, we need an update
                         needs_update = "Your branch is behind" in result.stdout
                     except Exception as e:
-                        logger.warning(f"Error checking for updates for git tool {name}: {e}")
-            
+                        logger.warning(
+                            f"Error checking for updates for git tool {name}: {e}"
+                        )
+
             update_status[name] = needs_update
 
         return update_status

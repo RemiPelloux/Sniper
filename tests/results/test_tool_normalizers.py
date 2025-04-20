@@ -437,7 +437,8 @@ class TestZAPNormalizer:
         info_finding = next(
             f
             for f in normalized
-            if isinstance(f, WebFinding) and "Information Disclosure at /profile" in f.title
+            if isinstance(f, WebFinding)
+            and "Information Disclosure at /profile" in f.title
         )
         assert info_finding.severity == FindingSeverity.MEDIUM
 
@@ -572,9 +573,7 @@ class TestZAPNormalizer:
         normalized = normalizer.normalize(findings)  # type: ignore
 
         # Title should contain "Sql Injection at /login"
-        sql_finding = next(
-            f for f in normalized if isinstance(f, WebFinding)
-        )
+        sql_finding = next(f for f in normalized if isinstance(f, WebFinding))
         assert "Sql Injection at /login" in sql_finding.title
 
     def test_normalize_description_from_raw_evidence(self) -> None:
@@ -599,7 +598,7 @@ class TestZAPNormalizer:
                     "cwe": "CWE-89",
                     "impact": "High impact allowing authentication bypass",
                     "description": "A detailed description of the SQL injection vulnerability",
-                    "solution": "Use parameterized queries"
+                    "solution": "Use parameterized queries",
                 },
             ),
         ]
@@ -609,11 +608,11 @@ class TestZAPNormalizer:
 
         # Finding description should come from raw_evidence
         finding = next(f for f in normalized if isinstance(f, WebFinding))
-        
+
         # If raw_evidence.description exists, it should be used
         if "description" in finding.raw_evidence:
             assert finding.raw_evidence["description"] in finding.description
-            
+
         # If raw_evidence.solution exists, it should be mentioned
         if "solution" in finding.raw_evidence:
             assert "Solution:" in finding.description

@@ -7,8 +7,8 @@ import os
 import shutil
 import sys
 import tempfile
-from unittest.mock import MagicMock, patch
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 import typer
@@ -309,15 +309,16 @@ class MockPluginGoodDuplicate(PluginInterface):
 # --- Test Cases ---
 
 
-def test_plugin_manager_init():
-    """Test PluginManager initialization."""
-    manager = PluginManager()
-    assert manager.plugin_dirs == ["app/plugins"]
-    manager_custom = PluginManager(plugin_dirs=["custom/path"])
-    assert manager_custom.plugin_dirs == ["custom/path"]
-    assert manager.plugins == {}
-    assert manager.loaded_plugins == {}
-    assert manager._discovered_plugin_classes == {}
+class TestPluginManagerInit:
+    """Tests for PluginManager.__init__"""
+
+    def test_init_default(self):
+        """Test initialization with default arguments."""
+        pm = PluginManager()
+        assert pm.plugin_dirs == ["src/sniper/plugins"]
+        assert pm.plugins == {}
+        assert pm.loaded_plugins == {}
+        assert pm._discovered_plugin_classes == {}
 
 
 def test_discover_plugins(temp_plugin_dir):
@@ -339,7 +340,9 @@ def test_discover_plugins_nonexistent_dir(caplog):
     manager = PluginManager(plugin_dirs=["nonexistent/path"])
     with caplog.at_level(logging.WARNING):
         manager.discover_plugins()
-    assert "Plugin directory not found or not a directory: nonexistent/path" in caplog.text
+    assert (
+        "Plugin directory not found or not a directory: nonexistent/path" in caplog.text
+    )
     assert len(manager._discovered_plugin_classes) == 0
 
 
@@ -576,18 +579,18 @@ def test_plugin_manager_plugin_dir_resolution():
     relative_manager = PluginManager(plugin_dirs=["tests/fixtures/plugins"])
     assert len(relative_manager.plugin_dirs) == 1
     assert relative_manager.plugin_dirs[0] == "tests/fixtures/plugins"
-    
+
     # Test with absolute path
     project_root = Path(os.getcwd())
     abs_path = str(project_root / "tests" / "fixtures" / "plugins")
     abs_manager = PluginManager(plugin_dirs=[abs_path])
     assert len(abs_manager.plugin_dirs) == 1
     assert abs_manager.plugin_dirs[0] == abs_path
-    
+
     # Test with default path
     default_manager = PluginManager()
     assert len(default_manager.plugin_dirs) == 1
-    assert default_manager.plugin_dirs[0] == "app/plugins"
+    assert default_manager.plugin_dirs[0] == "src/sniper/plugins"
 
 
 # TODO: Add tests for discovery from multiple directories

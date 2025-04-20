@@ -101,19 +101,22 @@ class TestWorkerNode:
         # Set up worker node for heartbeat
         worker_node.status = NodeStatus.IDLE
         worker_node.master_id = "test-master"
-        
+
         # Mock the protocol's async send_message method to return a coroutine
         async def mock_send_message(*args, **kwargs):
-            return {"message_type": "HEARTBEAT_RESPONSE", "payload": {"status": "success"}}
-        
+            return {
+                "message_type": "HEARTBEAT_RESPONSE",
+                "payload": {"status": "success"},
+            }
+
         worker_node.protocol.send_message = MagicMock(side_effect=mock_send_message)
-        
+
         # Call the async method
         await worker_node._send_heartbeat()
-        
+
         # Verify send_message was called
         worker_node.protocol.send_message.assert_called_once()
-        
+
         # Verify the message content (optional)
         call_args = worker_node.protocol.send_message.call_args[0][0]
         assert call_args.message_type == MessageType.HEARTBEAT
@@ -178,14 +181,13 @@ class TestWorkerNode:
             # Access target from task object
             target = task.target
             # Mock the API call
-            response = requests.post(f"http://scanner-api/{target}", json=task.parameters)
+            response = requests.post(
+                f"http://scanner-api/{target}", json=task.parameters
+            )
             response.raise_for_status()
             # Return in the expected format (including both result and status)
             result_data = response.json()
-            return {
-                "status": "COMPLETED",
-                "result": result_data
-            }
+            return {"status": "COMPLETED", "result": result_data}
 
         worker_node.register_task_handler("port_scan", mock_handler)
 
@@ -273,15 +275,16 @@ class TestWorkerNode:
     @pytest.mark.asyncio
     async def test_heartbeat_thread(self, worker_node):
         """Test heartbeat thread functionality."""
+
         # Create an async mock for _send_heartbeat
         async def mock_send_heartbeat():
             # Track the call with a counter
             mock_send_heartbeat.call_count += 1
             return True
-        
+
         # Initialize the counter
         mock_send_heartbeat.call_count = 0
-        
+
         # Replace the real method with our mock
         worker_node._send_heartbeat = mock_send_heartbeat
         worker_node.status = NodeStatus.IDLE
@@ -290,17 +293,17 @@ class TestWorkerNode:
 
         # Set a very short interval for testing
         worker_node.heartbeat_interval = 0.1
-        
+
         # Run the heartbeat task directly for a short time
         heartbeat_task = asyncio.create_task(self._run_heartbeat_for_test(worker_node))
-        
+
         # Wait a short time to allow for multiple heartbeats
         await asyncio.sleep(0.3)
-        
+
         # Stop the task
         worker_node.running = False
         await heartbeat_task
-        
+
         # Check that heartbeat was sent multiple times
         assert mock_send_heartbeat.call_count > 1
 

@@ -68,10 +68,10 @@ app = typer.Typer(
 )
 
 # Register built-in subcommands
-app.add_typer(scan.app)
-app.add_typer(report.app)
-app.add_typer(tools.tools_app)
-app.add_typer(ml.ml)
+app.add_typer(scan.app, name="scan")  # Make sure name is explicitly set
+app.add_typer(report.app, name="report")
+app.add_typer(tools.tools_app, name="tools")
+app.add_typer(ml.ml, name="ml")
 app.add_typer(custom_tools.custom_tools_app, name="custom-tools")
 
 # --- Load Plugins and Register Commands ---

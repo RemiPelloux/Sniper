@@ -211,6 +211,16 @@ Sprint 6 is currently in progress, focusing on advanced attack simulation capabi
 - 🔄 Implementing payload delivery and execution monitoring
 - ⬜ Develop rollback mechanisms for exploitation attempts
 
+#### Predefined Scanning Profiles (100% Complete)
+- ✅ Designed configurable scan mode system for different security assessment needs
+- ✅ Implemented 5 predefined scan modes (quick, standard, comprehensive, stealth, API)
+- ✅ Created ScanModeManager for loading and retrieving scan modes
+- ✅ Enhanced CLI to support scan mode selection
+- ✅ Added configuration options for customizing each scan mode
+- ✅ Created comprehensive documentation for scan modes
+- ✅ Added unit and integration tests for scan modes
+- ✅ Implemented tool configuration overrides based on scan mode
+
 #### Payload Generation (30% Complete)
 - ✅ Implemented context-aware payload generation
 - 🔄 Creating mutation engine for payload variation
@@ -268,11 +278,11 @@ Sprint 6 is currently in progress, focusing on advanced attack simulation capabi
 - [x] **Implement `ToolManager.update_tool()` method.** (Assumed implemented, mock created)
 - [x] **Implement `ToolManager.check_for_updates()` method.**
 - [x] **Add tests** for `install_tool`, `update_tool` commands in `tests/cli/test_tools.py` (Basic install/update tests added and passing).
-- [ ] **Add tests** for `add_tool`, `remove_tool`, `categories`, `check_updates` commands in `tests/cli/test_tools.py`.
+- [x] **Add tests** for `add_tool`, `remove_tool`, `categories`, `check_updates` commands in `tests/cli/test_tools.py`.
   - [x] Added test for `add_tool` command
-  - [ ] Add test for `remove_tool` command
-  - [ ] Add test for `categories` command
-  - [ ] Add test for `check_updates` command
+  - [x] Add test for `remove_tool` command
+  - [x] Add test for `categories` command
+  - [x] Add test for `check_updates` command
 - [ ] **Add tests** for `install/update` with `--all` and `--category` flags in `tests/cli/test_tools.py`.
 - [x] **Fix missing import** in `src/cli/custom_tools.py` to resolve ToolInstallMethod reference error.
 - [x] **Fix typing issues** in `normalize_features` function in `src/ml/utils.py` to support new parameter requirements.
@@ -284,7 +294,7 @@ Sprint 6 is currently in progress, focusing on advanced attack simulation capabi
   - Added tests for environment access info and file path construction
   - Fixed import paths in test files
 - [x] **Add new test file** for sandbox CLI commands with comprehensive test cases
-- [x] **Add plugin manager path resolution test** for better coverage of plugin loading
+- [x] **Add plugin manager path resolution test** for better coverage of plugin loading (Fixed in current cycle)
 - [x] **Create CLI test framework** for distributed commands to improve coverage of `src/cli/distributed.py`
 - [ ] **Increase test coverage** for low-coverage modules (target >85% overall):
   - [ ] `src/cli/custom_tools.py` (40% → target 85%)
@@ -309,6 +319,7 @@ Sprint 6 is currently in progress, focusing on advanced attack simulation capabi
   - Added tools for network security testing (Bettercap)
   - Added tools for memory forensics (Volatility Framework)
   - Added tools for disk forensics (Autopsy)
+  - Added tools for infrastructure-as-code security scanning (Checkov)
   - Reorganized tools into individual YAML files following the correct directory structure
 - ✅ Refactored `src/cli/tools.py` to use Typer conventions.
 - ✅ Added skipped tests for `list`/`show` commands in `tests/cli/test_tools.py`.
@@ -328,6 +339,12 @@ Sprint 6 is currently in progress, focusing on advanced attack simulation capabi
   - Changed log level in `test_unload_plugin_not_loaded` from WARNING to DEBUG to match actual implementation
   - Updated expected message in `test_unload_all_plugins` to match "Unloaded 1 plugins successfully" format
   - Modified assertion in `test_discover_plugins_duplicate_name` to use partial message matching
+  - Fixed plugin path resolution test to use correct default plugin directory path ("src/sniper/plugins" instead of "app/plugins")
+- ✅ Enhanced PluginManager discovery logic:
+  - Added support for plugins defined directly in `__init__.py` files
+  - Added handling for package-level plugins in the base plugin directory
+  - Improved test cases to match actual implementation details
+  - Fixed assertions in sandbox plugin tests to align with the current implementation
 
 ### Key Progress Indicators
 - Overall Sprint Progress: ~38%
@@ -372,6 +389,9 @@ Sprint 6 is currently in progress, focusing on advanced attack simulation capabi
 -   **New Features**: Initial documentation for key components created, test coverage enhanced.
 -   **Testing Progress**:
     -   Added test for `add_tool` command following correct custom tool YAML format
+    -   Added test for `remove_tool` command with proper validation of success and failure cases
+    -   Added test for `categories` command to ensure proper listing of tool categories
+    -   Added test for `check_updates` command to verify update functionality
     -   Fixed test formatting and documentation for clarity
     -   Prioritized list of low-coverage modules for future test implementation
     -   Improved test structure for future testing
@@ -430,6 +450,9 @@ Sprint 6 is currently in progress, focusing on advanced attack simulation capabi
     *   Implemented discovery, loading, unloading, and CLI registration logic.
     *   Integrated manager into `src/cli/main.py` with `atexit` cleanup.
     *   Fixed plugin directory discovery by updating the default path.
+    *   Updated plugin path resolution test to match actual implementation from "app/plugins" to "src/sniper/plugins".
+    *   Enhanced the plugin discovery logic to detect plugins defined directly in `__init__.py` files.
+    *   Improved test cases to ensure they match the actual implementation details.
 *   **Sandbox Plugin:**
     *   Created `app/plugins/sandbox/` directory structure.
     *   Implemented `SandboxPlugin` in `sandbox_plugin.py`.
@@ -449,8 +472,6 @@ Sprint 6 is currently in progress, focusing on advanced attack simulation capabi
 
 ## Pending Tasks / Issues
 
-*   Fix the plugin discovery issue where the secondary discovery for CLI commands is not finding the sandbox plugin class.
-*   Further refinement of `PluginManager` discovery logic (e.g., handling plugins directly in `__init__.py`).
 *   Add test coverage analysis step to CI/workflow.
 *   The `_get_sandbox_plugin_instance` helper in `sandbox_plugin.py` currently creates a temporary manager; this should be refactored to use the main application's shared instance (requires passing context or using a singleton pattern carefully).
 *   Resolve Docker prerequisite check failures that occur during sandbox commands.

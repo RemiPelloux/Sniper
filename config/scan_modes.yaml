@@ -1,0 +1,184 @@
+# Sniper Security Tool - Scan Modes Configuration
+# This file defines different scanning modes with preconfigured tools and settings
+
+# Quick mode - Fast reconnaissance with minimal footprint
+quick:
+  name: quick
+  description: "Fast scan with minimal footprint, suitable for initial reconnaissance"
+  target_types: ["domain", "url", "ip", "webapp"]
+  modules:
+    - technologies   # Technology detection using Wappalyzer
+    - ports          # Basic port scan (top ports only)
+  settings:
+    max_threads: 5
+    timeout: 600  # 10 minutes
+    retries: 1
+    scan_depth: quick
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    nmap:
+      enabled: true
+      options:
+        ports: "80,443,8080,8443"
+        timing_template: 3
+
+# Standard mode - Balanced scan for routine security assessments
+standard:
+  name: standard
+  description: "Balanced scan suitable for routine security assessments"
+  target_types: ["domain", "url", "ip", "webapp"]
+  modules:
+    - technologies
+    - subdomains
+    - ports
+    - web
+    - directories
+  settings:
+    max_threads: 10
+    timeout: 3600  # 1 hour
+    retries: 2
+    scan_depth: standard
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    sublist3r:
+      enabled: true
+      options: {}
+    nmap:
+      enabled: true
+      options:
+        ports: "top1000"
+        timing_template: 4
+    zap:
+      enabled: true
+      options:
+        active_scan: true
+        ajax_spider: false
+    dirsearch:
+      enabled: true
+      options:
+        wordlist: "common.txt"
+        extensions: "php,html,js"
+
+# Comprehensive mode - In-depth security assessment
+comprehensive:
+  name: comprehensive
+  description: "In-depth security assessment with thorough testing and vulnerability scanning"
+  target_types: ["domain", "url", "ip", "webapp"]
+  modules:
+    - technologies
+    - subdomains
+    - ports
+    - web
+    - directories
+  settings:
+    max_threads: 15
+    timeout: 7200  # 2 hours
+    retries: 3
+    scan_depth: comprehensive
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    amass:
+      enabled: true
+      options:
+        depth: 3
+    subfinder:
+      enabled: true
+      options: {}
+    nmap:
+      enabled: true
+      options:
+        ports: "1-65535"
+        timing_template: 4
+        scripts: "default,vuln"
+    zap:
+      enabled: true
+      options:
+        active_scan: true
+        ajax_spider: true
+        scan_policy: "Default Policy"
+    dirsearch:
+      enabled: true
+      options:
+        wordlist: "big.txt"
+        extensions: "php,html,js,txt,bak,old,sql,zip,tar.gz"
+    nuclei:
+      enabled: true
+      options:
+        templates: "cves,vulnerabilities,exposures"
+    sqlmap:
+      enabled: true
+      options:
+        level: 1
+        risk: 1
+
+# Stealth mode - Low-profile scan to avoid detection
+stealth:
+  name: stealth
+  description: "Low-profile scan designed to minimize detection chance"
+  target_types: ["domain", "url", "ip", "webapp"]
+  modules:
+    - technologies
+    - ports
+    - web
+  settings:
+    max_threads: 2
+    timeout: 4800  # 80 minutes
+    retries: 1
+    scan_depth: standard
+    delay: 5  # 5 seconds between requests
+  tools:
+    httpx:
+      enabled: true
+      options:
+        silent: true
+        threads: 1
+    nmap:
+      enabled: true
+      options:
+        ports: "80,443,8080,8443,22"
+        timing_template: 1
+        no_ping: true
+    zap:
+      enabled: true
+      options:
+        active_scan: false
+        passive_scan: true
+        ajax_spider: false
+
+# API mode - Focused on API security testing
+api:
+  name: api
+  description: "Specialized scan for API endpoints and services"
+  target_types: ["url", "webapp"]
+  modules:
+    - technologies
+    - web
+  settings:
+    max_threads: 8
+    timeout: 2400  # 40 minutes
+    retries: 2
+    scan_depth: standard
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    httpx:
+      enabled: true
+      options:
+        follow_redirects: true
+        status_code: true
+    nuclei:
+      enabled: true
+      options:
+        templates: "api,cves,vulnerabilities"
+    ffuf:
+      enabled: true
+      options:
+        wordlist: "api-endpoints.txt"
+        methods: "GET,POST,PUT,DELETE" 

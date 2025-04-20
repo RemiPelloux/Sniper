@@ -1,0 +1,25 @@
+checkov:
+  name: checkov
+  binary: checkov
+  category: miscellaneous
+  check_cmd: checkov --version
+  description: Static code analysis tool for infrastructure-as-code (Terraform, CloudFormation,
+    Kubernetes, Dockerfile, etc.)
+  execution_time: 300
+  install:
+    pip: pip install checkov
+  recommendation_score: 88
+  tags:
+  - static-analysis
+  - infrastructure
+  - cloud-security
+  - devsecops
+  target_types:
+  - iac
+  - terraform
+  - kubernetes
+  - docker
+  - cloudformation
+  update:
+    pip: pip install --upgrade checkov
+  website: https://www.checkov.io/

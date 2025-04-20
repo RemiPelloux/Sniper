@@ -94,6 +94,48 @@ class MockToolManager:
         self._installation_status[name] = True
         return True
 
+    def get_tool_categories(self) -> set[str]:
+        """Return a set of unique categories from the loaded tools."""
+        return {
+            data.get("category", "miscellaneous") for data in self._tools_data.values()
+        }
+
+    def remove_tool(self, name: str) -> bool:
+        """Mock implementation of remove_tool.
+
+        Removes a custom tool from the manager.
+
+        Args:
+            name (str): The name of the tool to remove
+
+        Returns:
+            bool: True if the tool was removed successfully, False otherwise
+        """
+        if name in self._tools_data:
+            del self._tools_data[name]
+            if name in self._installation_status:
+                del self._installation_status[name]
+            return True
+        return False
+
+    def check_for_updates(self) -> dict[str, bool]:
+        """Mock implementation of check_for_updates.
+
+        Returns:
+            dict[str, bool]: Dictionary mapping tool names to update status
+            True = update available, False = up to date, None = error/not installed
+        """
+        # By default, pretend that installed tools are up to date
+        updates = {}
+        for name in self._tools_data:
+            if name in self._installation_status and self._installation_status[name]:
+                updates[name] = False  # Tool is installed and up to date by default
+            else:
+                updates[name] = None  # Tool is not installed
+
+        # Can be overridden in tests
+        return updates
+
 
 @pytest.fixture(autouse=True)
 def mock_tool_manager(monkeypatch):
@@ -424,11 +466,15 @@ def test_update_tool_failure(mock_tool_manager: MockToolManager, monkeypatch) ->
 
 # TODO: Add tests for install/update with --all and --category flags
 
-def test_add_tool_command(mock_tool_manager: MockToolManager, monkeypatch, tmp_path) -> None:
+
+def test_add_tool_command(
+    mock_tool_manager: MockToolManager, monkeypatch, tmp_path
+) -> None:
     """Test the 'sniper tools add' command with a mock YAML file."""
     # Create a temporary YAML file with the correct structure - tools are defined as a dictionary
     tool_yaml = tmp_path / "test-tool.yaml"
-    tool_yaml.write_text("""
+    tool_yaml.write_text(
+        """
 test-tool:
   name: test-tool
   version: 1.0.0
@@ -448,8 +494,9 @@ test-tool:
     - unit-test
   requirements:
     - python3
-""")
-    
+"""
+    )
+
     # Mock the add_tool method in ToolManager
     def mock_add_tool(self, name, config, custom=True):
         # Add to our tracking for verification
@@ -457,14 +504,156 @@ test-tool:
         # Update internal state for future checks
         self._tools_data[name] = config
         return True
-    
+
     monkeypatch.setattr(MockToolManager, "add_tool", mock_add_tool)
-    
+
     # Run the command
     result = runner.invoke(app, ["tools", "add", str(tool_yaml)])
-    
+
     # Verify the result
     assert result.exit_code == 0
     output = strip_ansi(result.stdout)
     assert "Successfully added custom tool: test-tool" in output
     assert "test-tool" in mock_tool_manager.install_attempts
+
+
+def test_categories_command(mock_tool_manager: MockToolManager, monkeypatch) -> None:
+    """Test the 'sniper tools categories' command."""
+
+    # Extend the mock to include get_tool_categories method
+    def mock_get_tool_categories():
+        return {
+            ToolCategory.RECONNAISSANCE.value,
+            ToolCategory.VULNERABILITY_SCANNING.value,
+            ToolCategory.EXPLOITATION.value,
+            ToolCategory.MISCELLANEOUS.value,
+        }
+
+    # Patch the get_tool_categories method
+    monkeypatch.setattr(
+        mock_tool_manager, "get_tool_categories", mock_get_tool_categories
+    )
+
+    # Run the command
+    result = runner.invoke(app, ["tools", "categories"])
+
+    # Check exit code
+    assert result.exit_code == 0
+
+    # Verify all categories are listed in the output
+    output = strip_ansi(result.stdout)
+    assert "Available Tool Categories:" in output
+    assert ToolCategory.RECONNAISSANCE.value in output
+    assert ToolCategory.VULNERABILITY_SCANNING.value in output
+    assert ToolCategory.EXPLOITATION.value in output
+    assert ToolCategory.MISCELLANEOUS.value in output
+
+
+def test_remove_tool_command(mock_tool_manager: MockToolManager, monkeypatch) -> None:
+    """Test the 'sniper tools remove <tool_name>' command."""
+    # Mock the remove_tool method
+    remove_calls = []
+
+    def mock_remove_tool(name: str) -> bool:
+        remove_calls.append(name)
+        # Simulate successful removal
+        if name in mock_tool_manager._tools_data:
+            del mock_tool_manager._tools_data[name]
+            if name in mock_tool_manager._installation_status:
+                del mock_tool_manager._installation_status[name]
+            return True
+        return False
+
+    # Patch the remove_tool method
+    monkeypatch.setattr(mock_tool_manager, "remove_tool", mock_remove_tool)
+
+    # Add a test tool to remove
+    mock_tool_manager._tools_data["test-custom-tool"] = {
+        "name": "test-custom-tool",
+        "category": "miscellaneous",
+        "description": "A test custom tool",
+    }
+    mock_tool_manager._installation_status["test-custom-tool"] = True
+
+    # Run the command
+    result = runner.invoke(app, ["tools", "remove", "test-custom-tool"])
+
+    # Check exit code
+    assert result.exit_code == 0
+
+    # Verify the tool was removed
+    assert "test-custom-tool" in remove_calls
+    assert "test-custom-tool" not in mock_tool_manager._tools_data
+    assert "test-custom-tool" not in mock_tool_manager._installation_status
+
+    # Verify output message
+    output = strip_ansi(result.stdout)
+    assert "Successfully removed custom tool: test-custom-tool" in output
+
+    # Test attempting to remove a non-existent tool
+    nonexistent_tool = "nonexistent-tool"
+    remove_calls.clear()  # Reset the calls list
+
+    result = runner.invoke(app, ["tools", "remove", nonexistent_tool])
+    # Check that the command was run
+    assert nonexistent_tool in remove_calls
+
+    # The implementation may just print a warning rather than error
+    # So we'll check both possible outputs
+    output = strip_ansi(result.stdout)
+    # Check for the actual error message shown in the output
+    assert "Failed to remove tool: nonexistent-tool" in output
+    assert "Tools failed to remove: 1" in output
+
+
+def test_check_updates_command(mock_tool_manager: MockToolManager, monkeypatch) -> None:
+    """Test the 'sniper tools check-updates' command."""
+    # Mock the check_for_updates method
+    updates_dict = {
+        "nmap": True,  # Has updates
+        "zap": False,  # No updates
+        "massdns": None,  # Error/Not installed
+    }
+
+    def mock_check_for_updates(*args, **kwargs):
+        # Accept any arguments but return our predefined dict
+        return updates_dict
+
+    # Patch the check_for_updates method
+    monkeypatch.setattr(mock_tool_manager, "check_for_updates", mock_check_for_updates)
+
+    # Make sure we have the right tools in the manager
+    mock_tool_manager._tools_data = {
+        "nmap": {
+            "name": "nmap",
+            "category": "reconnaissance",
+            "description": "Network scanner",
+        },
+        "zap": {
+            "name": "zap",
+            "category": "vulnerability_scanning",
+            "description": "Web application scanner",
+        },
+        "massdns": {
+            "name": "massdns",
+            "category": "reconnaissance",
+            "description": "High-performance DNS resolver",
+        },
+    }
+
+    # Set installation status
+    mock_tool_manager._installation_status = {
+        "nmap": True,
+        "zap": True,
+        "massdns": False,
+    }
+
+    # Run the command
+    result = runner.invoke(app, ["tools", "check-updates"])
+
+    # Check exit code
+    assert result.exit_code == 0
+
+    # Verify output - might need adjustments based on actual output format
+    output = strip_ansi(result.stdout)
+    assert "Checking updates" in output

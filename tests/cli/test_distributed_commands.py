@@ -66,7 +66,7 @@ def mock_master_client():
             "priority": "MEDIUM",
         },
     ]
-    
+
     with patch("src.cli.distributed.create_master_client", return_value=master_client):
         yield master_client
 
@@ -83,7 +83,7 @@ def mock_worker_client():
         "completed_tasks": 5,
         "failed_tasks": 1,
     }
-    
+
     with patch("src.cli.distributed.create_worker_client", return_value=worker_client):
         yield worker_client
 
@@ -114,7 +114,7 @@ def test_master_status_command(cli_runner, mock_master_client):
         "queued_tasks": 0,
         "uptime": "0:10:30",
     }
-    
+
     result = cli_runner.invoke(distributed_app, ["master", "status"])
     assert result.exit_code == 0
     assert "Master Node Status" in result.stdout
@@ -150,11 +150,18 @@ def test_start_worker_command(cli_runner, mock_worker_client):
     result = cli_runner.invoke(distributed_app, ["worker", "start"])
     assert result.exit_code == 0
     assert "Worker node started" in result.stdout
-    
+
     # Test with custom parameters
     result = cli_runner.invoke(
-        distributed_app, 
-        ["worker", "start", "--master", "example.com:5000", "--capabilities", "port_scan,web_scan"]
+        distributed_app,
+        [
+            "worker",
+            "start",
+            "--master",
+            "example.com:5000",
+            "--capabilities",
+            "port_scan,web_scan",
+        ],
     )
     assert result.exit_code == 0
     # Check that parameters were passed correctly to the client
@@ -179,4 +186,4 @@ def test_worker_status_command(cli_runner, mock_worker_client):
     assert result.exit_code == 0
     assert "Worker Node Status" in result.stdout
     assert "ACTIVE" in result.stdout
-    mock_worker_client.get_status.assert_called_once() 
+    mock_worker_client.get_status.assert_called_once()

@@ -69,7 +69,7 @@ def test_sandbox_cli_integration(runner):
         # Configure mock to return success
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = b"Docker version 20.10.8\n"
-        
+
         # Test list command
         result = runner.invoke(sandbox_app, ["list"])
         assert result.exit_code == 0
@@ -83,7 +83,7 @@ def test_sandbox_commands_with_mock_docker(runner):
     """Test all sandbox commands with mocked Docker interactions."""
     # Create a sandbox plugin instance for mocking
     sandbox_plugin = SandboxPlugin()
-    
+
     # Mock the Docker prerequisite check to always return True
     with patch.object(SandboxPlugin, "_check_docker_prerequisites", return_value=True):
         # Mock subprocess to avoid actual Docker commands
@@ -91,34 +91,44 @@ def test_sandbox_commands_with_mock_docker(runner):
             # Configure mock to return success for all commands
             mock_run.return_value.returncode = 0
             mock_run.return_value.stdout = b"Docker version 20.10.8\n"
-            
+
             # Mock the _get_sandbox_plugin_instance function to return our controlled instance
-            with patch("src.sniper.plugins.sandbox.sandbox_plugin._get_sandbox_plugin_instance", 
-                      return_value=sandbox_plugin):
-                
+            with patch(
+                "src.sniper.plugins.sandbox.sandbox_plugin._get_sandbox_plugin_instance",
+                return_value=sandbox_plugin,
+            ):
+
                 # Mock the internal environment handling methods
-                with patch.object(sandbox_plugin, "_start_environment", return_value=True):
-                    with patch.object(sandbox_plugin, "_stop_environment", return_value=True):
-                        with patch.object(sandbox_plugin, "_get_status", return_value="Running"):
-                            
+                with patch.object(
+                    sandbox_plugin, "_start_environment", return_value=True
+                ):
+                    with patch.object(
+                        sandbox_plugin, "_stop_environment", return_value=True
+                    ):
+                        with patch.object(
+                            sandbox_plugin, "_get_status", return_value="Running"
+                        ):
+
                             # Test environment name validation
                             env_name = "dvwa"  # Use a valid environment name
-                            
+
                             # Test start command
                             result = runner.invoke(sandbox_app, ["start", env_name])
                             assert result.exit_code == 0
-                            
+
                             # Test status command
                             result = runner.invoke(sandbox_app, ["status", env_name])
                             assert result.exit_code == 0
-                            
+
                             # Test stop command
                             result = runner.invoke(sandbox_app, ["stop", env_name])
                             assert result.exit_code == 0
-                
+
                 # Test with invalid environment name - should fail
                 # We need a separate test for this as we want it to fail
-                with patch.object(sandbox_plugin, "_start_environment", return_value=False):
+                with patch.object(
+                    sandbox_plugin, "_start_environment", return_value=False
+                ):
                     result = runner.invoke(sandbox_app, ["start", "nonexistent"])
                     assert result.exit_code == 1
 
@@ -141,4 +151,4 @@ def test_docker_prerequisite_check():
         assert plugin._check_docker_prerequisites()
     except (subprocess.SubprocessError, FileNotFoundError):
         # If Docker is not available, the test is still valid but should be skipped
-        pytest.skip("Docker not available on this system") 
+        pytest.skip("Docker not available on this system")

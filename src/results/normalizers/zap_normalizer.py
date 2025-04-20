@@ -84,17 +84,23 @@ class ZAPFindingNormalizer(FindingNormalizer):
                 risk_code = str(finding.raw_evidence["riskcode"])
                 if risk_code in self.zap_severity_map:
                     return self.zap_severity_map[risk_code]
-                
+
             # Check for patterns in evidence that indicate specific vulnerabilities
             if "evidence" in finding.raw_evidence:
                 evidence = str(finding.raw_evidence["evidence"])
-                
+
                 # SQL Injection patterns
-                if any(pattern in evidence for pattern in ["'or 1=1", "' or '1'='1", "1=1--", "'; --"]):
+                if any(
+                    pattern in evidence
+                    for pattern in ["'or 1=1", "' or '1'='1", "1=1--", "'; --"]
+                ):
                     return FindingSeverity.HIGH
-                
+
                 # Path Traversal patterns
-                if any(pattern in evidence for pattern in ["../", "..\\", "/etc/passwd", "\\windows\\system32"]):
+                if any(
+                    pattern in evidence
+                    for pattern in ["../", "..\\", "/etc/passwd", "\\windows\\system32"]
+                ):
                     return FindingSeverity.HIGH
 
         # Default to the original severity

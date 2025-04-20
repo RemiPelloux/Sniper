@@ -9,14 +9,17 @@ import json
 import logging
 import os
 import subprocess
-from typing import List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
 import typer
 
 from src.sniper.core.plugin_manager import PluginInterface, PluginManager
 
+# Set up logger
 logger = logging.getLogger(__name__)
 
+# Create a Typer app
 sandbox_app = typer.Typer(help="Manage the Sniper Sandbox environment.")
 
 # Define available sandbox environments (maps name to docker-compose file)
@@ -52,9 +55,9 @@ class SandboxPlugin(PluginInterface):
     def unload(self) -> bool:
         """Unload the sandbox plugin. Stops any running environments."""
         logger.info("Unloading Sandbox Plugin...")
-        # Attempt to stop all known environments upon unload
-        for env_name in SANDBOX_ENVIRONMENTS:
-            self._stop_environment(env_name, silent=True)
+        # Comment this out to prevent stopping environments when unloading the plugin
+        # for env_name in SANDBOX_ENVIRONMENTS:
+        #     self._stop_environment(env_name, silent=True)
         logger.info("Sandbox Plugin unloaded.")
         return True
 
@@ -71,13 +74,18 @@ class SandboxPlugin(PluginInterface):
                 ["docker", "--version"], check=True, capture_output=True, text=True
             )
             logger.debug(f"Docker check successful: {docker_result.stdout.strip()}")
-            
+
             # Check Docker Compose v2
             compose_result = subprocess.run(
-                ["docker", "compose", "version"], check=True, capture_output=True, text=True
+                ["docker", "compose", "version"],
+                check=True,
+                capture_output=True,
+                text=True,
             )
-            logger.debug(f"Docker Compose check successful: {compose_result.stdout.strip()}")
-            
+            logger.debug(
+                f"Docker Compose check successful: {compose_result.stdout.strip()}"
+            )
+
             return True
         except subprocess.CalledProcessError as e:
             logger.debug(f"Docker prerequisite check failed (process error): {e}")
@@ -238,31 +246,19 @@ class SandboxPlugin(PluginInterface):
 
 def _get_sandbox_plugin_instance() -> Optional[SandboxPlugin]:
     """Helper to get the loaded SandboxPlugin instance."""
-    # This assumes a global or context-managed plugin manager
-    # For now, we instantiate it directly for CLI usage, but this should
-    # ideally use the main app's plugin manager instance.
-    # TODO: Refactor to use a shared plugin manager context.
     try:
-        temp_manager = PluginManager(plugin_dirs=["src/sniper/plugins"])
-        temp_manager.discover_plugins()
-        logger.debug(f"Discovered plugin classes: {list(temp_manager._discovered_plugin_classes.keys())}")
-        
-        instance = temp_manager.instantiate_plugin("Sandbox")
-        logger.debug(f"Instantiated plugin: {instance}")
-        
-        if isinstance(instance, SandboxPlugin):
-            # Perform prerequisite check here if needed for CLI commands
-            if not instance._check_docker_prerequisites():
-                typer.echo(
-                    "Error: Docker or Docker Compose not found. Cannot manage sandbox.",
-                    err=True,
-                )
-                raise typer.Exit(code=1)
-            return instance
-        else:
-            logger.error(f"Instantiated plugin is not a SandboxPlugin: {type(instance)}")
-            typer.echo("Error: Could not load Sandbox Plugin.", err=True)
+        # Create a direct instance - this is the most reliable approach
+        instance = SandboxPlugin()
+        logger.debug(f"Created SandboxPlugin instance directly: {instance}")
+
+        # Perform prerequisite check
+        if not instance._check_docker_prerequisites():
+            typer.echo(
+                "Error: Docker or Docker Compose not found. Cannot manage sandbox.",
+                err=True,
+            )
             raise typer.Exit(code=1)
+        return instance
     except Exception as e:
         logger.error(f"Error instantiating Sandbox Plugin: {e}", exc_info=True)
         typer.echo(f"Error: Could not load Sandbox Plugin: {e}", err=True)
