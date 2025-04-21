@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ category|title }} Findings - {{ target }}</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background-color: #f8f9fa;
+            --text-color: #333;
+            --border-color: #ddd;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --info-color: #3498db;
+            
+            /* Severity colors */
+            --critical-color: #7b0000;
+            --high-color: #e74c3c;
+            --medium-color: #f39c12;
+            --low-color: #3498db;
+            --info-color: #95a5a6;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            border-radius: 5px 5px 0 0;
+            margin-bottom: 20px;
+        }
+        
+        h1, h2, h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        
+        header h1, header h2 {
+            color: white;
+            margin: 0;
+        }
+        
+        header p {
+            margin: 5px 0 0;
+        }
+        
+        .breadcrumb {
+            margin: 0 0 20px 0;
+            padding: 10px 0;
+            font-size: 0.9rem;
+        }
+        
+        .breadcrumb a {
+            color: var(--secondary-color);
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        
+        .finding-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .finding-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .finding-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin: 0;
+        }
+        
+        .finding-body {
+            padding: 20px;
+        }
+        
+        .finding-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .meta-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        
+        .meta-value {
+            font-weight: 500;
+        }
+        
+        .finding-section {
+            margin-bottom: 15px;
+        }
+        
+        .finding-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
+        .evidence-box {
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .remediation-list {
+            padding-left: 20px;
+        }
+        
+        .remediation-list li {
+            margin-bottom: 8px;
+        }
+        
+        .references-list {
+            padding-left: 0;
+            list-style-type: none;
+        }
+        
+        .references-list li {
+            margin-bottom: 8px;
+        }
+        
+        .references-list a {
+            color: var(--secondary-color);
+            text-decoration: none;
+        }
+        
+        .references-list a:hover {
+            text-decoration: underline;
+        }
+        
+        .severity-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            color: white;
+            margin-right: 5px;
+        }
+        
+        .severity-critical {
+            background-color: var(--critical-color);
+        }
+        
+        .severity-high {
+            background-color: var(--high-color);
+        }
+        
+        .severity-medium {
+            background-color: var(--medium-color);
+        }
+        
+        .severity-low {
+            background-color: var(--low-color);
+        }
+        
+        .severity-info {
+            background-color: var(--info-color);
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            color: #777;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .finding-meta {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>{{ category|title }} Findings</h1>
+            <p>Target: {{ target }}</p>
+            <p>Scan Date: {{ scan_date }}</p>
+        </header>
+        
+        <div class="breadcrumb">
+            <a href="../index.html">« Back to Main Report</a>
+        </div>
+        
+        <h2>{{ findings|length }} Finding{% if findings|length != 1 %}s{% endif %} in {{ category|title }}</h2>
+        
+        {% for finding in findings %}
+        <div class="finding-card" id="finding-{{ loop.index }}">
+            <div class="finding-header">
+                <h3 class="finding-title">{{ finding.name or finding.title }}</h3>
+                {% if finding.severity %}
+                <span class="severity-badge severity-{{ finding.severity|lower }}">
+                    {{ finding.severity|upper }}
+                </span>
+                {% endif %}
+            </div>
+            
+            <div class="finding-body">
+                <div class="finding-meta">
+                    {% if finding.url %}
+                    <div class="meta-item">
+                        <span class="meta-label">URL</span>
+                        <span class="meta-value">
+                            <a href="{{ finding.url }}" target="_blank">{{ finding.url }}</a>
+                        </span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if finding.date %}
+                    <div class="meta-item">
+                        <span class="meta-label">Detected</span>
+                        <span class="meta-value">{{ finding.date }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if finding.severity %}
+                    <div class="meta-item">
+                        <span class="meta-label">Severity</span>
+                        <span class="meta-value">{{ finding.severity|title }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if finding.confidence %}
+                    <div class="meta-item">
+                        <span class="meta-label">Confidence</span>
+                        <span class="meta-value">{{ finding.confidence|title }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if finding.risk_score %}
+                    <div class="meta-item">
+                        <span class="meta-label">Risk Score</span>
+                        <span class="meta-value">{{ finding.risk_score }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if finding.description %}
+                <div class="finding-section">
+                    <h3>Description</h3>
+                    <p>{{ finding.description }}</p>
+                </div>
+                {% endif %}
+                
+                {% if finding.evidence %}
+                <div class="finding-section">
+                    <h3>Evidence</h3>
+                    <div class="evidence-box">{{ finding.evidence }}</div>
+                </div>
+                {% endif %}
+                
+                {% if finding.request %}
+                <div class="finding-section">
+                    <h3>Request</h3>
+                    <div class="evidence-box">{{ finding.request }}</div>
+                </div>
+                {% endif %}
+                
+                {% if finding.response %}
+                <div class="finding-section">
+                    <h3>Response</h3>
+                    <div class="evidence-box">{{ finding.response }}</div>
+                </div>
+                {% endif %}
+                
+                {% if finding.remediation %}
+                <div class="finding-section">
+                    <h3>Remediation</h3>
+                    {% if finding.remediation is string %}
+                    <p>{{ finding.remediation }}</p>
+                    {% else %}
+                    <ul class="remediation-list">
+                        {% for item in finding.remediation %}
+                        <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                {% if finding.references %}
+                <div class="finding-section">
+                    <h3>References</h3>
+                    <ul class="references-list">
+                        {% if finding.references is string %}
+                        <li><a href="{{ finding.references }}" target="_blank">{{ finding.references }}</a></li>
+                        {% else %}
+                        {% for reference in finding.references %}
+                        <li>
+                            {% if reference is mapping and reference.url %}
+                            <a href="{{ reference.url }}" target="_blank">{{ reference.title or reference.url }}</a>
+                            {% elif reference is mapping and reference.title %}
+                            {{ reference.title }}
+                            {% else %}
+                            <a href="{{ reference }}" target="_blank">{{ reference }}</a>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        
+        <div class="footer">
+            <p>Generated by Sniper Security Platform on {{ scan_date }}</p>
+        </div>
+    </div>
+</body>
+</html> 

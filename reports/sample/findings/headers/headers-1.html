@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missing Security Headers - http://example.com</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background-color: #f8f9fa;
+            --text-color: #333;
+            --border-color: #ddd;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --info-color: #3498db;
+            
+            /* Severity colors */
+            --critical-color: #7b0000;
+            --high-color: #e74c3c;
+            --medium-color: #f39c12;
+            --low-color: #3498db;
+            --info-color: #95a5a6;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            border-radius: 5px 5px 0 0;
+            margin-bottom: 20px;
+        }
+        
+        h1, h2, h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        
+        header h1, header h2 {
+            color: white;
+            margin: 0;
+        }
+        
+        header p {
+            margin: 5px 0 0;
+        }
+        
+        .breadcrumb {
+            margin: 0 0 20px 0;
+            padding: 10px 0;
+            font-size: 0.9rem;
+        }
+        
+        .breadcrumb a {
+            color: var(--secondary-color);
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        
+        .finding-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .finding-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .finding-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin: 0;
+        }
+        
+        .finding-body {
+            padding: 20px;
+        }
+        
+        .finding-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .meta-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        
+        .meta-value {
+            font-weight: 500;
+        }
+        
+        .finding-section {
+            margin-bottom: 15px;
+        }
+        
+        .finding-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
+        .evidence-box {
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .code-highlight {
+            background-color: rgba(255, 255, 0, 0.3);
+            font-weight: bold;
+        }
+        
+        .remediation-list {
+            padding-left: 20px;
+        }
+        
+        .remediation-list li {
+            margin-bottom: 10px;
+        }
+        
+        .references-list {
+            padding-left: 0;
+            list-style-type: none;
+        }
+        
+        .references-list li {
+            margin-bottom: 8px;
+        }
+        
+        .references-list a {
+            color: var(--secondary-color);
+            text-decoration: none;
+        }
+        
+        .references-list a:hover {
+            text-decoration: underline;
+        }
+        
+        .severity-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            color: white;
+            margin-right: 5px;
+        }
+        
+        .severity-critical {
+            background-color: var(--critical-color);
+        }
+        
+        .severity-high {
+            background-color: var(--high-color);
+        }
+        
+        .severity-medium {
+            background-color: var(--medium-color);
+        }
+        
+        .severity-low {
+            background-color: var(--low-color);
+        }
+        
+        .severity-info {
+            background-color: var(--info-color);
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .details-grid.full-width {
+            grid-template-columns: 1fr;
+        }
+        
+        .details-item {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+        }
+        
+        .details-item h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        table th,
+        table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        table th {
+            background-color: #f2f2f2;
+            font-weight: 600;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            color: #777;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .finding-meta {
+                grid-template-columns: 1fr;
+            }
+            
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Missing Security Headers</h1>
+            <p>Target: http://example.com</p>
+        </header>
+        
+        <div class="breadcrumb">
+            <a href="../index.html">« Back to Main Report</a> |
+            <a href="headers.html">« Back to Headers Findings</a>
+        </div>
+        
+        <div class="finding-card">
+            <div class="finding-header">
+                <h3 class="finding-title">Missing Security Headers</h3>
+                <span class="severity-badge severity-low">
+                    LOW
+                </span>
+            </div>
+            
+            <div class="finding-body">
+                <div class="finding-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">URL</span>
+                        <span class="meta-value">
+                            <a href="http://example.com" target="_blank">http://example.com</a>
+                        </span>
+                    </div>
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">Detected</span>
+                        <span class="meta-value">2023-09-05 14:40:05</span>
+                    </div>
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">Severity</span>
+                        <span class="meta-value">Low</span>
+                    </div>
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">Confidence</span>
+                        <span class="meta-value">High</span>
+                    </div>
+                    
+                    
+                    
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Description</h3>
+                    <p>The application is missing several recommended security headers that help protect against common web vulnerabilities.</p>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Impact</h3>
+                    <p>Without proper security headers, the application may be vulnerable to various attacks including XSS, clickjacking, and man-in-the-middle attacks.</p>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Evidence</h3>
+                    <div class="evidence-box">Response headers do not include Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, and X-XSS-Protection.</div>
+                </div>
+                
+                
+                
+                <div class="finding-section">
+                    <h3>Remediation</h3>
+                    <ul class="remediation-list">
+                        <li>Implement Content-Security-Policy header</li>
+                        <li>Add X-Frame-Options: DENY or SAMEORIGIN</li>
+                        <li>Set X-Content-Type-Options: nosniff</li>
+                        <li>Configure Strict-Transport-Security header</li>
+                    </ul>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>References</h3>
+                    <ul class="references-list">
+                        <li>
+                            <a href="https://owasp.org/www-project-secure-headers/" target="_blank">OWASP Secure Headers Project</a>
+                        </li>
+                        <li>
+                            <a href="https://developer.mozilla.org/en-US/docs/Web/Security" target="_blank">MDN Web Security</a>
+                        </li>
+                    </ul>
+                </div>
+                
+                
+                <div class="finding-section">
+                    <h3>Headers</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Header</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Server</td>
+                                    <td>Apache/2.4.41</td>
+                                </tr>
+                                <tr>
+                                    <td>Content-Type</td>
+                                    <td>text/html</td>
+                                </tr>
+                                <tr>
+                                    <td>Cache-Control</td>
+                                    <td>no-cache</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Generated by Sniper Security Platform on 2023-09-05 14:30:00</p>
+        </div>
+    </div>
+</body>
+</html> 

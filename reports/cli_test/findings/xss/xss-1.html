@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reflected Cross-Site Scripting - sample_findings</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background-color: #f8f9fa;
+            --text-color: #333;
+            --border-color: #ddd;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --info-color: #3498db;
+            
+            /* Severity colors */
+            --critical-color: #7b0000;
+            --high-color: #e74c3c;
+            --medium-color: #f39c12;
+            --low-color: #3498db;
+            --info-color: #95a5a6;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            border-radius: 5px 5px 0 0;
+            margin-bottom: 20px;
+        }
+        
+        h1, h2, h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        
+        header h1, header h2 {
+            color: white;
+            margin: 0;
+        }
+        
+        header p {
+            margin: 5px 0 0;
+        }
+        
+        .breadcrumb {
+            margin: 0 0 20px 0;
+            padding: 10px 0;
+            font-size: 0.9rem;
+        }
+        
+        .breadcrumb a {
+            color: var(--secondary-color);
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        
+        .finding-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .finding-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .finding-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin: 0;
+        }
+        
+        .finding-body {
+            padding: 20px;
+        }
+        
+        .finding-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .meta-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        
+        .meta-value {
+            font-weight: 500;
+        }
+        
+        .finding-section {
+            margin-bottom: 15px;
+        }
+        
+        .finding-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
+        .evidence-box {
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .code-highlight {
+            background-color: rgba(255, 255, 0, 0.3);
+            font-weight: bold;
+        }
+        
+        .remediation-list {
+            padding-left: 20px;
+        }
+        
+        .remediation-list li {
+            margin-bottom: 10px;
+        }
+        
+        .references-list {
+            padding-left: 0;
+            list-style-type: none;
+        }
+        
+        .references-list li {
+            margin-bottom: 8px;
+        }
+        
+        .references-list a {
+            color: var(--secondary-color);
+            text-decoration: none;
+        }
+        
+        .references-list a:hover {
+            text-decoration: underline;
+        }
+        
+        .severity-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            color: white;
+            margin-right: 5px;
+        }
+        
+        .severity-critical {
+            background-color: var(--critical-color);
+        }
+        
+        .severity-high {
+            background-color: var(--high-color);
+        }
+        
+        .severity-medium {
+            background-color: var(--medium-color);
+        }
+        
+        .severity-low {
+            background-color: var(--low-color);
+        }
+        
+        .severity-info {
+            background-color: var(--info-color);
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .details-grid.full-width {
+            grid-template-columns: 1fr;
+        }
+        
+        .details-item {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+        }
+        
+        .details-item h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        table th,
+        table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        table th {
+            background-color: #f2f2f2;
+            font-weight: 600;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            color: #777;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .finding-meta {
+                grid-template-columns: 1fr;
+            }
+            
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Reflected Cross-Site Scripting</h1>
+            <p>Target: sample_findings</p>
+        </header>
+        
+        <div class="breadcrumb">
+            <a href="../index.html">« Back to Main Report</a> |
+            <a href="xss.html">« Back to Xss Findings</a>
+        </div>
+        
+        <div class="finding-card">
+            <div class="finding-header">
+                <h3 class="finding-title">Reflected Cross-Site Scripting</h3>
+                <span class="severity-badge severity-high">
+                    HIGH
+                </span>
+            </div>
+            
+            <div class="finding-body">
+                <div class="finding-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">URL</span>
+                        <span class="meta-value">
+                            <a href="http://example.com/search?q=test" target="_blank">http://example.com/search?q=test</a>
+                        </span>
+                    </div>
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">Detected</span>
+                        <span class="meta-value">2023-09-05 14:32:45</span>
+                    </div>
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">Severity</span>
+                        <span class="meta-value">High</span>
+                    </div>
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">Confidence</span>
+                        <span class="meta-value">High</span>
+                    </div>
+                    
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">CVSS Score</span>
+                        <span class="meta-value">6.1</span>
+                    </div>
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">CWE</span>
+                        <span class="meta-value">
+                            <a href="https://cwe.mitre.org/data/definitions/79.html" target="_blank">
+                                CWE-79: Improper Neutralization of Input During Web Page Generation
+                            </a>
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Description</h3>
+                    <p>A reflected cross-site scripting vulnerability was detected in the search parameter. The application reflects user input without proper sanitization.</p>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Impact</h3>
+                    <p>This vulnerability allows attackers to inject malicious scripts that execute in the victim&#39;s browser context, potentially leading to cookie theft, session hijacking, or UI manipulation.</p>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Evidence</h3>
+                    <div class="evidence-box">Parameter &#39;q&#39; with value &#39;&lt;script&gt;alert(1)&lt;/script&gt;&#39; was reflected in the response without encoding.</div>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Request</h3>
+                    <div class="evidence-box">GET /search?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E HTTP/1.1
+Host: example.com
+User-Agent: Mozilla/5.0
+Accept: text/html,application/xhtml+xml</div>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Response</h3>
+                    <div class="evidence-box">HTTP/1.1 200 OK
+Content-Type: text/html
+
+&lt;html&gt;
+&lt;head&gt;&lt;title&gt;Search Results&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;Search Results for: &lt;script&gt;alert(1)&lt;/script&gt;&lt;/h1&gt;
+&lt;/body&gt;
+&lt;/html&gt;</div>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Remediation</h3>
+                    <ul class="remediation-list">
+                        <li>Implement content security policy (CSP) headers</li>
+                        <li>Apply input validation</li>
+                        <li>Use output encoding appropriate for the context (HTML, JS, CSS)</li>
+                        <li>Consider using frameworks that automatically escape output</li>
+                    </ul>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>References</h3>
+                    <ul class="references-list">
+                        <li>
+                            <a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html" target="_blank">OWASP XSS Prevention Cheat Sheet</a>
+                        </li>
+                        <li>
+                            <a href="https://cwe.mitre.org/data/definitions/79.html" target="_blank">CWE-79</a>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="finding-section">
+                    <h3>Parameters</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>q</td>
+                                    <td>&lt;script&gt;alert(1)&lt;/script&gt;</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Generated by Sniper Security Platform on 2023-09-05 14:30:00</p>
+        </div>
+    </div>
+</body>
+</html> 

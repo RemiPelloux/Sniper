@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sniper Security Scan Report - {{ target }}</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background-color: #f8f9fa;
+            --text-color: #333;
+            --border-color: #ddd;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --info-color: #3498db;
+            
+            /* Severity colors */
+            --critical-color: #7b0000;
+            --high-color: #e74c3c;
+            --medium-color: #f39c12;
+            --low-color: #3498db;
+            --info-color: #95a5a6;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            border-radius: 5px 5px 0 0;
+            margin-bottom: 30px;
+        }
+        
+        h1, h2, h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        
+        header h1, header h2 {
+            color: white;
+            margin: 0;
+        }
+        
+        header p {
+            margin: 5px 0 0;
+        }
+        
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .summary-card.critical {
+            border-top: 4px solid var(--critical-color);
+        }
+        
+        .summary-card.high {
+            border-top: 4px solid var(--high-color);
+        }
+        
+        .summary-card.medium {
+            border-top: 4px solid var(--medium-color);
+        }
+        
+        .summary-card.low {
+            border-top: 4px solid var(--low-color);
+        }
+        
+        .summary-card.info {
+            border-top: 4px solid var(--info-color);
+        }
+        
+        .summary-card .count {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .summary-card .label {
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .summary-card.critical .count {
+            color: var(--critical-color);
+        }
+        
+        .summary-card.high .count {
+            color: var(--high-color);
+        }
+        
+        .summary-card.medium .count {
+            color: var(--medium-color);
+        }
+        
+        .summary-card.low .count {
+            color: var(--low-color);
+        }
+        
+        .summary-card.info .count {
+            color: var(--info-color);
+        }
+        
+        .categories {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .category-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .category-header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .category-header h3 {
+            margin: 0;
+            color: white;
+            font-size: 1.2rem;
+        }
+        
+        .category-count {
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+        
+        .category-body {
+            padding: 15px;
+        }
+        
+        .category-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: #666;
+        }
+        
+        .category-findings {
+            margin-top: 15px;
+        }
+        
+        .finding-preview {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .finding-preview:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .finding-preview-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .finding-preview-name {
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .severity-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            color: white;
+            margin-right: 5px;
+        }
+        
+        .severity-critical {
+            background-color: var(--critical-color);
+        }
+        
+        .severity-high {
+            background-color: var(--high-color);
+        }
+        
+        .severity-medium {
+            background-color: var(--medium-color);
+        }
+        
+        .severity-low {
+            background-color: var(--low-color);
+        }
+        
+        .severity-info {
+            background-color: var(--info-color);
+        }
+        
+        .view-all {
+            display: block;
+            text-align: center;
+            margin-top: 15px;
+            padding: 8px 0;
+            background-color: var(--secondary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        .view-all:hover {
+            background-color: #2980b9;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            color: #777;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .summary-cards, .categories {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Security Scan Report</h1>
+            <h2>{{ target }}</h2>
+            <p>Scan Date: {{ scan_date }}</p>
+        </header>
+        
+        <h2>Summary of Findings</h2>
+        <div class="summary-cards">
+            <div class="summary-card critical">
+                <div class="label">Critical</div>
+                <div class="count">{{ severity_counts.critical }}</div>
+            </div>
+            <div class="summary-card high">
+                <div class="label">High</div>
+                <div class="count">{{ severity_counts.high }}</div>
+            </div>
+            <div class="summary-card medium">
+                <div class="label">Medium</div>
+                <div class="count">{{ severity_counts.medium }}</div>
+            </div>
+            <div class="summary-card low">
+                <div class="label">Low</div>
+                <div class="count">{{ severity_counts.low }}</div>
+            </div>
+            <div class="summary-card info">
+                <div class="label">Info</div>
+                <div class="count">{{ severity_counts.info }}</div>
+            </div>
+        </div>
+        
+        <h2>Findings by Category</h2>
+        <div class="categories">
+            {% for category in categories %}
+            <div class="category-card">
+                <div class="category-header">
+                    <h3>{{ category.name|title }}</h3>
+                    <span class="category-count">{{ category.count }}</span>
+                </div>
+                <div class="category-body">
+                    <div class="category-stats">
+                        {% if category.severity_counts.critical > 0 %}
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: var(--critical-color);">{{ category.severity_counts.critical }}</div>
+                            <div class="stat-label">Critical</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if category.severity_counts.high > 0 %}
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: var(--high-color);">{{ category.severity_counts.high }}</div>
+                            <div class="stat-label">High</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if category.severity_counts.medium > 0 %}
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: var(--medium-color);">{{ category.severity_counts.medium }}</div>
+                            <div class="stat-label">Medium</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if category.severity_counts.low > 0 %}
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: var(--low-color);">{{ category.severity_counts.low }}</div>
+                            <div class="stat-label">Low</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if category.severity_counts.info > 0 %}
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: var(--info-color);">{{ category.severity_counts.info }}</div>
+                            <div class="stat-label">Info</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="category-findings">
+                        {% for finding in category.findings %}
+                        <div class="finding-preview">
+                            <div class="finding-preview-title">
+                                <p class="finding-preview-name">{{ finding.name or finding.title }}</p>
+                                <span class="severity-badge severity-{{ finding.severity|lower }}">
+                                    {{ finding.severity|upper }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <a href="{{ category.file }}" class="view-all">View All {{ category.name|title }} Findings</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="footer">
+            <p>Generated by Sniper Security Platform on {{ scan_date }}</p>
+        </div>
+    </div>
+</body>
+</html> 

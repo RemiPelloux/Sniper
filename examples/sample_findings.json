@@ -1,0 +1,277 @@
+{
+  "scan_id": "scan-20230905-001",
+  "target": "http://example.com",
+  "scan_date": "2023-09-05 14:30:00",
+  "scan_duration": "00:05:23",
+  "scan_modules": ["passive", "active", "authentication"],
+  "scan_tool_versions": {
+    "sniper": "0.1.0",
+    "zap": "2.12.0"
+  },
+  "findings": [
+    {
+      "id": "xss-1",
+      "name": "Reflected Cross-Site Scripting",
+      "category": "xss",
+      "severity": "high",
+      "confidence": "high",
+      "description": "A reflected cross-site scripting vulnerability was detected in the search parameter. The application reflects user input without proper sanitization.",
+      "impact": "This vulnerability allows attackers to inject malicious scripts that execute in the victim's browser context, potentially leading to cookie theft, session hijacking, or UI manipulation.",
+      "evidence": "Parameter 'q' with value '<script>alert(1)</script>' was reflected in the response without encoding.",
+      "request": "GET /search?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E HTTP/1.1\nHost: example.com\nUser-Agent: Mozilla/5.0\nAccept: text/html,application/xhtml+xml",
+      "response": "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<html>\n<head><title>Search Results</title></head>\n<body>\n<h1>Search Results for: <script>alert(1)</script></h1>\n</body>\n</html>",
+      "remediation": [
+        "Implement content security policy (CSP) headers",
+        "Apply input validation",
+        "Use output encoding appropriate for the context (HTML, JS, CSS)",
+        "Consider using frameworks that automatically escape output"
+      ],
+      "references": [
+        {"title": "OWASP XSS Prevention Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"},
+        {"title": "CWE-79", "url": "https://cwe.mitre.org/data/definitions/79.html"}
+      ],
+      "cwe": {"id": "79", "name": "Improper Neutralization of Input During Web Page Generation"},
+      "cvss_score": 6.1,
+      "url": "http://example.com/search?q=test",
+      "params": {
+        "q": "<script>alert(1)</script>"
+      },
+      "date": "2023-09-05 14:32:45"
+    },
+    {
+      "id": "sqli-1",
+      "name": "SQL Injection",
+      "category": "sql_injection",
+      "severity": "critical",
+      "confidence": "high",
+      "description": "A SQL injection vulnerability was detected in the user ID parameter. The application constructs SQL queries from user input without proper parameterization.",
+      "impact": "This vulnerability allows attackers to bypass authentication, access, modify, or delete database content, and potentially execute commands on the database server.",
+      "evidence": "Parameter 'id' with value \"' OR 1=1--\" returned unexpected data indicating a successful SQL injection.",
+      "request": "GET /user?id=%27%20OR%201%3D1-- HTTP/1.1\nHost: example.com\nUser-Agent: Mozilla/5.0\nAccept: text/html,application/xhtml+xml",
+      "response": "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<html>\n<body>\n<h1>User Profile</h1>\n<div>Name: Admin User</div>\n<div>Email: admin@example.com</div>\n</body>\n</html>",
+      "remediation": [
+        "Use parameterized queries or prepared statements",
+        "Apply input validation and whitelist acceptable input",
+        "Use an ORM framework",
+        "Apply the principle of least privilege for database users"
+      ],
+      "references": [
+        {"title": "OWASP SQL Injection Prevention Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"},
+        {"title": "CWE-89", "url": "https://cwe.mitre.org/data/definitions/89.html"}
+      ],
+      "cwe": {"id": "89", "name": "Improper Neutralization of Special Elements used in an SQL Command"},
+      "cvss_score": 9.8,
+      "url": "http://example.com/user?id=1",
+      "params": {
+        "id": "' OR 1=1--"
+      },
+      "date": "2023-09-05 14:35:21"
+    },
+    {
+      "id": "csrf-1",
+      "name": "Cross-Site Request Forgery",
+      "category": "csrf",
+      "severity": "medium",
+      "confidence": "medium",
+      "description": "A Cross-Site Request Forgery vulnerability was detected in the account settings form. The application does not implement anti-CSRF tokens for state-changing operations.",
+      "impact": "This vulnerability allows attackers to trick users into performing unwanted actions on the application, such as changing account details or making unauthorized transactions.",
+      "evidence": "The form submission endpoint /api/account/update accepts POST requests without any CSRF token validation.",
+      "request": "POST /api/account/update HTTP/1.1\nHost: example.com\nContent-Type: application/x-www-form-urlencoded\n\nemail=attacker%40evil.com",
+      "remediation": [
+        "Implement anti-CSRF tokens in all forms and validate them on the server",
+        "Use the SameSite cookie attribute",
+        "Implement additional user verification for sensitive operations"
+      ],
+      "references": [
+        {"title": "OWASP CSRF Prevention Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"},
+        {"title": "CWE-352", "url": "https://cwe.mitre.org/data/definitions/352.html"}
+      ],
+      "cwe": {"id": "352", "name": "Cross-Site Request Forgery"},
+      "url": "http://example.com/account",
+      "date": "2023-09-05 14:38:12"
+    },
+    {
+      "id": "headers-1",
+      "name": "Missing Security Headers",
+      "category": "headers",
+      "severity": "low",
+      "confidence": "high",
+      "description": "The application is missing several recommended security headers that help protect against common web vulnerabilities.",
+      "impact": "Without proper security headers, the application may be vulnerable to various attacks including XSS, clickjacking, and man-in-the-middle attacks.",
+      "evidence": "Response headers do not include Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, and X-XSS-Protection.",
+      "headers": {
+        "Server": "Apache/2.4.41",
+        "Content-Type": "text/html",
+        "Cache-Control": "no-cache"
+      },
+      "remediation": [
+        "Implement Content-Security-Policy header",
+        "Add X-Frame-Options: DENY or SAMEORIGIN",
+        "Set X-Content-Type-Options: nosniff",
+        "Configure Strict-Transport-Security header"
+      ],
+      "references": [
+        {"title": "OWASP Secure Headers Project", "url": "https://owasp.org/www-project-secure-headers/"},
+        {"title": "MDN Web Security", "url": "https://developer.mozilla.org/en-US/docs/Web/Security"}
+      ],
+      "url": "http://example.com",
+      "date": "2023-09-05 14:40:05"
+    },
+    {
+      "id": "cookie-1",
+      "name": "Insecure Cookie Configuration",
+      "category": "cookies",
+      "severity": "medium",
+      "confidence": "high",
+      "description": "Session cookies are not configured with secure attributes, making them vulnerable to interception and theft.",
+      "impact": "Cookies without secure attributes can be stolen through man-in-the-middle attacks or accessed by malicious scripts, leading to session hijacking.",
+      "evidence": "The session cookie is set without the Secure, HttpOnly, and SameSite attributes.",
+      "headers": {
+        "Set-Cookie": "sessionid=12345; path=/; expires=Wed, 05 Oct 2023 14:40:00 GMT"
+      },
+      "remediation": [
+        "Set the Secure flag to ensure cookies are only sent over HTTPS",
+        "Set the HttpOnly flag to prevent JavaScript access to cookies",
+        "Set SameSite=Lax or SameSite=Strict to prevent CSRF attacks",
+        "Implement proper session management with timeouts"
+      ],
+      "references": [
+        {"title": "OWASP Session Management Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"},
+        {"title": "CWE-614", "url": "https://cwe.mitre.org/data/definitions/614.html"}
+      ],
+      "cwe": {"id": "614", "name": "Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"},
+      "url": "http://example.com/login",
+      "date": "2023-09-05 14:42:30"
+    },
+    {
+      "id": "info-1",
+      "name": "Information Disclosure",
+      "category": "information_disclosure",
+      "severity": "low",
+      "confidence": "medium",
+      "description": "The application reveals version information in HTTP headers and error messages, which could help attackers target known vulnerabilities.",
+      "impact": "Disclosing version information helps attackers identify potential vulnerabilities in the specific versions of software being used.",
+      "evidence": "Server header reveals Apache version, and error pages contain PHP version information.",
+      "headers": {
+        "Server": "Apache/2.4.41 (Ubuntu)"
+      },
+      "response": "HTTP/1.1 500 Internal Server Error\nContent-Type: text/html\n\n<html><body><h1>Internal Server Error</h1><p>PHP Version 7.4.3</p></body></html>",
+      "remediation": [
+        "Configure web server to hide version information",
+        "Implement custom error pages that don't reveal system details",
+        "Use a web application firewall to filter sensitive information"
+      ],
+      "references": [
+        {"title": "CWE-200", "url": "https://cwe.mitre.org/data/definitions/200.html"},
+        {"title": "OWASP Information Leakage", "url": "https://owasp.org/www-community/Improper_Error_Handling"}
+      ],
+      "cwe": {"id": "200", "name": "Exposure of Sensitive Information to an Unauthorized Actor"},
+      "url": "http://example.com/error.php",
+      "date": "2023-09-05 14:45:15"
+    },
+    {
+      "id": "auth-1",
+      "name": "Weak Authentication Mechanism",
+      "category": "authentication",
+      "severity": "high",
+      "confidence": "medium",
+      "description": "The application uses a weak authentication mechanism with no multi-factor authentication option and allows short passwords.",
+      "impact": "Weak authentication mechanisms make it easier for attackers to gain unauthorized access through brute force attacks or credential stuffing.",
+      "evidence": "Registration form accepts passwords as short as 4 characters with no complexity requirements.",
+      "remediation": [
+        "Implement strong password policies (minimum length, complexity)",
+        "Offer multi-factor authentication",
+        "Implement account lockout after failed attempts",
+        "Use secure password hashing algorithms"
+      ],
+      "references": [
+        {"title": "OWASP Authentication Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html"},
+        {"title": "CWE-521", "url": "https://cwe.mitre.org/data/definitions/521.html"}
+      ],
+      "cwe": {"id": "521", "name": "Weak Password Requirements"},
+      "url": "http://example.com/register",
+      "date": "2023-09-05 14:48:20"
+    },
+    {
+      "id": "config-1",
+      "name": "Insecure SSL/TLS Configuration",
+      "category": "configuration",
+      "severity": "medium",
+      "confidence": "high",
+      "description": "The server supports outdated and insecure SSL/TLS protocols and cipher suites.",
+      "impact": "Supporting deprecated protocols and weak cipher suites can expose communications to interception and decryption by attackers.",
+      "evidence": "Server supports TLS 1.0 and weak cipher suites like TLS_RSA_WITH_RC4_128_SHA.",
+      "remediation": [
+        "Disable TLS 1.0 and TLS 1.1",
+        "Disable weak cipher suites",
+        "Configure modern cipher suite ordering",
+        "Implement HSTS to force secure connections"
+      ],
+      "references": [
+        {"title": "OWASP TLS Cipher String Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/TLS_Cipher_String_Cheat_Sheet.html"},
+        {"title": "CWE-327", "url": "https://cwe.mitre.org/data/definitions/327.html"}
+      ],
+      "cwe": {"id": "327", "name": "Use of a Broken or Risky Cryptographic Algorithm"},
+      "url": "https://example.com",
+      "date": "2023-09-05 14:50:45"
+    },
+    {
+      "id": "path-1",
+      "name": "Path Traversal",
+      "category": "path_traversal",
+      "severity": "high",
+      "confidence": "high",
+      "description": "The application is vulnerable to path traversal attacks, allowing access to files outside the intended directory.",
+      "impact": "Attackers can read sensitive files from the server, potentially accessing configuration files, source code, or system files.",
+      "evidence": "Parameter 'file' with value '../../../etc/passwd' successfully retrieved the contents of /etc/passwd.",
+      "request": "GET /download?file=..%2F..%2F..%2Fetc%2Fpasswd HTTP/1.1\nHost: example.com\nUser-Agent: Mozilla/5.0\nAccept: */*",
+      "response": "HTTP/1.1 200 OK\nContent-Type: text/plain\n\nroot:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\n...",
+      "remediation": [
+        "Validate user input and reject paths containing '../' sequences",
+        "Use a whitelist of allowed files or resources",
+        "Implement proper access controls",
+        "Consider using a file resource abstraction layer"
+      ],
+      "references": [
+        {"title": "OWASP Path Traversal", "url": "https://owasp.org/www-community/attacks/Path_Traversal"},
+        {"title": "CWE-22", "url": "https://cwe.mitre.org/data/definitions/22.html"}
+      ],
+      "cwe": {"id": "22", "name": "Improper Limitation of a Pathname to a Restricted Directory"},
+      "cvss_score": 7.5,
+      "url": "http://example.com/download?file=report.pdf",
+      "params": {
+        "file": "../../../etc/passwd"
+      },
+      "date": "2023-09-05 14:53:10"
+    },
+    {
+      "id": "ssrf-1",
+      "name": "Server-Side Request Forgery",
+      "category": "ssrf",
+      "severity": "critical",
+      "confidence": "medium",
+      "description": "The application is vulnerable to Server-Side Request Forgery (SSRF), allowing attackers to make requests from the server to internal or external services.",
+      "impact": "This vulnerability can be exploited to scan internal networks, access internal services, or abuse trust relationships to attack other systems.",
+      "evidence": "The application fetches content from a URL provided in the 'url' parameter without proper validation, allowing access to internal resources.",
+      "request": "POST /fetch HTTP/1.1\nHost: example.com\nContent-Type: application/x-www-form-urlencoded\n\nurl=http%3A%2F%2F127.0.0.1%3A8080%2Fadmin",
+      "response": "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<html><body><h1>Admin Dashboard</h1>...</body></html>",
+      "remediation": [
+        "Implement a whitelist of allowed domains and protocols",
+        "Use a dedicated service for external resource fetching",
+        "Block requests to private IP addresses and internal hostnames",
+        "Implement network segmentation"
+      ],
+      "references": [
+        {"title": "OWASP SSRF Prevention Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html"},
+        {"title": "CWE-918", "url": "https://cwe.mitre.org/data/definitions/918.html"}
+      ],
+      "cwe": {"id": "918", "name": "Server-Side Request Forgery (SSRF)"},
+      "cvss_score": 9.1,
+      "url": "http://example.com/fetch",
+      "params": {
+        "url": "http://127.0.0.1:8080/admin"
+      },
+      "date": "2023-09-05 14:56:30"
+    }
+  ]
+} 

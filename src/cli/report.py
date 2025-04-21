@@ -4,12 +4,15 @@ import os
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
+from pathlib import Path
 
 import markdown
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from src.reporting.html_generator import HTMLReportGenerator
+from src.reporting.html_report_renderer import HTMLReportRenderer
 
 app = typer.Typer(name="report", help="Generate and manage scan reports.")
 log = logging.getLogger(__name__)
@@ -237,3 +240,184 @@ def list_formats() -> None:
 
     for format, description in formats.items():
         console.print(f"  [bold cyan]{format.value}[/bold cyan]: {description}")
+
+
+@app.command("generate-html")
+def generate_html_report(
+    findings_file: str = typer.Argument(..., help="Path to JSON file containing findings data"),
+    output_dir: str = typer.Option("./reports", help="Directory to save the report"),
+    target: str = typer.Option(None, help="Target that was scanned (defaults to filename if not specified)"),
+):
+    """
+    Generate an HTML report from findings data.
+    """
+    try:
+        # Validate input file
+        findings_path = Path(findings_file)
+        if not findings_path.exists():
+            console.print(f"[bold red]Error:[/bold red] File {findings_file} not found")
+            raise typer.Exit(1)
+        
+        # Load findings data
+        with open(findings_path, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                console.print(f"[bold red]Error:[/bold red] {findings_file} is not a valid JSON file")
+                raise typer.Exit(1)
+        
+        # Extract findings and metadata
+        findings = []
+        metadata = {}
+        
+        if isinstance(data, dict):
+            # Handle structured data with metadata
+            findings = data.get("findings", [])
+            metadata = {k: v for k, v in data.items() if k != "findings"}
+        elif isinstance(data, list):
+            # Handle simple list of findings
+            findings = data
+        else:
+            console.print(f"[bold red]Error:[/bold red] Invalid findings data format")
+            raise typer.Exit(1)
+        
+        # Default target to filename if not specified
+        if target is None:
+            target = findings_path.stem
+        
+        # Ensure metadata has scan_date
+        if "scan_date" not in metadata:
+            metadata["scan_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Create output directory
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize the renderer
+        renderer = HTMLReportRenderer()
+        
+        # Generate the report
+        console.print(f"Generating HTML report from {len(findings)} findings...")
+        report_path = renderer.render(
+            findings=findings,
+            output_dir=str(output_path),
+            target=target,
+            metadata=metadata
+        )
+        
+        # Print success message
+        console.print(f"[bold green]Success:[/bold green] Report generated at [link=file://{os.path.abspath(report_path)}]{report_path}[/link]")
+        
+        # Show summary table
+        if findings:
+            severity_counts = {
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0,
+                "info": 0
+            }
+            
+            categories = {}
+            
+            for finding in findings:
+                # Count by severity
+                severity = finding.get("severity", "info").lower()
+                if severity in severity_counts:
+                    severity_counts[severity] += 1
+                else:
+                    severity_counts["info"] += 1
+                
+                # Count by category
+                category = finding.get("category", "other").lower()
+                if category not in categories:
+                    categories[category] = 0
+                categories[category] += 1
+            
+            # Create severity table
+            severity_table = Table("Severity", "Count")
+            severity_colors = {
+                "critical": "bright_red",
+                "high": "red",
+                "medium": "yellow",
+                "low": "blue",
+                "info": "grey70"
+            }
+            
+            for severity, count in severity_counts.items():
+                if count > 0:
+                    severity_table.add_row(
+                        f"[{severity_colors.get(severity, 'white')}]{severity.upper()}[/{severity_colors.get(severity, 'white')}]",
+                        str(count)
+                    )
+            
+            # Create category table
+            category_table = Table("Category", "Count")
+            for category, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+                category_table.add_row(category.title(), str(count))
+            
+            # Output tables
+            console.print("\n[bold]Findings by Severity:[/bold]")
+            console.print(severity_table)
+            
+            console.print("\n[bold]Findings by Category:[/bold]")
+            console.print(category_table)
+        
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] Failed to generate report: {str(e)}")
+        logger.exception("Report generation failed")
+        raise typer.Exit(1)
+
+
+@app.command("list")
+def list_reports(
+    report_dir: str = typer.Argument("./reports", help="Directory containing reports"),
+):
+    """
+    List available reports in the specified directory.
+    """
+    try:
+        report_path = Path(report_dir)
+        if not report_path.exists():
+            console.print(f"[bold yellow]Warning:[/bold yellow] Report directory {report_dir} does not exist")
+            raise typer.Exit(0)
+        
+        reports = []
+        
+        # Find all index.html files one level deep
+        for item in report_path.iterdir():
+            if item.is_dir():
+                index_file = item / "index.html"
+                if index_file.exists():
+                    reports.append((item.name, index_file))
+        
+        # Also check for index.html in the root directory
+        root_index = report_path / "index.html"
+        if root_index.exists():
+            reports.append(("latest", root_index))
+        
+        if not reports:
+            console.print("No reports found")
+            raise typer.Exit(0)
+        
+        # Create and display table
+        table = Table("Report", "Path", "Last Modified")
+        for name, path in reports:
+            modified_time = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+            table.add_row(
+                name,
+                f"[link=file://{path.absolute()}]{str(path)}[/link]",
+                modified_time
+            )
+        
+        console.print("[bold]Available Reports:[/bold]")
+        console.print(table)
+        
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] Failed to list reports: {str(e)}")
+        logger.exception("Listing reports failed")
+        raise typer.Exit(1)
+
+
+if __name__ == "__main__":
+    app()
