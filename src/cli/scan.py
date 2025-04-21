@@ -6,9 +6,12 @@ import asyncio
 import json
 import logging
 import os
+import sys
+from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, List, Optional, Union
+import re
 
 import typer
 from rich.console import Console
@@ -26,6 +29,7 @@ from src.integrations import (
 )
 from src.results.normalizer import ResultNormalizer
 from src.integrations.vulnerability_scanner import VulnerabilityScanner
+from src.ml.url_prioritizer import URLPrioritizer, create_structured_report
 
 # Create the typer app
 app = typer.Typer(help="Security scanning commands")
@@ -185,44 +189,39 @@ def scan(
     # Initialize scan mode manager
     scan_mode_manager = ScanModeManager()
 
-    # If a scan mode was specified, use its configuration
+    # Get scan mode configuration if specified
     if scan_mode:
         mode_config = scan_mode_manager.get_scan_mode(scan_mode)
         if not mode_config:
-            typer.echo(
+            console.print(
                 f"Error: Scan mode '{scan_mode}' not found. Run 'sniper scan modes' to list available modes.",
-                err=True,
+                style="red",
             )
-            raise typer.Exit(code=1)
-
-        # Apply the scan mode configuration
-        typer.echo(
-            f"Using scan mode: {scan_mode} - {mode_config.get('description', '')}"
-        )
-
-        # Override modules and depth if specified by scan mode
+            sys.exit(1)
+        
+        # Apply scan mode settings
+        scan_depth_str = mode_config.get("settings", {}).get("scan_depth", depth.name)
+        scan_depth = str_to_scan_depth(scan_depth_str) if isinstance(scan_depth_str, str) else depth
+        max_threads = mode_config.get("settings", {}).get("max_threads", 10)
+        timeout_value = mode_config.get("settings", {}).get("timeout", 3600)
+        retries = mode_config.get("settings", {}).get("retries", 2)
+        max_pages = mode_config.get("settings", {}).get("max_pages", None)
+        structured_reporting = mode_config.get("settings", {}).get("structured_reporting", False)
+        prioritize_endpoints = mode_config.get("settings", {}).get("prioritize_endpoints", False)
+        
+        # Override modules with the ones from the scan mode
         if "modules" in mode_config:
-            # Convert string module names to ScanModule enum values
-            modules = str_list_to_scan_modules(mode_config["modules"])
-
-        # Get settings from the scan mode
-        settings = mode_config.get("settings", {})
-        if "scan_depth" in settings:
-            # Convert string depth to ScanDepth enum
-            depth = str_to_scan_depth(settings["scan_depth"])
-
-        # Log the scan configuration from the scan mode
-        max_threads = settings.get("max_threads", 10)
-        timeout_value = settings.get("timeout", 3600)
-        retries = settings.get("retries", 2)
-        log.info(
-            f"Scan configuration from mode '{scan_mode}': threads={max_threads}, timeout={timeout_value}s, retries={retries}"
+            modules = [ScanModule(module) for module in mode_config["modules"] if module in ScanModule._value2member_map_]
+        
+        console.print(
+            f"Using scan mode: {scan_mode} - {mode_config.get('description', '')}",
+            style="blue",
         )
 
     # Resolve full list of modules to run
     module_list = resolve_scan_modules(modules)
     typer.echo(f"Target: {target}")
-    typer.echo(f"Scan depth: {depth.name}")
+    typer.echo(f"Scan depth: {scan_depth.name}")
     typer.echo(f"Modules: {', '.join(module_list)}")
 
     # Check for required tools based on selected modules
@@ -264,6 +263,7 @@ def scan(
 
         # The main dictionary to collect all findings
         all_findings: List[BaseFinding] = []
+        crawled_urls = []
 
         try:
             # Run each selected module with appropriate tools and configurations
@@ -322,7 +322,7 @@ def scan(
                         if "nmap" in mode_tools and mode_tools["nmap"].get("enabled", True):
                             port_tools["nmap"] = mode_tools["nmap"].get("options", {})
 
-                    port_findings = asyncio.run(run_port_scan(target, depth, port_tools))
+                    port_findings = asyncio.run(run_port_scan(target, scan_depth, port_tools))
                     all_findings.extend(port_findings)
                 else:
                     log.warning("Skipping ports module: Nmap not available")
@@ -337,7 +337,7 @@ def scan(
                             web_tools["zap"] = mode_tools["zap"].get("options", {})
 
                     web_findings = asyncio.run(
-                        run_web_scan(target, depth, ignore_ssl, web_tools)
+                        run_web_scan(target, scan_depth, ignore_ssl, web_tools)
                     )
                     all_findings.extend(web_findings)
                 else:
@@ -357,11 +357,59 @@ def scan(
                             )
 
                     directory_findings = asyncio.run(
-                        run_directory_scan(target, depth, ignore_ssl, dir_tools)
+                        run_directory_scan(target, scan_depth, ignore_ssl, dir_tools)
                     )
                     all_findings.extend(directory_findings)
                 else:
                     log.warning("Skipping directories module: Dirsearch not available")
+
+            # Store all results
+            scan_results = {}
+            for tool_name, result in tool_availability.items():
+                if result[0]:
+                    scan_results[tool_name] = result[1]
+
+            # If using AI Smart scan mode with prioritization and structured reporting
+            if scan_mode == "ai_smart" and prioritize_endpoints:
+                try:
+                    # Get all crawled URLs from scan results
+                    for tool_name, result in scan_results.items():
+                        if isinstance(result, dict) and "crawled_urls" in result:
+                            crawled_urls.extend(result["crawled_urls"])
+                        elif isinstance(result, dict) and "urls" in result:
+                            crawled_urls.extend(result["urls"])
+                    
+                    # Deduplicate URLs
+                    crawled_urls = list(set(crawled_urls))
+                    
+                    if crawled_urls:
+                        # Initialize URL prioritizer
+                        prioritizer = URLPrioritizer(
+                            max_urls=max_pages or 150,
+                            confidence_threshold=0.6,
+                            use_historical_data=True
+                        )
+                        
+                        console.print(f"Prioritizing {len(crawled_urls)} discovered URLs...", style="blue")
+                        prioritized_urls = prioritizer.prioritize(crawled_urls, target)
+                        
+                        # Create structured report
+                        console.print("Generating structured report...", style="blue")
+                        html_report_path = create_structured_report(
+                            target=target,
+                            output_dir=output_file.parent if output_file else ".", 
+                            findings=all_findings,
+                            prioritized_urls=prioritized_urls
+                        )
+                        
+                        console.print(f"\nAI Smart report generated at: {html_report_path}", style="green")
+                    else:
+                        console.print("No URLs were crawled during the scan for prioritization", style="yellow")
+                
+                except ImportError as e:
+                    console.print(f"Warning: Could not import URL prioritizer: {str(e)}", style="yellow")
+                    console.print("AI Smart structured reporting will be skipped", style="yellow")
+                    structured_reporting = False
 
         except Exception as e:
             typer.echo(f"Error during scan: {e}", err=True)
@@ -776,11 +824,15 @@ def scan_juiceshop(
                 table.add_column("Evidence", style="green", no_wrap=False)
                 
                 for finding in findings:
+                    evidence = getattr(finding, "evidence", "")
+                    if not evidence and hasattr(finding, "raw_evidence"):
+                        evidence = str(finding.raw_evidence)[:80] + "..." if finding.raw_evidence and len(str(finding.raw_evidence)) > 80 else str(finding.raw_evidence or "")
+                    
                     table.add_row(
                         finding.title,
                         finding.url,
                         str(finding.severity),
-                        finding.evidence[:80] + "..." if len(finding.evidence) > 80 else finding.evidence
+                        evidence[:80] + "..." if evidence and len(evidence) > 80 else evidence or ""
                     )
                 
                 console.print(table)
@@ -817,4 +869,273 @@ def scan_juiceshop(
                 
         except Exception as e:
             console.print(f"[bold red]Error during scan:[/] {str(e)}")
-            raise typer.Exit(code=1) 
+            raise typer.Exit(code=1)
+
+
+@app.command("dvwa")
+def scan_dvwa(
+    target: str = typer.Argument("http://localhost:80", help="DVWA URL (default: http://localhost:80)"),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="Output file for detailed findings"
+    ),
+    json_format: bool = typer.Option(
+        False, "--json", "-j", help="Output in JSON format"
+    ),
+    max_urls: int = typer.Option(
+        100, "--max-urls", help="Maximum number of URLs to crawl"
+    ),
+    wait_time: int = typer.Option(
+        3, "--wait", help="Wait time in seconds for JavaScript to load"
+    ),
+    login: bool = typer.Option(
+        True, "--login/--no-login", help="Automatically login to DVWA before scanning"
+    ),
+    security_level: str = typer.Option(
+        "low", "--security-level", help="DVWA security level to set before scanning (low, medium, high, impossible)"
+    ),
+) -> None:
+    """
+    Run a specialized security scan against Damn Vulnerable Web Application (DVWA).
+    
+    This command runs a comprehensive vulnerability scan against a DVWA instance,
+    focusing on finding common web vulnerabilities like XSS, SQL injection, and more.
+    
+    Examples:
+        sniper scan dvwa
+        sniper scan dvwa http://192.168.1.100
+        sniper scan dvwa --output dvwa-findings.txt
+        sniper scan dvwa --json
+        sniper scan dvwa --max-urls 200 --wait 5
+        sniper scan dvwa --security-level medium
+        sniper scan dvwa --no-login
+    """
+    # Validate target
+    try:
+        target = validate_target_url(target)
+    except ValueError as e:
+        typer.echo(f"Error: {str(e)}", err=True)
+        raise typer.Exit(code=1)
+    
+    console.print(f"[bold green]Starting specialized DVWA scan against:[/] {target}")
+    console.print("[bold yellow]This scan will test for: XSS, SQLi, Command Injection, Path Traversal, File Inclusion[/]")
+    console.print(f"[bold blue]Crawl settings:[/] Max URLs: {max_urls}, Wait time: {wait_time}s")
+    
+    if login:
+        console.print(f"[bold blue]Login:[/] Will attempt to login with default credentials")
+        console.print(f"[bold blue]Security Level:[/] Will set to {security_level}")
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+    ) as progress:
+        task = progress.add_task("Running vulnerability scan...", total=None)
+        
+        # Create and initialize scanner
+        scanner = VulnerabilityScanner()
+        
+        # Check prerequisites
+        if not scanner.check_prerequisites():
+            console.print("[bold red]Error:[/] Vulnerability scanner prerequisites not met.")
+            raise typer.Exit(code=1)
+        
+        try:
+            # Handle DVWA login if requested
+            if login:
+                progress.update(task, description="Logging into DVWA...")
+                login_successful = try_dvwa_login(scanner, target, security_level)
+                
+                if not login_successful:
+                    console.print("[bold red]Warning:[/] Failed to login to DVWA. Continuing with unauthenticated scan.")
+            
+            # Common paths to check for DVWA
+            common_paths = [
+                "/", 
+                "/login.php", 
+                "/setup.php",
+                "/security.php",
+                "/vulnerabilities/xss_r/",
+                "/vulnerabilities/xss_s/",
+                "/vulnerabilities/sqli/",
+                "/vulnerabilities/sqli_blind/",
+                "/vulnerabilities/exec/",
+                "/vulnerabilities/upload/",
+                "/vulnerabilities/captcha/",
+                "/vulnerabilities/csrf/",
+                "/vulnerabilities/fi/",
+                "/vulnerabilities/brute/",
+                "/vulnerabilities/weak_id/",
+                "/instructions.php",
+                "/about.php",
+                "/security.php",
+                "/phpinfo.php"
+            ]
+            
+            # Add these paths to our target for scanning
+            urls_to_scan = [f"{target}{path}" for path in common_paths]
+            
+            # Run the scanner
+            loop = asyncio.get_event_loop()
+            scan_options = {
+                "verify_ssl": False,
+                "scan_types": ["xss", "sqli", "command_injection", "path_traversal", "file_inclusion"],
+                "scan_depth": "comprehensive",
+                "max_urls": max_urls,
+                "initial_urls": urls_to_scan,
+                "wait_time": wait_time
+            }
+            
+            # Inform about scan approach
+            console.print(f"[bold]Testing {len(urls_to_scan)} known DVWA paths[/]")
+            
+            scan_result = loop.run_until_complete(scanner.run(target, options=scan_options))
+            
+            # Parse results
+            findings = scanner.parse_output(scan_result)
+            
+            progress.update(task, completed=True)
+            
+            # Output findings
+            if findings:
+                console.print(f"\n[bold green]Found {len(findings)} potential vulnerabilities:[/]")
+                
+                # Create a table for findings
+                table = Table(show_header=True)
+                table.add_column("Vulnerability", style="bold red")
+                table.add_column("URL", style="blue")
+                table.add_column("Severity", style="yellow")
+                table.add_column("Evidence", style="green", no_wrap=False)
+                
+                for finding in findings:
+                    evidence = getattr(finding, "evidence", "")
+                    if not evidence and hasattr(finding, "raw_evidence"):
+                        evidence = str(finding.raw_evidence)[:80] + "..." if finding.raw_evidence and len(str(finding.raw_evidence)) > 80 else str(finding.raw_evidence or "")
+                    
+                    table.add_row(
+                        finding.title,
+                        finding.url,
+                        str(finding.severity),
+                        evidence[:80] + "..." if evidence and len(evidence) > 80 else evidence or ""
+                    )
+                
+                console.print(table)
+                
+                # Save detailed findings if output file specified
+                if output:
+                    save_findings = []
+                    for finding in findings:
+                        save_findings.append(finding.dict())
+                    
+                    with open(output, "w") as f:
+                        if json_format:
+                            json.dump(save_findings, f, indent=2)
+                        else:
+                            f.write(f"# DVWA Scan Results\n")
+                            f.write(f"Target: {target}\n\n")
+                            for i, finding in enumerate(findings, 1):
+                                f.write(f"## Finding {i}: {finding.title}\n")
+                                f.write(f"- Severity: {finding.severity}\n")
+                                f.write(f"- URL: {finding.url}\n")
+                                f.write(f"- Request Method: {finding.request_method}\n")
+                                f.write(f"- Evidence:\n```\n{finding.evidence}\n```\n\n")
+                    
+                    console.print(f"\nDetailed findings saved to: {output}")
+            else:
+                console.print("\n[bold green]No vulnerabilities found.[/]")
+                
+                # Provide some suggestions for manual testing
+                console.print("\n[bold yellow]Suggestions for manual testing:[/]")
+                console.print("1. Try SQL injection on the login form (admin' --)")
+                console.print("2. Try XSS in the user input fields (<script>alert('xss')</script>)")
+                console.print("3. Try command injection in the ping tool (127.0.0.1 && cat /etc/passwd)")
+                console.print("4. Try path traversal and file inclusion (../../etc/passwd)")
+                
+        except Exception as e:
+            console.print(f"[bold red]Error during scan:[/] {str(e)}")
+            raise typer.Exit(code=1)
+
+
+def try_dvwa_login(scanner, target, security_level):
+    """
+    Attempt to login to DVWA with default credentials and set security level
+    
+    Args:
+        scanner: The vulnerability scanner instance
+        target: The base URL of the DVWA instance
+        security_level: The security level to set (low, medium, high, impossible)
+        
+    Returns:
+        bool: True if login was successful, False otherwise
+    """
+    try:
+        # Step 1: Get login page to retrieve CSRF token
+        login_url = f"{target}/login.php"
+        response = scanner.session.get(login_url, timeout=10)
+        
+        # Check if we can access the login page
+        if response.status_code != 200:
+            log.warning(f"Failed to access DVWA login page: {response.status_code}")
+            return False
+            
+        # Extract CSRF token (if present)
+        csrf_token = None
+        match = re.search(r'<input type="hidden" name="user_token" value="([a-zA-Z0-9]+)"', response.text)
+        if match:
+            csrf_token = match.group(1)
+            log.debug(f"Found CSRF token: {csrf_token}")
+        
+        # Step 2: Login with default credentials
+        login_data = {
+            "username": "admin",
+            "password": "password",
+            "Login": "Login"
+        }
+        
+        # Add CSRF token if found
+        if csrf_token:
+            login_data["user_token"] = csrf_token
+        
+        login_response = scanner.session.post(login_url, data=login_data, timeout=10, allow_redirects=True)
+        
+        # Check if login was successful (look for logout link or welcome message)
+        if "logout" in login_response.text.lower() or "welcome to damn vulnerable web application" in login_response.text.lower():
+            log.info("Successfully logged into DVWA")
+            
+            # Step 3: Set security level
+            if security_level in ["low", "medium", "high", "impossible"]:
+                security_url = f"{target}/security.php"
+                
+                # Get security page to retrieve CSRF token
+                security_response = scanner.session.get(security_url, timeout=10)
+                
+                # Extract CSRF token (if present)
+                security_csrf_token = None
+                match = re.search(r'<input type="hidden" name="user_token" value="([a-zA-Z0-9]+)"', security_response.text)
+                if match:
+                    security_csrf_token = match.group(1)
+                
+                # Set security level
+                security_data = {
+                    "security": security_level,
+                    "seclev_submit": "Submit"
+                }
+                
+                # Add CSRF token if found
+                if security_csrf_token:
+                    security_data["user_token"] = security_csrf_token
+                
+                security_set_response = scanner.session.post(security_url, data=security_data, timeout=10)
+                
+                if "security level set to" in security_set_response.text.lower():
+                    log.info(f"Successfully set DVWA security level to {security_level}")
+                else:
+                    log.warning(f"Failed to set DVWA security level to {security_level}")
+            
+            return True
+        else:
+            log.warning("Failed to login to DVWA with default credentials")
+            return False
+            
+    except Exception as e:
+        log.error(f"Error during DVWA login: {str(e)}")
+        return False 

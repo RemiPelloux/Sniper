@@ -69,6 +69,9 @@ class WebFinding(BaseFinding):
     status_code: Optional[int] = Field(
         None, description="HTTP status code observed, if relevant."
     )
+    evidence: Optional[str] = Field(
+        None, description="Specific evidence of the vulnerability."
+    )
 
     # Example customization for title
     def __init__(self, **data: Any):

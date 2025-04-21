@@ -225,3 +225,110 @@ juiceshop:
         scan_types: ["xss", "sqli", "open_redirect", "path_traversal"]
         scan_depth: "comprehensive"
         verify_ssl: false 
+
+# DVWA mode - Optimized for scanning DVWA (Damn Vulnerable Web Application)
+dvwa:
+  name: dvwa
+  description: "Scan mode optimized for testing Damn Vulnerable Web Application (DVWA)"
+  target_types: ["url", "webapp"]
+  modules:
+    - technologies
+    - web
+    - directories
+  settings:
+    max_threads: 5
+    timeout: 1800  # 30 minutes
+    retries: 2
+    scan_depth: standard
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    nmap:
+      enabled: true
+      options:
+        ports: "80,443"
+        timing_template: 3
+        scripts: "http-enum,http-headers"
+    zap:
+      enabled: true
+      options:
+        active_scan: true
+        ajax_spider: true
+        scan_policy: "Default Policy"
+        context_name: "DVWA"
+    dirsearch:
+      enabled: true
+      options:
+        wordlist: "common.txt"
+        extensions: "php,html,js"
+    vulnerability_scanner:
+      enabled: true
+      options:
+        scan_types: ["xss", "sqli", "command_injection", "path_traversal", "file_inclusion"]
+        scan_depth: "comprehensive"
+        verify_ssl: false
+
+# AI Smart mode - Advanced AI-driven vulnerability assessment
+ai_smart:
+  name: ai_smart
+  description: "Advanced AI-driven scan that prioritizes up to 150 pages by vulnerability likelihood"
+  target_types: ["domain", "url", "webapp"]
+  modules:
+    - technologies
+    - subdomains
+    - ports
+    - web
+    - directories
+    - ml
+  settings:
+    max_threads: 10
+    timeout: 5400  # 90 minutes
+    retries: 2
+    scan_depth: comprehensive
+    max_pages: 150
+    structured_reporting: true
+    prioritize_endpoints: true
+    categorize_findings: true
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    sublist3r:
+      enabled: true
+      options: {}
+    nmap:
+      enabled: true
+      options:
+        ports: "top1000"
+        timing_template: 3
+        scripts: "http-enum,http-headers,vuln"
+    zap:
+      enabled: true
+      options:
+        active_scan: true
+        ajax_spider: true
+        scan_policy: "Default Policy"
+    dirsearch:
+      enabled: true
+      options:
+        wordlist: "big.txt"
+        extensions: "php,html,js,asp,aspx,jsp"
+    nuclei:
+      enabled: true
+      options:
+        templates: "cves,vulnerabilities,exposures,technologies"
+    vulnerability_scanner:
+      enabled: true
+      options:
+        scan_types: ["xss", "sqli", "open_redirect", "path_traversal", "command_injection", "ssrf", "xxe"]
+        scan_depth: "comprehensive"
+        max_urls: 150
+        verify_ssl: false
+    ml_prioritizer:
+      enabled: true
+      options:
+        confidence_threshold: 0.6
+        use_historical_data: true
+        model: "url_vulnerability_classifier"
+        group_by_severity: true 

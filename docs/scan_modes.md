@@ -121,6 +121,58 @@ poetry run sniper scan run example.com --mode stealth
 poetry run sniper scan run https://api.example.com --mode api
 ```
 
+## DVWA (Damn Vulnerable Web Application) Scanning
+
+In addition to the existing scan modes, Sniper now provides specialized scanning capabilities for DVWA (Damn Vulnerable Web Application), which is a deliberately vulnerable web application used for security training and testing.
+
+### Using the DVWA Scan Command
+
+The dedicated DVWA scan command provides an optimized scanning experience specifically for DVWA instances:
+
+```bash
+sniper scan dvwa [URL] [OPTIONS]
+```
+
+**Example Usage:**
+```bash
+# Scan a local DVWA instance
+sniper scan dvwa http://localhost
+
+# Scan with a custom output file
+sniper scan dvwa http://example.com:80 --output dvwa-findings.txt
+
+# Scan with JSON output format
+sniper scan dvwa http://localhost --json
+
+# Scan with a specific security level
+sniper scan dvwa http://localhost --security-level medium
+
+# Scan without automatic login
+sniper scan dvwa http://localhost --no-login
+```
+
+**Available Options:**
+- `--output`, `-o`: Output file for detailed findings
+- `--json`, `-j`: Output in JSON format
+- `--max-urls`: Maximum number of URLs to crawl (default: 100)
+- `--wait`: Wait time in seconds for JavaScript to load (default: 3)
+- `--login/--no-login`: Automatically login to DVWA before scanning (default: login enabled)
+- `--security-level`: DVWA security level to set before scanning (low, medium, high, impossible) (default: low)
+
+### Using the DVWA Scan Mode
+
+You can also use the DVWA scan mode with the general scan command:
+
+```bash
+sniper scan run [URL] --mode dvwa
+```
+
+The DVWA scan mode is optimized with the following configurations:
+- Focuses on technologies, web scanning, and directory discovery
+- Optimized for testing PHP-based vulnerabilities
+- Tests for XSS, SQL injection, command injection, path traversal, and file inclusion vulnerabilities
+- Uses specific tools and settings optimized for DVWA's architecture
+
 ## Usage
 
 ### Listing Available Scan Modes

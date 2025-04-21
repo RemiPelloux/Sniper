@@ -128,6 +128,32 @@ Available scan modes:
 - **stealth**: Low-profile scan to avoid detection
 - **api**: Specialized scan for API endpoints and services
 
+### Specialized Target Scanning
+
+Sniper includes dedicated commands for specific targets:
+
+#### DVWA (Damn Vulnerable Web Application)
+
+```bash
+# Scan a DVWA instance with defaults
+poetry run sniper scan dvwa http://localhost
+
+# Scan with options
+poetry run sniper scan dvwa http://localhost --security-level medium --output dvwa-report.json
+```
+
+#### OWASP Juice Shop
+
+```bash
+# Scan a Juice Shop instance with defaults
+poetry run sniper scan juiceshop http://localhost:3000
+
+# Scan with options
+poetry run sniper scan juiceshop http://localhost:3000 --output juice-report.json
+```
+
+These specialized scan commands are optimized for testing these deliberately vulnerable applications, making them ideal for security training and testing environments.
+
 ### Advanced Usage
 
 Scan with specific modules:
