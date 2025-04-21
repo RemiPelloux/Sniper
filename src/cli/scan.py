@@ -531,7 +531,7 @@ async def run_technology_scan(
         options.update(tool_options["wappalyzer"])
 
     execution_result = await scanner.run(target, options=options)
-    findings = await scanner.parse_output(execution_result)
+    findings = scanner.parse_output(execution_result)
     return findings or []
 
 
@@ -863,7 +863,6 @@ def scan_juiceshop(
             urls_to_scan = [f"{target}{path}" for path in common_paths]
 
             # Run the scanner
-            loop = asyncio.get_event_loop()
             scan_options = {
                 "verify_ssl": False,
                 "scan_types": [
@@ -881,8 +880,12 @@ def scan_juiceshop(
                 f"[bold]Testing {
                     len(urls_to_scan)} known JuiceShop paths[/]")
 
-            scan_result = loop.run_until_complete(
-                scanner.run(target, options=scan_options))
+            try:
+                # Use asyncio.run for Python 3.7+
+                scan_result = asyncio.run(scanner.run(target, options=scan_options))
+            except Exception as e:
+                console.print(f"[bold red]Error during async scan execution:[/] {str(e)}")
+                raise typer.Exit(code=1)
 
             # Parse results
             findings = scanner.parse_output(scan_result)
@@ -1080,7 +1083,6 @@ def scan_dvwa(
             urls_to_scan = [f"{target}{path}" for path in common_paths]
 
             # Run the scanner
-            loop = asyncio.get_event_loop()
             scan_options = {
                 "verify_ssl": False,
                 "scan_types": [
@@ -1099,8 +1101,12 @@ def scan_dvwa(
                 f"[bold]Testing {
                     len(urls_to_scan)} known DVWA paths[/]")
 
-            scan_result = loop.run_until_complete(
-                scanner.run(target, options=scan_options))
+            try:
+                # Use asyncio.run for Python 3.7+
+                scan_result = asyncio.run(scanner.run(target, options=scan_options))
+            except Exception as e:
+                console.print(f"[bold red]Error during async scan execution:[/] {str(e)}")
+                raise typer.Exit(code=1)
 
             # Parse results
             findings = scanner.parse_output(scan_result)
