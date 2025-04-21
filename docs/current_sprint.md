@@ -288,6 +288,13 @@ Status: **Completed** (March 2024)
   - Added robust error handling for URL processing
   - Implemented detection of infinite crawling loops
   - Created comprehensive unit tests for the URL filter functionality
+- ✅ Implemented SQL Injection Payloads Module
+  - Created comprehensive Python module with categorized SQL injection payloads
+  - Organized payloads by attack technique (authentication bypass, union-based, error-based, etc.)
+  - Added database-specific payloads for MySQL, MSSQL, PostgreSQL, Oracle, and SQLite
+  - Implemented utility functions to retrieve payloads by category or database type
+  - Included advanced evasion techniques and time-based injection methods
+  - Created a flexible, maintainable structure for future payload additions
 - ✅ Refactored `src/cli/tools.py` to use Typer conventions.
 - ✅ Added skipped tests for `list`/`show` commands in `tests/cli/test_tools.py`.
 - ✅ Fixed missing `ToolInstallMethod` import in `src/cli/custom_tools.py` to resolve reference error in the `add_custom_tool` function.
@@ -373,6 +380,7 @@ Status: **Completed** (March 2024)
     -   Tool Orchestration Framework: 70%
     -   Test Coverage Enhancement: 85%
     -   Vulnerability Scanner Enhancement: 100%
+    -   SQL Injection Payloads Module: 100%
     -   Documentation: "howto" guides created.
 
 ## Challenges & Blockers
