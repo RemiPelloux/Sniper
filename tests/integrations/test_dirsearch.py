@@ -167,8 +167,9 @@ async def test_dirsearch_run_prereq_fail_raises(
 # --- Parse Output Tests ---
 
 
+@pytest.mark.asyncio  # Mark test as async
 @patch("shutil.which", return_value=MOCK_DIRSEARCH_EXEC)
-def test_dirsearch_parse_success(
+async def test_dirsearch_parse_success(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
     """Test parsing a valid Dirsearch JSON report."""
@@ -198,7 +199,7 @@ def test_dirsearch_parse_success(
         json.dump(sample_data, f)
         report_path = Path(f.name)
 
-    parsed = integration.parse_output(report_path)
+    parsed = await integration.parse_output(report_path)
 
     assert parsed is not None
     assert len(parsed) == 4  # Expect 4 findings, including the 500 error
@@ -234,8 +235,9 @@ def test_dirsearch_parse_success(
     assert not report_path.exists()
 
 
+@pytest.mark.asyncio  # Mark test as async
 @patch("shutil.which", return_value=MOCK_DIRSEARCH_EXEC)
-def test_dirsearch_parse_success_empty_results(
+async def test_dirsearch_parse_success_empty_results(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
     """Test parsing a valid report with no findings."""
@@ -246,13 +248,14 @@ def test_dirsearch_parse_success_empty_results(
         json.dump(sample_data, f)
         report_path = Path(f.name)
 
-    parsed = integration.parse_output(report_path)
+    parsed = await integration.parse_output(report_path)
     assert parsed is None  # Expect None if no findings were generated
     assert not report_path.exists()
 
 
+@pytest.mark.asyncio  # Mark test as async
 @patch("shutil.which", return_value=MOCK_DIRSEARCH_EXEC)
-def test_dirsearch_parse_non_json_file(
+async def test_dirsearch_parse_non_json_file(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
     """Test parsing a file that is not valid JSON."""
@@ -261,26 +264,28 @@ def test_dirsearch_parse_non_json_file(
         f.write("this is not json")
         report_path = Path(f.name)
 
-    parsed = integration.parse_output(report_path)
+    parsed = await integration.parse_output(report_path)
     assert parsed is None
     assert not report_path.exists()  # Should still delete corrupted file
 
 
+@pytest.mark.asyncio  # Mark test as async
 @patch("shutil.which", return_value=MOCK_DIRSEARCH_EXEC)
-def test_dirsearch_parse_file_not_found(
+async def test_dirsearch_parse_file_not_found(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
     integration = DirsearchIntegration(executor=mock_executor)
     non_existent_path = Path("non_existent_dirsearch_report.json")
-    parsed = integration.parse_output(non_existent_path)
+    parsed = await integration.parse_output(non_existent_path)
     assert parsed is None
 
 
+@pytest.mark.asyncio  # Mark test as async
 @patch("shutil.which", return_value=MOCK_DIRSEARCH_EXEC)
-def test_dirsearch_parse_failed_execution_result(
+async def test_dirsearch_parse_failed_execution_result(
     mock_which: MagicMock, mock_executor: MagicMock
 ) -> None:
     integration = DirsearchIntegration(executor=mock_executor)
     failed_result = ExecutionResult("cmd", 1, "", "err", False)
-    parsed = integration.parse_output(failed_result)
+    parsed = await integration.parse_output(failed_result)
     assert parsed is None

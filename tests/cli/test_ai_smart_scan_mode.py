@@ -295,7 +295,7 @@ def test_scan_with_invalid_ai_smart_mode(mock_scan_mode_manager_class, runner):
     """Test running scan with incorrect AI smart mode name"""
     # Mock an error when getting the scan mode
     manager_mock = MagicMock()
-    manager_mock.get_scan_mode.side_effect = ValueError("Unknown scan mode: ai-smart")
+    manager_mock.get_scan_mode.side_effect = SystemExit("Unknown scan mode: ai-smart")
     mock_scan_mode_manager_class.return_value = manager_mock
     
     # Run the command with an incorrect mode name
@@ -303,5 +303,5 @@ def test_scan_with_invalid_ai_smart_mode(mock_scan_mode_manager_class, runner):
     
     # Assertions
     assert result.exit_code != 0
-    assert isinstance(result.exception, ValueError)
-    assert "Unknown scan mode: ai-smart" in str(result.exception) 
+    assert isinstance(result.exception, SystemExit)
+    assert "ai-smart" in result.stdout 

@@ -162,7 +162,7 @@ def test_port_scan_function(mock_nmap_class):
 
     # Verify the instance was created and methods called with right args
     mock_nmap_class.assert_called_once()
-    mock_instance.run.assert_called_once_with(target, options={"ports": "top1000"})
+    mock_instance.run.assert_called_once_with(target, options={"ports": "1-1000"})
     mock_instance.parse_output.assert_called_once()
     assert result == []
 
@@ -257,7 +257,9 @@ def test_scan_command_integration():
 @patch("src.cli.scan.run_port_scan", return_value=[])
 @patch("src.cli.scan.run_subdomain_scan", return_value=[])
 @patch("src.cli.scan.run_technology_scan", return_value=[])
+@patch("src.cli.scan.check_and_ensure_tools")
 def test_scan_command_integration(
+    mock_check_tools,
     mock_tech_scan,
     mock_subdomain_scan,
     mock_port_scan,
@@ -282,6 +284,17 @@ def test_scan_command_integration(
             "location": "https://example.com/test",
         }
     ]
+    
+    # Mock tool availability check to show all tools are available
+    mock_check_tools.return_value = {
+        "wappalyzer": (True, "Wappalyzer is available"),
+        "nmap": (True, "Nmap is available"),
+        "zap": (True, "ZAP is available"),
+        "dirsearch": (True, "Dirsearch is available"),
+        "sublist3r": (True, "Sublist3r is available"),
+        "amass": (True, "Amass is available"),
+        "subfinder": (True, "Subfinder is available")
+    }
 
     # Test by calling the scan function directly
     with patch("src.cli.scan.output_scan_results"):
@@ -301,15 +314,21 @@ def test_scan_command_integration(
     
     # Verify the scan functions were called
     mock_tech_scan.assert_called_once()
+    mock_subdomain_scan.assert_called_once()
+    mock_port_scan.assert_called_once()
     mock_web_scan.assert_called_once()
     mock_dir_scan.assert_called_once()
 
 
 @patch("src.cli.scan.validate_target_url", return_value="https://example.com")
 @patch("src.cli.scan.ResultNormalizer")
-@patch("src.cli.scan.run_web_scan", return_value=[])
-@patch("src.cli.scan.run_port_scan", return_value=[])
+@patch("src.cli.scan.run_web_scan")
+@patch("src.cli.scan.run_port_scan")
+@patch("src.cli.scan.check_and_ensure_tools")
+@patch("src.cli.scan.ScanModeManager")
 def test_scan_command_specific_module(
+    mock_scan_mode_manager_class,
+    mock_check_tools,
     mock_port_scan,
     mock_web_scan,
     mock_normalizer_class,
@@ -320,15 +339,43 @@ def test_scan_command_specific_module(
     normalizer_instance = MagicMock()
     mock_normalizer_class.return_value = normalizer_instance
 
-    # Create a valid return structure (list of findings dictionaries)
-    normalizer_instance.correlate_findings.return_value = [
-        {
-            "title": "Test Finding",
-            "severity": "medium",
-            "description": "A test finding for the scan test",
-            "location": "https://example.com/test",
-        }
-    ]
+    # Configure async mock return values
+    mock_port_scan.return_value = []
+    mock_web_scan.return_value = []
+
+    # Create a valid return structure as a dictionary mapping targets to findings lists
+    normalizer_instance.correlate_findings.return_value = {
+        "https://example.com": [
+            MagicMock(
+                severity="medium",
+                title="Test Finding",
+                description="A test finding for the scan test",
+                location="https://example.com/test",
+                tool="test_tool",
+                dict=lambda: {
+                    "title": "Test Finding",
+                    "severity": "medium",
+                    "description": "A test finding for the scan test",
+                    "location": "https://example.com/test",
+                }
+            )
+        ]
+    }
+    
+    # Set up the ScanModeManager mock
+    mock_scan_mode_manager = MagicMock()
+    mock_scan_mode_manager_class.return_value = mock_scan_mode_manager
+    
+    # Mock tool availability check to show all tools are available
+    mock_check_tools.return_value = {
+        "wappalyzer": (True, "Wappalyzer is available"),
+        "nmap": (True, "Nmap is available"),
+        "zap": (True, "ZAP is available"),
+        "dirsearch": (True, "Dirsearch is available"),
+        "sublist3r": (True, "Sublist3r is available"),
+        "amass": (True, "Amass is available"),
+        "subfinder": (True, "Subfinder is available")
+    }
 
     # Test with invoke - specify only PORT and WEB modules
     result = runner.invoke(
@@ -351,7 +398,11 @@ def test_scan_command_specific_module(
 @patch("src.cli.scan.run_port_scan", return_value=[])
 @patch("src.cli.scan.run_subdomain_scan", return_value=[])
 @patch("src.cli.scan.run_technology_scan", return_value=[])
+@patch("src.cli.scan.check_and_ensure_tools")
+@patch("src.cli.scan.ScanModeManager")
 def test_scan_command_with_ignore_ssl(
+    mock_scan_mode_manager_class,
+    mock_check_tools,
     mock_tech_scan,
     mock_subdomain_scan,
     mock_port_scan,
@@ -365,15 +416,39 @@ def test_scan_command_with_ignore_ssl(
     normalizer_instance = MagicMock()
     mock_normalizer_class.return_value = normalizer_instance
 
-    # Create a valid return structure (list of findings dictionaries)
-    normalizer_instance.correlate_findings.return_value = [
-        {
-            "title": "Test Finding",
-            "severity": "medium",
-            "description": "A test finding for the scan test",
-            "location": "https://example.com/test",
-        }
-    ]
+    # Create a valid return structure as a dictionary mapping targets to findings lists
+    normalizer_instance.correlate_findings.return_value = {
+        "https://example.com": [
+            MagicMock(
+                severity="medium",
+                title="Test Finding",
+                description="A test finding for the scan test",
+                location="https://example.com/test",
+                tool="test_tool",
+                dict=lambda: {
+                    "title": "Test Finding",
+                    "severity": "medium",
+                    "description": "A test finding for the scan test",
+                    "location": "https://example.com/test",
+                }
+            )
+        ]
+    }
+    
+    # Set up the ScanModeManager mock
+    mock_scan_mode_manager = MagicMock()
+    mock_scan_mode_manager_class.return_value = mock_scan_mode_manager
+    
+    # Mock tool availability check to show all tools are available
+    mock_check_tools.return_value = {
+        "wappalyzer": (True, "Wappalyzer is available"),
+        "nmap": (True, "Nmap is available"),
+        "zap": (True, "ZAP is available"),
+        "dirsearch": (True, "Dirsearch is available"),
+        "sublist3r": (True, "Sublist3r is available"),
+        "amass": (True, "Amass is available"),
+        "subfinder": (True, "Subfinder is available")
+    }
 
     # Test with invoke - with ignore-ssl flag
     result = runner.invoke(app, ["run", "https://example.com", "--ignore-ssl"])

@@ -25,6 +25,14 @@ PAYLOAD_TYPES = {
     "XXE": "XML external entity payloads",
 }
 
+# Import mutation engine components
+try:
+    from .mutation_engine import MutationEngine, MutationStrategy
+    from .mutator import PayloadMutator
+except ImportError:
+    # Handle the case where the modules might not exist yet
+    pass
+
 def get_payload_categories() -> List[str]:
     """
     Get a list of all available payload categories.
@@ -167,4 +175,52 @@ def create_payload_category(category: str) -> bool:
         os.makedirs(category_path)
         return True
     except OSError:
-        return False 
+        return False
+
+def mutate_payloads(payloads: List[str], vulnerability_type: str, 
+                   context: Optional[str] = None, 
+                   num_variations: int = 2,
+                   complexity: int = 3) -> List[str]:
+    """
+    Generate mutations of the given payloads.
+    
+    Args:
+        payloads: List of payload strings to mutate
+        vulnerability_type: Type of vulnerability (e.g., "xss", "sql_injection")
+        context: Optional context information (e.g., "html", "attribute", "javascript")
+        num_variations: Number of variations to generate per payload
+        complexity: Mutation complexity level (1-5)
+            
+    Returns:
+        List containing original payloads and their mutations
+        
+    Raises:
+        ImportError: If the mutation engine is not available
+    """
+    try:
+        from .mutator import PayloadMutator
+    except ImportError:
+        raise ImportError("Mutation engine is not available. Ensure src/payloads/mutation_engine.py and src/payloads/mutator.py exist.")
+    
+    mutator = PayloadMutator(complexity=complexity)
+    return mutator.mutate_payloads(payloads, vulnerability_type, context, num_variations)
+
+def get_mutator(complexity: int = 3) -> 'PayloadMutator':
+    """
+    Get a PayloadMutator instance for advanced mutation operations.
+    
+    Args:
+        complexity: Mutation complexity level (1-5)
+            
+    Returns:
+        PayloadMutator instance
+        
+    Raises:
+        ImportError: If the mutation engine is not available
+    """
+    try:
+        from .mutator import PayloadMutator
+    except ImportError:
+        raise ImportError("Mutation engine is not available. Ensure src/payloads/mutation_engine.py and src/payloads/mutator.py exist.")
+    
+    return PayloadMutator(complexity=complexity) 
