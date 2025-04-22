@@ -11,10 +11,13 @@ import logging
 import time
 from datetime import datetime, timezone
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union, Callable
+import asyncio
+import threading
 
 if TYPE_CHECKING:
     from typing import Type
+    from src.distributed.base import BaseNode
 
 logger = logging.getLogger("sniper.distributed.protocol")
 
@@ -405,23 +408,21 @@ class ProtocolBase:
     """
     Base class for all protocol implementations.
 
-    Defines the interface that all concrete protocol implementations must follow.
+    Subclasses must implement the concrete protocol (e.g., REST, gRPC, WebSockets).
     """
 
-    def __init__(self, host: str = "localhost", port: int = 5555):
+    def __init__(self, node):
         """
-        Initialize the protocol.
+        Initialize the protocol base with node reference.
 
         Args:
-            host: Host address for the protocol
-            port: Port number for the protocol
+            node: Node that will use this protocol
         """
-        self.host = host
-        self.port = port
+        self.node = node
 
     def connect(self) -> bool:
         """
-        Establish a connection to the remote endpoint.
+        Connect to the remote endpoint.
 
         Returns:
             True if connected successfully, False otherwise
@@ -430,7 +431,7 @@ class ProtocolBase:
 
     def disconnect(self) -> bool:
         """
-        Close the connection to the remote endpoint.
+        Disconnect from the remote endpoint.
 
         Returns:
             True if disconnected successfully, False otherwise
@@ -445,7 +446,7 @@ class ProtocolBase:
             message: Message to send
 
         Returns:
-            Response message if applicable, None otherwise
+            Response message if received, None otherwise
         """
         raise NotImplementedError("Subclasses must implement send_message()")
 
@@ -460,97 +461,136 @@ class ProtocolBase:
 
 
 class RestProtocol(ProtocolBase):
-    """
-    REST-based protocol implementation.
+    """REST protocol implementation for distributed communication."""
 
-    Uses HTTP for communication between nodes, with JSON payloads.
-    """
-
-    def __init__(self, host: str = "localhost", port: int = 5555):
+    def __init__(self, node: 'BaseNode'):
         """
-        Initialize the REST protocol.
+        Initialize REST protocol with a node reference.
 
         Args:
-            host: Host address for REST endpoints
-            port: Port number for REST endpoints
+            node: Node instance that will use this protocol
         """
-        super().__init__(host, port)
-        self.base_url = f"http://{host}:{port}"
-        # Note: This would normally use requests library
-        # but for now we'll keep it simple
+        super().__init__(node)
+        self.base_url = f"http://{self.node.master_host}:{self.node.master_port}" if hasattr(self.node, 'master_host') else None
+        self.server = None
+        self.server_thread = None
 
     def connect(self) -> bool:
-        """
-        Verify connectivity to the REST endpoint.
-
-        For REST, there's no persistent connection, so this just
-        checks if the server is reachable.
-
-        Returns:
-            True if the endpoint is reachable, False otherwise
-        """
-        # This would normally try a HEAD request to the base URL
-        # and return True if successful
+        """Connect to the remote endpoint."""
+        logger.debug(f"REST protocol connected to {self.base_url}")
         return True
 
     def disconnect(self) -> bool:
-        """
-        Close the connection to the REST endpoint.
-
-        For REST, there's no persistent connection to close.
-
-        Returns:
-            Always returns True
-        """
+        """Disconnect from the remote endpoint."""
+        logger.debug("REST protocol disconnected")
         return True
 
-    def send_message(self, message: ProtocolMessage) -> Optional[ProtocolMessage]:
+    def send_message(self, message: ProtocolMessage) -> Optional[Dict]:
         """
-        Send a message to the REST endpoint.
+        Send a message via REST API.
 
         Args:
             message: Message to send
 
         Returns:
-            Response message if received, None otherwise
+            Response message or None if no response
         """
-        # This would normally use requests.post to send the message
-        # and return a ProtocolMessage built from the response
-        logger.debug(f"REST send: {message.message_type.name} to {self.base_url}")
-        return None
+        from src.distributed.rest import create_rest_client
+
+        try:
+            client = create_rest_client()
+            endpoint = self._get_endpoint_for_message(message)
+            response = client.post(
+                f"{self.base_url}/{endpoint}",
+                json=message.to_dict(),
+                timeout=30
+            )
+            
+            if response.status_code >= 200 and response.status_code < 300:
+                return response.json()
+            else:
+                logger.error(f"REST API error: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Error sending REST message: {str(e)}")
+            return None
+
+    def _get_endpoint_for_message(self, message: ProtocolMessage) -> str:
+        """Get the appropriate REST endpoint for a message type."""
+        endpoints = {
+            MessageType.REGISTER: "register",
+            MessageType.HEARTBEAT: "heartbeat",
+            MessageType.TASK_STATUS: "task-status",
+            MessageType.TASK_RESULT: "task-result",
+            MessageType.NODE_STATUS: "status",
+        }
+        return endpoints.get(message.message_type, "")
 
     def receive_message(self) -> Optional[ProtocolMessage]:
         """
-        Receive a message from the REST endpoint.
-
-        For REST, this doesn't make sense as REST is request/response,
-        not push-based. Included for interface completeness.
-
+        Receive a message. In REST, this is unused as it's handled by the server.
+        
         Returns:
-            Always returns None
+            None as REST is request/response based
         """
-        logger.warning("REST protocol doesn't support receive_message()")
         return None
+        
+    def start_server(self, host: str, port: int, message_handler: Callable) -> bool:
+        """
+        Start the REST server for receiving messages.
+        
+        Args:
+            host: Host address to bind to
+            port: Port to listen on
+            message_handler: Callback for handling incoming messages
+            
+        Returns:
+            True if server started successfully
+        """
+        from src.distributed.rest import run_app, create_master_app
+        
+        try:
+            # Create FastAPI app for master node
+            app = create_master_app(self.node)
+            
+            # Run in a separate thread
+            self.server_thread = threading.Thread(
+                target=run_app,
+                args=(app, host, port),
+                daemon=True
+            )
+            self.server_thread.start()
+            
+            logger.info(f"REST server started on {host}:{port}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start REST server: {str(e)}", exc_info=True)
+            return False
 
 
-def create_protocol(
-    protocol_type: str, host: str = "localhost", port: int = 5555
-) -> ProtocolBase:
+def create_protocol(protocol_type: str, node) -> ProtocolBase:
     """
-    Factory function to create an appropriate protocol instance.
+    Create a protocol instance of the specified type.
 
     Args:
-        protocol_type: Type of protocol to create ("rest", "websocket", etc.)
-        host: Host address for the protocol
-        port: Port number for the protocol
+        protocol_type: Type of protocol to create (e.g., "REST", "GRPC", "WS")
+        node: Node that will use this protocol
 
     Returns:
         Protocol instance
 
     Raises:
-        ValueError: If protocol_type is not supported
+        ValueError: If the protocol type is not supported
     """
-    if protocol_type.lower() == "rest":
-        return RestProtocol(host, port)
+    protocol_type = protocol_type.upper()
+    
+    if protocol_type == "REST":
+        return RestProtocol(node)
+    elif protocol_type == "GRPC":
+        # If we had a gRPC implementation
+        raise ValueError(f"Protocol type not implemented: {protocol_type}")
+    elif protocol_type == "WS":
+        # If we had a WebSocket implementation
+        raise ValueError(f"Protocol type not implemented: {protocol_type}")
     else:
-        raise ValueError(f"Unsupported protocol type: {protocol_type}")
+        raise ValueError(f"Unknown protocol type: {protocol_type}")

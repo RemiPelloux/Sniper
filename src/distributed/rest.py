@@ -424,3 +424,14 @@ def shutdown_app(app):
     # FastAPI/Uvicorn doesn't have a direct method to shutdown
     # We'll handle this at the thread level in the master/worker classes
     logger.info("Application shutdown requested")
+
+
+def create_rest_client():
+    """
+    Create an HTTP client for REST API calls.
+    
+    Returns:
+        A client instance for making HTTP requests.
+    """
+    import requests
+    return requests

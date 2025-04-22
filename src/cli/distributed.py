@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 
 from src.core.logging import setup_logging
 from src.distributed.master import MasterNodeServer
-from src.distributed.worker import WorkerNodeServer
+from src.distributed.worker import WorkerNodeClient
 
 # Configure logging
 logger = logging.getLogger("sniper.distributed.cli")
@@ -94,7 +94,7 @@ def start_worker(args):
 
     # Create and start worker node
     try:
-        worker = WorkerNodeServer(
+        worker = WorkerNodeClient(
             master_host=args.master_host,
             master_port=args.master_port,
             worker_id=args.worker_id,
