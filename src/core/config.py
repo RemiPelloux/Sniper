@@ -66,3 +66,35 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any
 
     # Return a dictionary representation of the settings object
     return settings.dict()
+
+
+def load_scan_mode_config(mode_name: Optional[str] = None) -> Dict:
+    """Load scan mode configuration from YAML file.
+    
+    Args:
+        mode_name: Optional name of scan mode to load
+        
+    Returns:
+        Dict containing scan mode configuration(s)
+        
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        ValueError: If specified mode doesn't exist
+    """
+    config_dir = Path(__file__).parent.parent.parent / "config"
+    config_file = config_dir / "scan_modes.yaml"
+    
+    if not config_file.exists():
+        if mode_name:
+            raise FileNotFoundError(f"Scan mode config file not found: {config_file}")
+        return {}
+        
+    with open(config_file) as f:
+        config = yaml.safe_load(f) or {}
+        
+    if mode_name:
+        if mode_name not in config:
+            raise ValueError(f"Scan mode not found: {mode_name}")
+        return config[mode_name]
+        
+    return config

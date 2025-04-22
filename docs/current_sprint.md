@@ -229,23 +229,6 @@ Status: **Completed** (March 2024)
 - ⬜ Developing workflow templates for common scenarios
 
 #### Testing & Quality Improvements
-- [x] Refactor `src/cli/tools.py` to use Typer conventions. (Completed in this cycle)
-- [x] Add initial tests for `list` and `show` commands in `tests/cli/test_tools.py`. (Completed in this cycle)
-- [x] **Investigate and resolve `typer.testing.CliRunner` incompatibility** preventing `tests/cli/test_tools.py` tests from running (currently skipped). (Resolved by using main app)
-- [ ] **Review/update Typer version** to potentially resolve testing issues.
-- [ ] **Refactor `src/cli/main.py`** to improve testability (related to skipped plugin loading tests).
-- [x] **Implement `ToolManager.update_tool()` method.** (Assumed implemented, mock created)
-- [x] **Implement `ToolManager.check_for_updates()` method.**
-- [x] **Add tests** for `install_tool`, `update_tool` commands in `tests/cli/test_tools.py` (Basic install/update tests added and passing).
-- [x] **Add tests** for `add_tool`, `remove_tool`, `categories`, `check_updates` commands in `tests/cli/test_tools.py`.
-  - [x] Added test for `add_tool` command
-  - [x] Add test for `remove_tool` command
-  - [x] Add test for `categories` command
-  - [x] Add test for `check_updates` command
-- [ ] **Add tests** for `install/update` with `--all` and `--category` flags in `tests/cli/test_tools.py`.
-- [x] **Fix missing import** in `src/cli/custom_tools.py` to resolve ToolInstallMethod reference error.
-- [x] **Fix typing issues** in `normalize_features` function in `src/ml/utils.py` to support new parameter requirements.
-- [x] **Fix spelling inconsistency** in distributed module (`TaskStatus.CANCELED` vs `TaskStatus.CANCELLED`).
 - [x] **Fix distributed worker node tests** (All 12 worker node tests are now passing).
 - [x] **Enhance test coverage** for sandbox plugin:
   - Split complex test cases into smaller, focused tests
@@ -267,8 +250,10 @@ Status: **Completed** (March 2024)
   - [ ] `src/ml/smart_recon.py` (8% → target 85%)
   - [ ] `src/ml/tool_selection.py` (0% → target 85%)
   - [ ] `src/results/normalizers/*` (add tests for untested normalizers)
+- [x] **Fix scan modes test** (Updated scan mode descriptions in test to match actual configuration).
 
 ### Completed Tasks (Current Sprint)
+- [x] **Fix scan modes test** (Updated scan mode descriptions in test to match actual configuration) - *Completed: April 22, 2025*
 - ✅ Security Tools Arsenal Enhancement
   - Fixed duplicate tool entries in the custom_tools.yaml file
   - Added more specialized security tools to the arsenal

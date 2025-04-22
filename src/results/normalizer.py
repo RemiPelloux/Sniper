@@ -17,6 +17,7 @@ from src.results.types import (
     TechnologyFinding,
     WebFinding,
 )
+from src.core.findings import Finding
 
 log = logging.getLogger(__name__)
 
@@ -365,22 +366,69 @@ class ResultNormalizer:
         return list(unique_findings.values())
 
     def correlate_findings(
-        self, findings: List[BaseFinding]
-    ) -> Dict[str, List[BaseFinding]]:
-        """Group related findings by target.
-
-        This is a simple correlation approach that groups findings by their target.
-        More advanced correlation could be implemented in the future.
-
+        self, findings: List[Finding]
+    ) -> List[Finding]:
+        """Correlate and deduplicate findings.
+        
         Args:
             findings: List of findings to correlate
-
+            
         Returns:
-            Dictionary mapping targets to lists of findings
+            List of correlated findings with duplicates removed
         """
-        correlated: Dict[str, List[BaseFinding]] = defaultdict(list)
-
+        if not findings:
+            return []
+            
+        # Group findings by target and title
+        grouped: Dict[str, Dict[str, List[Finding]]] = {}
         for finding in findings:
-            correlated[finding.target].append(finding)
+            target_findings = grouped.setdefault(finding.target, {})
+            title_findings = target_findings.setdefault(finding.title, [])
+            title_findings.append(finding)
+            
+        # Correlate findings within each group
+        correlated: List[Finding] = []
+        for target_findings in grouped.values():
+            for title_findings in target_findings.values():
+                if len(title_findings) == 1:
+                    correlated.append(title_findings[0])
+                else:
+                    correlated.append(self._merge_findings(title_findings))
+                    
+        return sorted(
+            correlated,
+            key=lambda f: (f.severity, f.confidence),
+            reverse=True
+        )
 
-        return dict(correlated)
+    def _merge_findings(self, findings: List[Finding]) -> Finding:
+        """Merge multiple findings into one.
+        
+        Args:
+            findings: List of findings to merge
+            
+        Returns:
+            Merged finding
+        """
+        # Use the finding with highest confidence as base
+        base = max(findings, key=lambda f: f.confidence)
+        
+        # Combine descriptions and raw data
+        description = base.description
+        raw_data = base.raw_data or {}
+        
+        for finding in findings:
+            if finding != base:
+                description += f"\n\nAlso reported by {finding.tool}:\n{finding.description}"
+                if finding.raw_data:
+                    raw_data.update(finding.raw_data)
+                    
+        return Finding(
+            title=base.title,
+            description=description,
+            severity=base.severity,
+            confidence=base.confidence,
+            target=base.target,
+            tool=f"{base.tool} (correlated)",
+            raw_data=raw_data
+        )

@@ -6,9 +6,9 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 
-from src.integrations.base import ToolIntegration, ToolIntegrationError
+from src.integrations.base import ToolIntegration, ToolIntegrationError, BaseIntegration, ToolNotFoundError
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
 
 # Import result types
@@ -20,8 +20,8 @@ log = logging.getLogger(__name__)
 DEFAULT_EXTENSIONS = "php,html,js,txt,bak,config,json,xml"
 
 
-class DirsearchIntegration(ToolIntegration):
-    """Integration for the Dirsearch directory enumerator."""
+class DirsearchIntegration(BaseIntegration):
+    """Integration with Dirsearch for directory/file discovery."""
 
     def __init__(self, executor: SubprocessExecutor | None = None) -> None:
         self._executor = executor or SubprocessExecutor()
@@ -198,37 +198,40 @@ class DirsearchIntegration(ToolIntegration):
             report_path.unlink(missing_ok=True)
             return None
 
-    async def scan(
-        self, target: str, wordlist_size: str = "medium", verify_ssl: bool = True
-    ) -> List[BaseFinding]:
-        """
-        Legacy method for backward compatibility.
-
-        This is a wrapper around the run and parse_output methods that simplifies the interface
-        for callers that don't need the full flexibility of the run method.
-
+    async def scan(self, target: str, **kwargs) -> Dict[str, Any]:
+        """Execute Dirsearch scan against the target.
+        
         Args:
-            target: The URL to scan.
-            wordlist_size: Size of wordlist to use (small, medium, large).
-            verify_ssl: Whether to verify SSL certificates.
-
+            target: The target URL to scan
+            **kwargs: Additional scan parameters
+            
         Returns:
-            List of findings from the scan.
+            Dict containing scan results
+            
+        Raises:
+            ToolNotFoundError: If Dirsearch is not available
+            Exception: For any other errors during scanning
         """
-        log.warning(
-            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
-        )
-
         try:
             # Run the scan and get raw results
             scan_result = await self.run(
                 target,
-                options={"wordlist_size": wordlist_size, "verify_ssl": verify_ssl},
+                options={"wordlist_size": kwargs.get("wordlist_size", "medium"), "verify_ssl": kwargs.get("verify_ssl", True)},
             )
 
             # Parse the results
             findings = await self.parse_output(scan_result)
-            return findings if findings is not None else []
+            return {
+                "entries": [
+                    {
+                        "path": finding.url,
+                        "status": finding.status_code,
+                        "size": "unknown",
+                        "content_type": finding.description.split("Content-Type: ")[1] if "Content-Type: " in finding.description else "unknown"
+                    }
+                    for finding in findings or []
+                ]
+            }
         except Exception as e:
             log.exception(f"Error in scan method: {e}")
-            return []
+            raise ToolNotFoundError("Dirsearch not available") from e

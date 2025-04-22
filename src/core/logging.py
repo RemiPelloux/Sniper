@@ -1,56 +1,44 @@
+"""Logging configuration for the Sniper project."""
+
 import logging
 import sys
-import time
+from typing import Optional
 
 from src.core.config import settings
 
-# Define log format based on rules (ISO8601, Level, Module:Line, Message)
-LOG_FORMAT = (
-    "%(asctime)s.%(msecs)03dZ [%(levelname)s] [%(name)s:%(lineno)d] %(message)s"
-)
-DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
-
-def setup_logging(force_setup: bool = False) -> None:
-    """Configure the root logger based on application settings.
-
+def setup_logging(level: Optional[str] = None, force_setup: bool = False) -> None:
+    """Configure logging for the application.
+    
     Args:
-        force_setup: If True, remove existing handlers before setting up.
-                     Useful for testing scenarios.
+        level: Optional logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        force_setup: Force setup even if already configured
     """
-    log_level_name = settings.log_level.upper()
-    log_level = getattr(logging, log_level_name, logging.INFO)
-
-    # Get root logger
-    root_logger = logging.getLogger()
-
-    # Check if handlers are already configured (to prevent duplicates)
-    if root_logger.hasHandlers() and not force_setup:
-        # Only log warning if not forcing setup (tests might force repeatedly)
-        root_logger.warning("Logger already configured. Skipping setup.")
+    # Check if already configured and not forcing
+    if not force_setup and len(logging.root.handlers) > 0:
+        logging.warning("Logger already configured, skipping setup")
         return
-
-    # If forcing setup, remove existing handlers first
+        
+    # Use provided level, or get from settings, or use default
+    if level is None:
+        level = settings.log_level
+        
+    # Convert string level to logging constant
+    numeric_level = getattr(logging, level.upper(), logging.INFO)
+        
+    # Configure root logger
+    # First clear any existing handlers if force_setup
     if force_setup:
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
-
-    # Set level
-    root_logger.setLevel(log_level)
-
-    # Create console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(log_level)
-
-    # Create formatter
-    formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
-    # Use UTC time for logs
-    formatter.converter = time.gmtime
-
-    # Set formatter and add handler
-    console_handler.setFormatter(formatter)
-    root_logger.addHandler(console_handler)
-
-    # Avoid logging during forced setup potentially within tests
-    if not force_setup:
-        logging.info(f"Logging configured with level: {log_level_name}")
+        logging.root.handlers = []
+        
+    logging.basicConfig(
+        level=numeric_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    
+    # Set level for specific loggers
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)

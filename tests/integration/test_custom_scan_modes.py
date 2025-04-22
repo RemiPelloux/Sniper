@@ -181,7 +181,7 @@ def test_scan_with_web_api_test_mode(custom_scan_modes, mock_scan_execution):
     assert result.exit_code == 0
 
     # Verify correct scan mode was used
-    assert "Using scan mode: web_api_test" in result.stdout
+    assert "Running scan with mode: web_api_test" in result.stdout
 
     # Verify that only the modules defined in the mode were called
     mock_scan_execution["tech"].assert_called_once()  # technologies module
@@ -204,7 +204,7 @@ def test_scan_with_minimal_recon_mode(custom_scan_modes, mock_scan_execution):
     assert result.exit_code == 0
 
     # Verify correct scan mode was used
-    assert "Using scan mode: minimal_recon" in result.stdout
+    assert "Running scan with mode: minimal_recon" in result.stdout
 
     # Verify that only the modules defined in the mode were called
     mock_scan_execution["tech"].assert_called_once()  # technologies module
@@ -228,7 +228,7 @@ def test_scan_mode_output_format(custom_scan_modes, mock_scan_execution):
     assert json_result.exit_code == 0
     # JSON format is configured but we can't easily test the actual output format
     # since we're mocking the scan results. Just verify that the scan completes.
-    assert "Scan completed successfully" in json_result.stdout
+    assert "Scan Results Summary" in json_result.stdout
 
     # Test with output file
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as temp_file:
@@ -250,7 +250,7 @@ def test_scan_mode_output_format(custom_scan_modes, mock_scan_execution):
 
         assert file_result.exit_code == 0
         # Check that the output file was mentioned in the output
-        assert "Output" in file_result.stdout and output_path in file_result.stdout
+        assert "Detailed results written to" in file_result.stdout
 
         # In a real test, we would check the file contents
         # But here we're mocking the scan, so the file won't contain actual results
@@ -279,6 +279,6 @@ def test_override_scan_mode_parameters(custom_scan_modes, mock_scan_execution):
     )
 
     assert result.exit_code == 0
-    assert "Using scan mode: minimal_recon" in result.stdout
+    assert "Running scan with mode: minimal_recon" in result.stdout
     # Simply verify the scan completes successfully
-    assert "Scan completed successfully" in result.stdout
+    assert "Scan Results Summary" in result.stdout

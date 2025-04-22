@@ -186,13 +186,13 @@ class WappalyzerIntegration(ToolIntegration):
             if not data:
                 log.warning("Wappalyzer output contained no URLs.")
                 return None
-                
+
             # Process each URL in the output
             for target_url, technologies in data.items():
                 if not isinstance(technologies, dict):
                     log.warning(f"Unexpected format for URL {target_url}, skipping.")
                     continue
-                    
+
                 log.debug(f"Processing technologies for {target_url}")
                 
                 # Process each technology found for this URL
@@ -200,7 +200,7 @@ class WappalyzerIntegration(ToolIntegration):
                     if not isinstance(tech_details, dict):
                         log.warning(f"Unexpected format for technology {tech_name}, skipping.")
                         continue
-                        
+
                     # Extract categories from the details
                     categories_list = tech_details.get("categories", [])
                     if not isinstance(categories_list, list):

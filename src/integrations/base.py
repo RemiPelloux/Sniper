@@ -64,3 +64,38 @@ class ToolIntegration(ABC):
             List of BaseFinding objects or None if parsing fails
         """
         pass
+
+
+class ToolNotFoundError(Exception):
+    """Raised when a required tool is not found or not available."""
+    pass
+
+
+class BaseIntegration:
+    """Base class for all tool integrations."""
+
+    def __init__(self, verify_ssl: bool = True, options: Optional[Dict] = None):
+        """Initialize the integration.
+        
+        Args:
+            verify_ssl: Whether to verify SSL certificates
+            options: Additional tool-specific options
+        """
+        self.verify_ssl = verify_ssl
+        self.options = options or {}
+
+    async def scan(self, target: str, **kwargs) -> Dict[str, Any]:
+        """Execute the scan against the target.
+        
+        Args:
+            target: The target to scan
+            **kwargs: Additional scan parameters
+            
+        Returns:
+            Dict containing scan results
+            
+        Raises:
+            ToolNotFoundError: If the tool is not available
+            Exception: For any other errors during scanning
+        """
+        raise NotImplementedError("Scan method must be implemented by subclasses")

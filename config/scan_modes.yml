@@ -1,0 +1,102 @@
+---
+# Default scan modes configuration
+
+quick:
+  description: Quick scan with minimal impact
+  target_types: [url, webapp]
+  modules: [technologies, web]
+  depth: quick
+  settings:
+    max_threads: 5
+    timeout: 1800
+    retries: 1
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    zap:
+      enabled: true
+      options:
+        active_scan: false
+        ajax_spider: false
+
+standard:
+  description: Standard scan with balanced coverage and impact
+  target_types: [url, webapp, api]
+  modules: [technologies, web, directories]
+  depth: standard
+  settings:
+    max_threads: 10
+    timeout: 3600
+    retries: 2
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    zap:
+      enabled: true
+      options:
+        active_scan: true
+        ajax_spider: true
+    dirsearch:
+      enabled: true
+      options:
+        wordlist: standard.txt
+        extensions: php,html,js
+
+comprehensive:
+  description: Comprehensive scan with maximum coverage
+  target_types: [url, webapp, api]
+  modules: [technologies, web, directories, ports, subdomains]
+  depth: comprehensive
+  settings:
+    max_threads: 15
+    timeout: 7200
+    retries: 3
+  tools:
+    wappalyzer:
+      enabled: true
+      options: {}
+    zap:
+      enabled: true
+      options:
+        active_scan: true
+        ajax_spider: true
+        scan_policy: comprehensive
+    dirsearch:
+      enabled: true
+      options:
+        wordlist: comprehensive.txt
+        extensions: php,html,js,txt,bak,old
+    nmap:
+      enabled: true
+      options:
+        ports: 1-65535
+        timing: 4
+    sublist3r:
+      enabled: true
+      options:
+        threads: 30
+        timeout: 30
+
+stealth:
+  description: Stealthy scan with minimal detection risk
+  target_types: [url, webapp]
+  modules: [technologies, web]
+  depth: quick
+  settings:
+    max_threads: 3
+    timeout: 3600
+    retries: 1
+  tools:
+    wappalyzer:
+      enabled: true
+      options:
+        delay: 5
+    zap:
+      enabled: true
+      options:
+        active_scan: false
+        ajax_spider: false
+        delay: 5
+        random_user_agent: true 
