@@ -106,7 +106,7 @@ class SniperMasterNode(MasterNode):
         self.host = host
         self.port = port
         self.protocol_type = protocol_type
-        self.protocol = create_protocol(protocol_type)
+        self.protocol = create_protocol(protocol_type, self)
 
         # Worker management
         self.workers: Dict[str, NodeInfo] = {}
@@ -297,27 +297,16 @@ class SniperMasterNode(MasterNode):
         # Import here to avoid circular imports
         from src.distributed.rest import create_master_app, run_app
 
-        # Start the protocol server
-        self.protocol.start_server(self.host, self.port, self._handle_message)
+        try:
+            # Start the protocol server first
+            if not self.protocol.start_server(self.host, self.port, self._handle_message):
+                raise RuntimeError("Failed to start protocol server")
 
-        # Create the FastAPI app
-        app = create_master_app(self)
-
-        # Run the app in a separate thread
-        thread, server = run_app(app, host=self.host, port=self.port)
-
-        # Store server information
-        self.server = {
-            "type": "rest",
-            "status": "running",
-            "host": self.host,
-            "port": self.port,
-            "app": app,
-            "thread": thread,
-            "server": server,
-        }
-
-        logger.info(f"REST server started at {self.host}:{self.port}")
+            logger.info(f"REST server started at {self.host}:{self.port}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start REST server: {e}")
+            raise
 
     def _stop_server(self):
         """Stop the REST server for the master node."""

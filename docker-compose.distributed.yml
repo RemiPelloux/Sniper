@@ -1,0 +1,106 @@
+services:
+  # Master node
+  master:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: sniper/master:latest
+    container_name: sniper-master
+    ports:
+      - "5000:5000"  # API/master port
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./results:/app/results
+    environment:
+      - SNIPER_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    command: python -m src.cli.distributed_typer master start --host 0.0.0.0 --port 5000 --distribution-strategy capability_based --worker-timeout 60
+    restart: unless-stopped
+    networks:
+      - sniper-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Worker nodes (will automatically be scaled)
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: sniper/worker:latest
+    depends_on:
+      - master
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - SNIPER_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    command: python -m src.cli.distributed_typer worker start --master master:5000 --capabilities autonomous_test,vulnerability_scan,recon,enum --max-tasks 5
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+    networks:
+      - sniper-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; exit(0 if os.path.exists('/tmp/worker_health') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Simple demonstration using the simplified Typer CLI
+  simple:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: sniper/simple:latest
+    container_name: sniper-simple
+    ports:
+      - "5001:5000"  # Different port to avoid conflict with main master
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./results:/app/results
+    environment:
+      - SNIPER_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    command: python -m src.cli.distributed_typer_simple distributed master start --host 0.0.0.0 --port 5000
+    restart: unless-stopped
+    networks:
+      - sniper-network
+    profiles:
+      - simple
+
+  # Simple worker for demonstration
+  simple-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: sniper/simple-worker:latest
+    depends_on:
+      - simple
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - SNIPER_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    command: python -m src.cli.distributed_typer_simple distributed worker start --master-host simple --master-port 5000 --capabilities vulnerability_scan,recon,fuzzing --max-tasks 3
+    restart: unless-stopped
+    networks:
+      - sniper-network
+    profiles:
+      - simple
+
+networks:
+  sniper-network:
+    driver: bridge 

@@ -471,7 +471,12 @@ class RestProtocol(ProtocolBase):
             node: Node instance that will use this protocol
         """
         super().__init__(node)
-        self.base_url = f"http://{self.node.master_host}:{self.node.master_port}" if hasattr(self.node, 'master_host') else None
+        # For worker nodes connecting to a master node, include the master node's host/port
+        if hasattr(self.node, 'master_host') and hasattr(self.node, 'master_port'):
+            self.base_url = f"http://{self.node.master_host}:{self.node.master_port}"
+        else:
+            # For master nodes, there is no base_url for outgoing requests
+            self.base_url = None
         self.server = None
         self.server_thread = None
 
@@ -553,18 +558,33 @@ class RestProtocol(ProtocolBase):
             # Create FastAPI app for master node
             app = create_master_app(self.node)
             
-            # Run in a separate thread
-            self.server_thread = threading.Thread(
-                target=run_app,
-                args=(app, host, port),
-                daemon=True
-            )
-            self.server_thread.start()
+            # Run in a separate thread without creating a new server
+            thread, server = run_app(app, host, port)
+            self.server_thread = thread
+            self.server = server
             
             logger.info(f"REST server started on {host}:{port}")
             return True
         except Exception as e:
             logger.error(f"Failed to start REST server: {str(e)}", exc_info=True)
+            return False
+            
+    def stop_server(self) -> bool:
+        """
+        Stop the REST server.
+        
+        Returns:
+            True if server stopped successfully
+        """
+        try:
+            if self.server_thread and self.server_thread.is_alive():
+                # We can't easily stop the thread directly
+                # The thread is daemon=True so it will be terminated when the process exits
+                logger.info("REST server thread is daemon and will exit with process")
+                return True
+            return True
+        except Exception as e:
+            logger.error(f"Failed to stop REST server: {str(e)}", exc_info=True)
             return False
 
 

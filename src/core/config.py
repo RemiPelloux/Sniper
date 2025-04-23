@@ -68,6 +68,20 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any
     return settings.dict()
 
 
+def get_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+    """
+    Get configuration from a file or return the default settings.
+    This is a wrapper around load_config for backward compatibility.
+
+    Args:
+        config_path: Optional path to a YAML configuration file.
+
+    Returns:
+        Dict containing configuration values.
+    """
+    return load_config(config_path)
+
+
 def load_scan_mode_config(mode_name: Optional[str] = None) -> Dict:
     """Load scan mode configuration from YAML file.
     

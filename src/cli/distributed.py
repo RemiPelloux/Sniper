@@ -12,12 +12,14 @@ import os
 import signal
 import sys
 import time
+import asyncio
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from src.core.logging import setup_logging
 from src.distributed.master import MasterNodeServer
 from src.distributed.worker import WorkerNodeClient
+from src.distributed.autodiscovery import get_discovery_manager
 
 # Configure logging
 logger = logging.getLogger("sniper.distributed.cli")
@@ -101,20 +103,21 @@ def start_worker(args):
             protocol_type=args.protocol,
             capabilities=args.capabilities.split(",") if args.capabilities else None,
             max_tasks=args.max_tasks,
+            heartbeat_interval=30,  # Default heartbeat interval
             config_path=args.config,
         )
 
         # Handle interrupts
         def signal_handler(sig, frame):
             logger.info("Shutting down worker node...")
-            worker.stop()
+            asyncio.run(worker.stop())
             sys.exit(0)
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-        # Start the worker
-        worker.start()
+        # Start the worker using asyncio
+        asyncio.run(worker.start())
 
         # Keep the process running
         logger.info("Worker node running. Press Ctrl+C to stop.")
@@ -140,6 +143,43 @@ def status_command(args):
     return 0
 
 
+def auto_command(args):
+    """Start a complete distributed system with auto-discovery and management."""
+    setup_logging(level=args.log_level.upper())
+
+    logger.info("Starting Sniper distributed system with auto-discovery")
+    
+    # Get the discovery manager with optional configuration
+    discovery_manager = get_discovery_manager(args.config)
+    
+    # Handle interrupts
+    def signal_handler(sig, frame):
+        logger.info("Shutting down distributed system...")
+        discovery_manager.stop()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Start the discovery manager which will start master and workers
+    if discovery_manager.start():
+        logger.info("Distributed system started successfully")
+        logger.info("Press Ctrl+C to stop")
+        
+        # Keep the process running
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("Stopping on user request")
+            discovery_manager.stop()
+    else:
+        logger.error("Failed to start distributed system")
+        return 1
+        
+    return 0
+
+
 def main() -> int:
     """
     Main entry point for the distributed CLI.
@@ -159,6 +199,15 @@ def main() -> int:
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # Auto-managed distributed system command
+    auto_parser = subparsers.add_parser(
+        "auto", help="Start a complete distributed system with auto-discovery"
+    )
+    auto_parser.add_argument(
+        "--config", help="Path to configuration file"
+    )
+    auto_parser.set_defaults(func=auto_command)
 
     # Master node command
     master_parser = subparsers.add_parser("master", help="Start a master node")

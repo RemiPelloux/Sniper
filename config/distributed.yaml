@@ -1,0 +1,61 @@
+###################################################
+# Sniper Distributed Scanning System Configuration #
+###################################################
+
+# Master node configuration
+master:
+  host: "0.0.0.0"         # Listen on all interfaces
+  port: 5000              # Master node port
+  protocol: "rest"        # Communication protocol (rest)
+  distribution_strategy: "smart"  # How to distribute tasks (smart, capability_based, round_robin, etc.)
+  worker_timeout: 60      # Seconds after which a worker is considered offline
+  auto_scaling: true      # Enable built-in auto-scaling
+  min_nodes: 2            # Minimum number of worker nodes to maintain
+  max_nodes: 10           # Maximum number of worker nodes allowed
+  scaling_policy: "queue_depth"  # Scale based on pending task queue depth
+  scaling_provider: "local"  # Use local process spawning for auto-scaling
+
+# Worker node configuration
+worker:
+  capabilities:           # Task types that workers can handle by default
+    - "autonomous_test"   # AI-powered testing
+    - "vulnerability_scan"  # Standard vulnerability scanning
+    - "recon"             # Reconnaissance tasks
+    - "enum"              # Enumeration tasks
+  max_tasks: 5            # Maximum concurrent tasks per worker
+  heartbeat_interval: 30  # Seconds between heartbeat messages
+
+# Auto-discovery configuration
+discovery:
+  enabled: true           # Enable auto-discovery of worker nodes
+  method: "direct"        # Discovery method (direct, mdns, kubernetes)
+  auto_start: true        # Automatically start worker nodes as needed
+  network_scan_interval: 300  # Seconds between network scans for new nodes
+
+# Performance tuning
+performance:
+  task_batch_size: 10     # Number of tasks to retrieve in a single batch
+  result_cache_size: 100  # Number of results to keep in memory cache
+  worker_prefetch: 2      # Number of tasks to prefetch per worker
+  distribution_interval: 5  # Seconds between task distribution cycles
+
+# Fault tolerance
+fault_tolerance:
+  task_retry_limit: 3     # Maximum number of retries for failed tasks
+  retry_delay: 5          # Seconds to wait before retrying a failed task
+  dead_worker_cleanup: 300  # Seconds before removing a dead worker's records
+  heartbeat_timeout: 90   # Seconds without heartbeat before worker is considered dead
+  task_timeout_multiplier: 1.5  # Multiple of task's own timeout to use for global timeout
+
+# Security
+security:
+  require_authentication: false  # Require worker authentication (future feature)
+  encryption_enabled: false      # Use encrypted communication (future feature)
+  allowed_worker_ips: []         # List of allowed worker IP addresses (empty=all)
+
+# Logging
+logging:
+  worker_logs: "info"     # Worker log level (debug, info, warning, error, critical)
+  task_logs: true         # Log task execution details
+  heartbeat_logs: false   # Log heartbeat messages (very verbose)
+  result_logs: true       # Log task results 

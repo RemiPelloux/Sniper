@@ -249,3 +249,57 @@ custom_mode:
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Distributed Scanning Architecture
+
+Sniper includes a powerful distributed scanning architecture that allows you to scale your security testing across multiple machines. This is useful for large-scale assessments, high-performance scanning, and specialized worker nodes.
+
+### Starting a Master Node
+
+```bash
+# Using the Typer CLI
+python -m src.cli.distributed_typer master start --host 0.0.0.0 --port 5000
+
+# Using the simplified CLI for demonstration
+python -m src.cli.distributed_typer_simple distributed master start
+```
+
+### Starting Worker Nodes
+
+```bash
+# Using the Typer CLI
+python -m src.cli.distributed_typer worker start --master localhost:5000 --capabilities vulnerability_scan,recon
+
+# Using the simplified CLI for demonstration
+python -m src.cli.distributed_typer_simple distributed worker start
+```
+
+### Using Docker Compose
+
+```bash
+# Start the entire distributed system
+docker compose -f docker-compose.distributed.yml up
+
+# Start the simplified version for demonstration
+docker compose -f docker-compose.distributed.yml --profile simple up
+```
+
+For more details about the distributed scanning architecture, see the [Distributed Scanning Documentation](docs/distributed.md).
+
+## Current Sprint Status
+
+### Sprint 3: Distributed Architecture Implementation ✅
+
+- ✅ Implement master node functionality with task distribution
+- ✅ Implement worker node with task execution capabilities
+- ✅ Create command-line interface for distributed operations
+- ✅ Add Docker Compose configuration for easy deployment
+- ✅ Document distributed architecture usage and workflows
+
+### Sprint 4: Advanced Scanning Features 🔄
+
+- 🔄 Implement advanced vulnerability scanning techniques
+- 🔄 Add support for custom scanning rules and profiles
+- ⬜ Integrate with external security tools and databases
+- ⬜ Enhance reporting with detailed vulnerability information
+- ⬜ Optimize scanning performance for large targets
