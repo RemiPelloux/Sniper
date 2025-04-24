@@ -35,6 +35,32 @@ import sys
 import time
 from typing import Any, Dict, List, Optional, Union
 
+# Import zaproxy with error handling
+try:
+    import zaproxy
+    ZAP_API_AVAILABLE = True
+except ImportError:
+    ZAP_API_AVAILABLE = False
+    logging.warning("ZAP Python API not installed. Install with: pip install zaproxy")
+
+
+# Import ZAP API (try both package names)
+ZAP_AVAILABLE = False
+try:
+    # First try the new package name directly
+    from zaproxy import ZAPv2  # type: ignore
+    ZAP_AVAILABLE = True
+except ImportError:
+    try:
+        # Then try the legacy package name
+        from zapv2 import ZAPv2  # type: ignore
+        ZAP_AVAILABLE = True
+    except ImportError:
+        # Both import attempts failed, provide error message
+        ZAP_AVAILABLE = False
+        ZAPv2 = None  # type: ignore
+        logging.warning("ZAP Python API not installed. Install with: pip install zaproxy")
+
 from pydantic import ValidationError
 
 from src.integrations.base import ToolIntegration, ToolIntegrationError
@@ -44,18 +70,6 @@ from src.results.types import BaseFinding, FindingSeverity, WebFinding
 from src.core.config import settings
 
 log = logging.getLogger(__name__)
-
-# Check if ZAP API is available
-ZAP_AVAILABLE = False
-try:
-    # Try new package name
-    from zaproxy import ZAPv2  # type: ignore
-
-    ZAP_AVAILABLE = True
-except ImportError:
-    ZAP_AVAILABLE = False
-    log.warning("ZAP Python API not installed. Install with: pip install zaproxy")
-
 
 class ZapIntegration(ToolIntegration):
     """Integration for OWASP ZAP (Zed Attack Proxy) web scanner."""

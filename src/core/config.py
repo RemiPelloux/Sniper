@@ -112,3 +112,18 @@ def load_scan_mode_config(mode_name: Optional[str] = None) -> Dict:
         return config[mode_name]
         
     return config
+
+def get_templates_dir() -> Path:
+    """
+    Get the path to the templates directory.
+    
+    Returns:
+        Path: Path to the templates directory
+    """
+    templates_dir = Path(__file__).parent.parent.parent / "templates"
+    
+    # Create directory if it doesn't exist
+    if not templates_dir.exists():
+        templates_dir.mkdir(parents=True)
+        
+    return templates_dir

@@ -52,6 +52,8 @@ beautifulsoup4 = "^4.13.4"
 python-owasp-zap-v2-4 = "^0.1.0"
 autopep8 = "^2.3.2"
 markdown2 = "^2.5.3"
+python-nmap = "^0.7.1"
+docker = "^7.1.0"
 
 [tool.poetry.extras]
 zap = ["zaproxy"]
