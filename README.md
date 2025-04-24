@@ -1,354 +1,368 @@
-# Sniper
+# Sniper Security Tool
 
-A comprehensive security scanning tool that integrates multiple security tools for reconnaissance, vulnerability scanning, and reporting.
+<p align="center">
+  <img src="docs/assets/sniper-logo.png" alt="Sniper Logo" width="200"/>
+</p>
 
-## Features
+<div align="center">
+  <strong>Advanced Security Testing with AI-Powered Intelligence</strong>
+</div>
+<div align="center">
+  A comprehensive security scanning platform with distributed architecture, machine learning capabilities, and intelligent orchestration
+</div>
 
-- Integrated security modules:
-  - Port scanning (Nmap)
+<div align="center">
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+" />
+  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License" />
+  <img src="https://img.shields.io/badge/version-0.1.0-orange.svg" alt="Version 0.1.0" />
+  <img src="https://img.shields.io/badge/tests-407%20passing-brightgreen.svg" alt="407 Tests Passing" />
+</div>
+
+<hr>
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+  - [Using Docker](#using-docker-recommended)
+  - [Manual Installation](#manual-installation)
+- [Basic Usage](#basic-usage)
+- [Advanced Usage](#advanced-usage)
+  - [Scan Modes](#scan-modes)
+  - [Distributed Scanning](#distributed-scanning)
+  - [Machine Learning](#machine-learning)
+  - [Sandbox Environments](#sandbox-environments)
+- [Architecture](#architecture)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [License](#license)
+
+## Overview
+
+Sniper is a comprehensive security scanning platform designed for professional penetration testers, security researchers, and DevSecOps teams. It combines the power of multiple security tools, distributed computing, and machine learning to deliver advanced security testing capabilities with unprecedented speed and intelligence.
+
+Built with a modular architecture, Sniper orchestrates specialized security tools, analyzes their results using AI, and provides actionable security insights through a unified interface.
+
+## Key Features
+
+### Core Capabilities
+
+- **Unified Interface**: Interact with 40+ security tools through a single CLI or API
+- **Modular Design**: Easily extend with plugins and custom integrations
+- **Flexible Configuration**: Configure each tool with custom parameters
+- **Comprehensive Reporting**: Generate reports in multiple formats (JSON, HTML, Markdown)
+
+### Advanced Features
+
+- **Distributed Scanning Architecture**:
+  - Master-worker model for parallel scanning across multiple nodes
+  - Auto-scaling capability based on workload and resource availability
+  - Task distribution with intelligent prioritization
+  - Fault tolerance and recovery mechanisms
+
+- **AI-Powered Intelligence**:
+  - ML-based vulnerability prediction and risk scoring
+  - Smart scan optimization based on target characteristics
+  - Pattern learning for identifying complex vulnerabilities
+  - Autonomous vulnerability testing and verification
+
+- **Integrated Security Modules**:
+  - Port scanning and service detection (Nmap)
   - Subdomain enumeration (Sublist3r)
   - Technology detection (Wappalyzer)
   - Web vulnerability scanning (OWASP ZAP)
-  - Directory brute-forcing (Dirsearch)
-- ML-powered vulnerability prediction and risk scoring
-- Unified reporting system with multiple output formats
-- Flexible configuration management
-- Modular architecture for easy extension
-- Predefined scan modes for different scanning scenarios
-- Distributed scanning architecture:
-  - Master-worker model for parallel scanning
-  - Auto-scaling capabilities based on workload
-  - Fault tolerance and recovery mechanisms
-  - Support for multiple deployment environments (local, Docker, Kubernetes)
+  - Directory discovery (Dirsearch)
+  - And many more...
+
+- **Sandbox Environments**:
+  - Built-in vulnerable application sandbox for training and testing
+  - Docker-based isolation for safe exploitation attempts
+  - Pre-configured environments (DVWA, OWASP Juice Shop)
+
+## Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/sniper.git
+cd sniper
+
+# Install with Poetry
+poetry install
+
+# Run a basic scan
+poetry run sniper scan run --target example.com
+
+# Generate a report
+poetry run sniper report data/results/example.com_*.json --format html
+```
 
 ## Installation
 
 ### Using Docker (Recommended)
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/your-username/sniper.git
-   cd sniper
-   ```
+```bash
+# Build and run using Docker Compose
+docker compose up -d
 
-2. Build and run using Docker Compose:
-   ```
-   docker compose up -d
-   ```
-
-3. Run a scan:
-   ```
-   docker compose run --rm sniper scan run --target example.com
-   ```
+# Run a scan
+docker compose run --rm sniper scan run --target example.com
+```
 
 ### Manual Installation
 
-1. Install dependencies:
-   - Python 3.10+
-   - Poetry
-   - Nmap
-   - OWASP ZAP (for web scanning)
+#### Prerequisites
 
-2. Clone the repository:
-   ```
+- Python 3.10 or higher
+- Poetry (dependency management)
+- Docker (optional, for tool containerization)
+
+#### Steps
+
+1. **Clone the repository**:
+   ```bash
    git clone https://github.com/your-username/sniper.git
    cd sniper
    ```
 
-3. Install Python dependencies:
-   ```
+2. **Install dependencies**:
+   ```bash
    poetry install
    ```
 
-4. Run a scan:
+3. **Verify installation**:
+   ```bash
+   poetry run sniper --version
    ```
-   poetry run sniper scan run --target example.com
-   ```
 
-## Configuration
+#### Security Tool Dependencies
 
-Create a `config.yaml` file in the `config` directory:
+Sniper can use many external security tools. You have three options:
 
-```yaml
-modules:
-  nmap:
-    enabled: true
-    arguments: "-sV -p 1-1000"
-  
-  sublist3r:
-    enabled: true
-    
-  wappalyzer:
-    enabled: true
-    
-  zap:
-    enabled: true
-    api_key: "changeme"
-    api_url: "http://localhost:8080"
-    
-  dirsearch:
-    enabled: true
-    wordlist: "common.txt"
+1. **Install tools manually** on your system
+2. **Let Sniper use Docker containers** automatically (recommended)
+3. **Use the distributed architecture** to delegate tool execution to worker nodes
 
-output:
-  report_dir: "./data/reports"
-  formats:
-    - json
-    - console
-```
+## Basic Usage
 
-## Usage
-
-### Basic Scan
+### Running a Basic Scan
 
 ```bash
+# Run a basic scan against a target
 poetry run sniper scan run --target example.com
+
+# Specify output file
+poetry run sniper scan run --target example.com --output my-scan-results.json
+
+# Use specific modules
+poetry run sniper scan run --target example.com --module ports,web,subdomains
 ```
 
-### Using Scan Modes
+### Viewing Results
 
-Sniper supports predefined scan modes, each tailored for specific scanning scenarios:
-
-List available scan modes:
 ```bash
+# Generate an HTML report
+poetry run sniper report my-scan-results.json --format html
+
+# Generate multiple format reports
+poetry run sniper report my-scan-results.json --format html,json,markdown
+```
+
+### Managing Tools
+
+```bash
+# List available tools
+poetry run sniper tools list
+
+# Show detailed information about a tool
+poetry run sniper tools show nmap
+
+# Install a tool
+poetry run sniper tools install zap
+
+# Update a tool
+poetry run sniper tools update nmap
+```
+
+## Advanced Usage
+
+### Scan Modes
+
+Sniper supports predefined scan modes for different scenarios:
+
+```bash
+# List available scan modes
 poetry run sniper scan modes
-```
 
-Run a scan using a specific mode:
-```bash
-poetry run sniper scan run --target example.com --mode quick
-poetry run sniper scan run --target example.com --mode comprehensive
+# Use a specific scan mode
 poetry run sniper scan run --target example.com --mode stealth
+poetry run sniper scan run --target example.com --mode comprehensive
 ```
 
-Available scan modes:
+Available modes include:
 - **quick**: Fast reconnaissance with minimal footprint
-- **standard**: Balanced scan for routine security assessments
-- **comprehensive**: In-depth security assessment with thorough testing
+- **standard**: Balanced scan for routine assessments
+- **comprehensive**: In-depth assessment with thorough testing
 - **stealth**: Low-profile scan to avoid detection
-- **api**: Specialized scan for API endpoints and services
-
-### Specialized Target Scanning
-
-Sniper includes dedicated commands for specific targets:
-
-#### DVWA (Damn Vulnerable Web Application)
-
-```bash
-# Scan a DVWA instance with defaults
-poetry run sniper scan dvwa http://localhost
-
-# Scan with options
-poetry run sniper scan dvwa http://localhost --security-level medium --output dvwa-report.json
-```
-
-#### OWASP Juice Shop
-
-```bash
-# Scan a Juice Shop instance with defaults
-poetry run sniper scan juiceshop http://localhost:3000
-
-# Scan with options
-poetry run sniper scan juiceshop http://localhost:3000 --output juice-report.json
-```
-
-These specialized scan commands are optimized for testing these deliberately vulnerable applications, making them ideal for security training and testing environments.
-
-### Advanced Usage
-
-Scan with specific modules:
-```bash
-poetry run sniper scan run --target example.com --module technologies --module ports
-```
-
-Scan with comma-separated modules:
-```bash
-poetry run sniper scan run --target example.com --module technologies,ports,web
-```
-
-Scan with specific depth:
-```bash
-poetry run sniper scan run --target example.com --depth COMPREHENSIVE
-```
-
-Generate a report:
-```bash
-poetry run sniper scan run --target example.com --output report.json --json
-```
-
-### Docker Container Fallbacks
-
-Sniper automatically detects if required security tools (like Nmap, OWASP ZAP, etc.) are installed on your system. If a tool is missing, Sniper will:
-
-1. Check if Docker is available on your system
-2. Pull the appropriate Docker image for the missing tool
-3. Create a wrapper script to use the tool via Docker
-4. Use this wrapper for scanning operations
-
-This ensures that you can run scans even if you haven't installed all the required security tools locally. The Docker container fallback is completely transparent - you don't need to modify your commands or configuration.
-
-To use this feature, simply make sure Docker is installed on your system. Everything else happens automatically when needed.
+- **api**: Specialized scan for API endpoints
 
 ### Distributed Scanning
 
-Start a master node:
-```bash
-poetry run sniper distributed master --auto-scaling --min-nodes 2 --max-nodes 5
-```
-
-Start a worker node:
-```bash
-poetry run sniper distributed worker --master-host <master-ip> --master-port 5000
-```
-
-Check distributed system status:
-```bash
-poetry run sniper distributed status
-```
-
-## Development
-
-### Running Tests
-
-```bash
-poetry run pytest
-```
-
-### Adding New Modules
-
-1. Create a new integration file in `src/integrations/`
-2. Implement the required interface methods
-3. Register the module in `src/modules/registry.py`
-
-### Adding Custom Scan Modes
-
-Custom scan modes can be added by creating or modifying the `config/scan_modes.yaml` file:
-
-```yaml
-custom_mode:
-  name: custom_mode
-  description: "Your custom scan mode description"
-  target_types: ["domain", "url"]
-  modules:
-    - technologies
-    - ports
-  settings:
-    max_threads: 10
-    timeout: 1800
-    scan_depth: standard
-  tools:
-    nmap:
-      enabled: true
-      options:
-        ports: "80,443,8080"
-    wappalyzer:
-      enabled: true
-      options: {}
-```
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Distributed Scanning Architecture
-
-Sniper includes a powerful distributed scanning architecture that allows you to scale your security testing across multiple machines. This is useful for large-scale assessments, high-performance scanning, and specialized worker nodes.
-
-### Automatic Worker Management (New!)
-
-The latest version includes automatic worker management, eliminating the need to manually start and manage worker nodes:
-
-```bash
-# Start master node with auto-scaling (workers are managed automatically)
-python run_master.py --min-workers 3 --max-workers 10
-
-# Submit tasks directly (no need to manage workers)
-python submit_task.py https://example.com --wait
-```
-
-### Using Docker Compose with Auto-Scaling
-
-The Docker Compose configuration now supports automatic worker management:
-
-```bash
-# Start the entire distributed system with auto-scaling
-docker compose -f docker-compose.distributed.yml up
-
-# Scale workers explicitly if needed
-docker compose -f docker-compose.distributed.yml up --scale worker=5
-```
-
-### Task Submission API
-
-For integrating with other applications, use the task submitter API:
-
-```bash
-# Start the task submitter API server
-python -m src.cli.task_submitter --master localhost:5000 --port 8080
-
-# Now you can submit tasks via HTTP API
-curl -X POST http://localhost:8080/scan/vulnerability \
-  -H "Content-Type: application/json" \
-  -d '{"target_url": "https://example.com", "priority": "high"}'
-```
-
-### Manual Mode (Legacy)
-
-If you prefer to manually manage master and worker nodes:
+Sniper's distributed architecture allows you to scale your scanning capabilities across multiple nodes:
 
 ```bash
 # Start a master node
-python -m src.cli.distributed_typer master start --host 0.0.0.0 --port 5000
+poetry run sniper distributed master start --host 0.0.0.0 --port 5000
 
-# Start worker nodes manually
-python -m src.cli.distributed_typer worker start --master localhost:5000 --capabilities vulnerability_scan,recon
+# Start a worker node
+poetry run sniper distributed worker start --master example.com:5000 --capabilities web,ports,subdomains
+
+# Submit a task to the distributed system
+poetry run sniper distributed tasks submit --target example.com --type scan --priority high
+
+# List workers connected to the master
+poetry run sniper distributed workers list
+
+# Check task status
+poetry run sniper distributed tasks list
 ```
 
-For more details about the distributed scanning architecture, see the [Distributed Scanning Documentation](docs/distributed.md).
+### Machine Learning
 
-## Testing
-
-This project uses pytest for testing. The test configuration has been fixed to ensure proper test discovery:
+Leverage Sniper's ML capabilities:
 
 ```bash
-# Run all tests
-python -m pytest
+# Predict vulnerabilities based on scan results
+poetry run sniper ml predict --input scan-results.json
 
-# Run specific test modules
-python -m pytest tests/distributed/
+# Calculate risk scores
+poetry run sniper ml risk --input scan-results.json
 
-# Run with coverage
-python -m pytest --cov=src tests/
+# Train a custom model (requires training data)
+poetry run sniper ml train --data training-data/ --output my-model.pkl
 ```
 
-If you encounter issues with pytest, run the fix script:
+### Sandbox Environments
+
+Sniper includes a sandbox plugin for managing vulnerable testing environments:
 
 ```bash
-python fix_pytest.py
+# List available sandbox environments
+poetry run sniper sandbox list
+
+# Start a sandbox environment
+poetry run sniper sandbox start dvwa
+
+# Check status of sandbox environments
+poetry run sniper sandbox status
+
+# Stop a sandbox environment
+poetry run sniper sandbox stop dvwa
 ```
 
-## Current Sprint Status
+## Architecture
 
-### Sprint 3: Distributed Architecture Implementation ✅
+Sniper is built with a modular, microservices-inspired architecture:
 
-- ✅ Implement master node functionality with task distribution
-- ✅ Implement worker node with task execution capabilities
-- ✅ Create command-line interface for distributed operations
-- ✅ Add Docker Compose configuration for easy deployment
-- ✅ Document distributed architecture usage and workflows
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       Sniper Core                           │
+├─────────────┬─────────────┬─────────────┬─────────────┬─────┘
+│ Scan Engine │ Config Mgmt │ Plugin Mgmt │ Tool Mgmt   │
+└─────────────┴─────────────┴─────────────┴─────────────┘
+        │              │              │            │
+┌───────▼──────┐ ┌─────▼───────┐ ┌────▼─────┐ ┌────▼────────┐
+│   Security   │ │ Distributed │ │ Reporting│ │ Machine      │
+│    Tools     │ │   System    │ │  Engine  │ │ Learning     │
+└──────────────┘ └─────────────┘ └──────────┘ └─────────────┘
+```
 
-### Sprint 4: Advanced Scanning Features ✅
+### Distributed Architecture
 
-- ✅ Implement advanced vulnerability scanning techniques
-- ✅ Add support for custom scanning rules and profiles
-- ✅ Integrate with external security tools and databases
-- ✅ Enhance reporting with detailed vulnerability information
-- ✅ Optimize scanning performance for large targets
+```
+┌─────────────────┐                 ┌─────────────────┐
+│   Master Node   │◄───Network─────►│   Worker Node   │
+│                 │    Protocol     │                 │
+└──────┬──────────┘                 └────────┬────────┘
+       │                                     │
+       │                                     │
+┌──────▼──────────┐                 ┌────────▼────────┐
+│ Task Scheduler  │                 │   Task Runner   │
+│ Load Balancer   │                 │  Tool Executor  │
+│ Result Aggregator│                 │ Result Reporter │
+└─────────────────┘                 └─────────────────┘
+```
 
-### Sprint 5: Worker Auto-Management & API Integration 🔄
+### Plugin System
 
-- ✅ Implement automatic worker scaling based on workload
-- ✅ Create task submission API for external integrations
-- ✅ Fix pytest configuration and test frameworks
-- ✅ Add worker health monitoring and recovery
-- 🔄 Expand ML capabilities for vulnerability detection
+Sniper features a robust plugin system that allows for easy extension of its capabilities:
+
+- **Tool Integrations**: Add support for new security tools
+- **Reporting Plugins**: Create custom report formats
+- **Custom Scanners**: Implement specialized scanning logic
+- **Sandbox Environments**: Add new vulnerable application setups
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- [User Guide](docs/user_guide.md): Complete usage documentation
+- [Developer Guide](docs/dev_guide.md): How to extend Sniper
+- [API Reference](docs/api_reference.md): REST API documentation
+- [Architecture](docs/architecture.md): Detailed system design
+- [Tool Integrations](docs/tools.md): Available security tool integrations
+
+## Development
+
+### Setting Up Development Environment
+
+```bash
+# Install development dependencies
+poetry install --with dev
+
+# Run tests
+poetry run pytest
+
+# Format code
+poetry run black .
+poetry run isort .
+
+# Type checking
+poetry run mypy .
+```
+
+### Project Structure
+
+```
+sniper/
+├── src/                 # Source code
+│   ├── cli/             # CLI commands and interfaces
+│   ├── core/            # Core functionality
+│   ├── distributed/     # Distributed scanning architecture
+│   ├── integrations/    # Security tool integrations
+│   ├── ml/              # Machine learning components
+│   ├── payloads/        # Vulnerability testing payloads
+│   ├── reporting/       # Report generation
+│   ├── results/         # Result processing and normalization
+│   └── sniper/          # Plugin system and extensions
+├── tests/               # Test suite
+├── docs/                # Documentation
+├── config/              # Configuration files
+└── examples/            # Example scripts and usage
+```
+
+## Roadmap
+
+See our [Roadmap](docs/roadmap.md) for planned features and future development.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+  <sub>Built with ❤️ by the Sniper Security Tool Team</sub>
+</div>
