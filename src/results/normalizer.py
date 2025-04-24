@@ -367,39 +367,47 @@ class ResultNormalizer:
 
     def correlate_findings(
         self, findings: List[Finding]
-    ) -> List[Finding]:
+    ) -> Dict[str, List[Finding]]:
         """Correlate and deduplicate findings.
         
         Args:
             findings: List of findings to correlate
             
         Returns:
-            List of correlated findings with duplicates removed
+            Dictionary mapping target names to lists of findings
         """
         if not findings:
-            return []
+            return {}
             
-        # Group findings by target and title
-        grouped: Dict[str, Dict[str, List[Finding]]] = {}
+        # Group findings by target
+        grouped_by_target: Dict[str, List[Finding]] = {}
         for finding in findings:
-            target_findings = grouped.setdefault(finding.target, {})
-            title_findings = target_findings.setdefault(finding.title, [])
-            title_findings.append(finding)
+            target_findings = grouped_by_target.setdefault(finding.target, [])
+            target_findings.append(finding)
             
-        # Correlate findings within each group
-        correlated: List[Finding] = []
-        for target_findings in grouped.values():
-            for title_findings in target_findings.values():
+        # For each target, group and correlate findings by title
+        correlated_by_target: Dict[str, List[Finding]] = {}
+        for target, target_findings in grouped_by_target.items():
+            # Group by title
+            findings_by_title: Dict[str, List[Finding]] = {}
+            for finding in target_findings:
+                title_findings = findings_by_title.setdefault(finding.title, [])
+                title_findings.append(finding)
+            
+            # Correlate findings with the same title
+            correlated_findings = []
+            for title_findings in findings_by_title.values():
                 if len(title_findings) == 1:
-                    correlated.append(title_findings[0])
+                    correlated_findings.append(title_findings[0])
                 else:
-                    correlated.append(self._merge_findings(title_findings))
-                    
-        return sorted(
-            correlated,
-            key=lambda f: (f.severity, f.confidence),
-            reverse=True
-        )
+                    # Merge multiple findings with the same title
+                    correlated_findings.append(self._merge_findings(title_findings))
+            
+            # Sort findings by severity
+            correlated_findings.sort(key=lambda f: f.severity, reverse=True)
+            correlated_by_target[target] = correlated_findings
+            
+        return correlated_by_target
 
     def _merge_findings(self, findings: List[Finding]) -> Finding:
         """Merge multiple findings into one.
@@ -410,8 +418,8 @@ class ResultNormalizer:
         Returns:
             Merged finding
         """
-        # Use the finding with highest confidence as base
-        base = max(findings, key=lambda f: f.confidence)
+        # Use the finding with highest severity as base instead of confidence
+        base = max(findings, key=lambda f: f.severity)
         
         # Combine descriptions and raw data
         description = base.description
@@ -419,16 +427,21 @@ class ResultNormalizer:
         
         for finding in findings:
             if finding != base:
-                description += f"\n\nAlso reported by {finding.tool}:\n{finding.description}"
-                if finding.raw_data:
+                # Use source_tool instead of tool which might not exist on BaseFinding
+                source = getattr(finding, 'source_tool', 'unknown tool')
+                description += f"\n\nAlso reported by {source}:\n{finding.description}"
+                if hasattr(finding, 'raw_data') and finding.raw_data:
                     raw_data.update(finding.raw_data)
+        
+        # Handle confidence attribute which may not exist on BaseFinding
+        confidence = getattr(base, 'confidence', None)
                     
         return Finding(
             title=base.title,
             description=description,
             severity=base.severity,
-            confidence=base.confidence,
+            confidence=confidence,
             target=base.target,
-            tool=f"{base.tool} (correlated)",
+            tool=f"{getattr(base, 'source_tool', 'multiple tools')} (correlated)",
             raw_data=raw_data
         )

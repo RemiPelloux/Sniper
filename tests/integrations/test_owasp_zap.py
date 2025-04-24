@@ -101,7 +101,8 @@ class TestZapIntegration:
 
     def test_check_prerequisites_no_executable(self) -> None:
         """Test prerequisite check when ZAP executable is not available."""
-        with patch("shutil.which", return_value=None):
+        with patch("shutil.which", return_value=None), \
+             patch("src.integrations.owasp_zap.ensure_tool_available", return_value=(False, None)):
             integration = ZapIntegration()
             assert integration.check_prerequisites() is False
 

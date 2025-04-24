@@ -523,7 +523,8 @@ class TestMasterNode:
                 master_node.host, master_node.port, master_node._handle_message
             )
 
-        # Test stop
+        # Test stop - Set up the server attribute first as it's checked in the stop method
+        master_node.server = {"status": "running", "type": "rest", "thread": None, "app": None}
         with patch.object(
             master_node.protocol, "stop_server"
         ) as mock_stop_server, patch.object(

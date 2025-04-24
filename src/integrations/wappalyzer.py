@@ -142,22 +142,29 @@ class WappalyzerIntegration(ToolIntegration):
             )
             raise ToolIntegrationError(f"Wappalyzer execution failed: {e}") from e
 
-    async def parse_output(
+    def parse_output_sync(
         self, raw_output: ExecutionResult
     ) -> list[BaseFinding] | None:
-        """Parse Wappalyzer JSON output (expected on stdout) into TechnologyFinding objects.
+        """Synchronous version of parse_output.
+        
+        Parse Wappalyzer JSON output (expected on stdout) into TechnologyFinding objects.
         
         The Wappalyzer CLI produces JSON in the format:
         {
-          "http://example.com": {
-            "TechnologyName": {
+          "urls": {
+            "http://example.com": {
+              "status": 200
+            }
+          },
+          "technologies": [
+            {
+              "name": "TechnologyName",
               "version": "1.0",
               "confidence": 100,
-              "categories": ["Category1", "Category2"],
-              "groups": ["Group1"]
+              "categories": [{"name": "Category1"}, {"name": "Category2"}]
             },
             ...more technologies
-          }
+          ]
         }
         """
         # Don't parse if execution failed or timed out
@@ -182,48 +189,62 @@ class WappalyzerIntegration(ToolIntegration):
                 )
                 return None
 
-            # The dict keys are URLs
-            if not data:
-                log.warning("Wappalyzer output contained no URLs.")
+            # Check if URLs and technologies keys exist
+            if "urls" not in data or "technologies" not in data:
+                log.warning("Missing URLs or technologies in Wappalyzer output.")
                 return None
-
-            # Process each URL in the output
-            for target_url, technologies in data.items():
-                if not isinstance(technologies, dict):
-                    log.warning(f"Unexpected format for URL {target_url}, skipping.")
-                    continue
-
-                log.debug(f"Processing technologies for {target_url}")
                 
-                # Process each technology found for this URL
-                for tech_name, tech_details in technologies.items():
-                    if not isinstance(tech_details, dict):
-                        log.warning(f"Unexpected format for technology {tech_name}, skipping.")
-                        continue
-
-                    # Extract categories from the details
-                    categories_list = tech_details.get("categories", [])
-                    if not isinstance(categories_list, list):
-                        log.warning(f"Invalid categories format for {tech_name}, using empty list.")
-                        categories_list = []
+            # Check if URLs dict is not empty
+            urls = data["urls"]
+            if not isinstance(urls, dict) or not urls:
+                log.warning("Empty URLs dict in Wappalyzer output.")
+                return None
+                
+            # Check if technologies list is valid
+            technologies = data["technologies"]
+            if not isinstance(technologies, list) or not technologies:
+                log.warning("No technologies found in Wappalyzer output.")
+                return None
+                
+            # Get the first URL (usually there's just one)
+            target_url = next(iter(urls.keys()))
+                
+            # Process each technology found
+            for tech_details in technologies:
+                if not isinstance(tech_details, dict):
+                    log.warning(f"Unexpected technology format, skipping: {tech_details}")
+                    continue
                     
-                    # Create a TechnologyFinding
-                    try:
-                        finding = TechnologyFinding(
-                            target=target_url,
-                            technology_name=tech_name,
-                            version=tech_details.get("version") or None,
-                            categories=categories_list,
-                            # Severity/description handled by model __init__
-                            source_tool=self.tool_name,
-                            raw_evidence=tech_details,
-                        )
-                        findings.append(finding)
-                    except Exception as e:
-                        log.warning(
-                            f"Could not create TechnologyFinding for {tech_name} at {target_url}: {e}"
-                        )
-                        continue
+                tech_name = tech_details.get("name")
+                if not tech_name or not isinstance(tech_name, str):
+                    log.warning(f"Missing or invalid technology name, skipping: {tech_details}")
+                    continue
+                    
+                # Extract categories from the details
+                categories_list = []
+                raw_categories = tech_details.get("categories", [])
+                if isinstance(raw_categories, list):
+                    for cat in raw_categories:
+                        if isinstance(cat, dict) and "name" in cat:
+                            categories_list.append(cat["name"])
+                
+                # Create a TechnologyFinding
+                try:
+                    finding = TechnologyFinding(
+                        target=target_url,
+                        technology_name=tech_name,
+                        version=tech_details.get("version"),
+                        categories=categories_list,
+                        # Severity/description handled by model __init__
+                        source_tool=self.tool_name,
+                        raw_evidence=tech_details,
+                    )
+                    findings.append(finding)
+                except Exception as e:
+                    log.warning(
+                        f"Could not create TechnologyFinding for {tech_name} at {target_url}: {e}"
+                    )
+                    continue
 
             if not findings:
                 log.info("No technologies parsed from Wappalyzer output.")
@@ -234,11 +255,24 @@ class WappalyzerIntegration(ToolIntegration):
 
         except json.JSONDecodeError as e:
             log.error(f"Failed to parse Wappalyzer JSON output: {e}")
-            log.debug(f"Raw stdout for Wappalyzer: {raw_output.stdout}")
             return None
         except Exception as e:
             log.exception(f"Error processing Wappalyzer output: {e}")
             return None
+            
+    async def parse_output(
+        self, raw_output: ExecutionResult
+    ) -> list[BaseFinding] | None:
+        """Parse Wappalyzer JSON output (expected on stdout) into TechnologyFinding objects.
+        
+        Args:
+            raw_output: ExecutionResult containing Wappalyzer JSON output
+            
+        Returns:
+            List of TechnologyFinding objects, or None if parsing failed
+        """
+        # Call the synchronous version for backward compatibility
+        return self.parse_output_sync(raw_output)
 
     async def scan(self, target: str, verify_ssl: bool = True) -> list[BaseFinding]:
         """
@@ -261,7 +295,7 @@ class WappalyzerIntegration(ToolIntegration):
             scan_result = await self.run(target, options={"verify_ssl": verify_ssl})
 
             # Parse the results
-            findings = await self.parse_output(scan_result)
+            findings = self.parse_output_sync(scan_result)
             return findings if findings is not None else []
         except Exception as e:
             log.exception(f"Error in scan method: {e}")

@@ -288,11 +288,18 @@ class PluginManager:
     def unload_plugin(self, plugin_name: str) -> bool:
         """Unloads a specific plugin by name."""
         if plugin_name not in self.loaded_plugins:
-            logger.debug(f"Plugin '{plugin_name}' not loaded or already unloaded.")
+            try:
+                logger.debug(f"Plugin '{plugin_name}' not loaded or already unloaded.")
+            except ValueError:
+                pass
             return True
 
         plugin_instance = self.loaded_plugins[plugin_name]
-        logger.debug(f"Attempting to unload plugin: {plugin_name}")
+        try:
+            logger.debug(f"Attempting to unload plugin: {plugin_name}")
+        except ValueError:
+            pass
+            
         try:
             if plugin_instance.unload():
                 del self.loaded_plugins[plugin_name]
@@ -300,13 +307,22 @@ class PluginManager:
                 # Let's remove it for now to ensure clean state.
                 if plugin_name in self.plugins:
                     del self.plugins[plugin_name]
-                logger.info(f"Successfully unloaded plugin: {plugin_name}")
+                try:
+                    logger.info(f"Successfully unloaded plugin: {plugin_name}")
+                except ValueError:
+                    print(f"Successfully unloaded plugin: {plugin_name}")
                 return True
             else:
-                logger.error(f"Plugin '{plugin_name}' unload() method returned False.")
+                try:
+                    logger.error(f"Plugin '{plugin_name}' unload() method returned False.")
+                except ValueError:
+                    print(f"Plugin '{plugin_name}' unload() method returned False.")
                 return False
         except Exception as e:
-            logger.error(f"Error unloading plugin '{plugin_name}': {e}", exc_info=True)
+            try:
+                logger.error(f"Error unloading plugin '{plugin_name}': {e}", exc_info=True)
+            except ValueError:
+                print(f"Error unloading plugin '{plugin_name}': {e}")
             return False
 
     def load_all_plugins(self):
@@ -330,14 +346,25 @@ class PluginManager:
         plugin_names = list(self.loaded_plugins.keys())
         unloaded_count = 0
         if not plugin_names:
-            logger.info("No plugins currently loaded to unload.")
+            try:
+                logger.info("No plugins currently loaded to unload.")
+            except ValueError:
+                print("No plugins currently loaded to unload.")
             return
 
-        logger.info(f"Unloading {len(plugin_names)} loaded plugins...")
+        try:
+            logger.info(f"Unloading {len(plugin_names)} loaded plugins...")
+        except ValueError:
+            print(f"Unloading {len(plugin_names)} loaded plugins...")
+            
         for name in plugin_names:
             if self.unload_plugin(name):
                 unloaded_count += 1
-        logger.info(f"Unloaded {unloaded_count} plugins successfully.")
+                
+        try:
+            logger.info(f"Unloaded {unloaded_count} plugins successfully.")
+        except ValueError:
+            print(f"Unloaded {unloaded_count} plugins successfully.")
 
     def register_all_cli_commands(self, cli_app):
         """Calls register_cli_commands on all loaded plugins."""

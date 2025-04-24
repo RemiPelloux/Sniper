@@ -632,7 +632,14 @@ class SmartDistribution(DistributionAlgorithm):
             
             # Adjust priority based on waiting time
             if task.created_at:
-                wait_time = (datetime.now(timezone.utc) - task.created_at).total_seconds()
+                # Ensure the created_at is timezone-aware
+                if task.created_at.tzinfo is None:
+                    # If naive datetime, assume it's UTC and make it timezone-aware
+                    task_created_at = task.created_at.replace(tzinfo=timezone.utc)
+                else:
+                    task_created_at = task.created_at
+                    
+                wait_time = (datetime.now(timezone.utc) - task_created_at).total_seconds()
                 # Increase priority with waiting time (avoid starvation)
                 priority_factor = min(3.0, 1.0 + (wait_time / 3600.0))  # Max 3x boost after 2 hours
                 priority_value *= priority_factor

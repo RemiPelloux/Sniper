@@ -15,7 +15,11 @@ services:
     environment:
       - SNIPER_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
-    command: python -m src.cli.distributed_typer master start --host 0.0.0.0 --port 5000 --distribution-strategy capability_based --worker-timeout 60
+      - SNIPER_AUTO_SCALING=true
+      - SNIPER_MIN_WORKERS=3
+      - SNIPER_MAX_WORKERS=10
+      - SNIPER_SCALING_POLICY=queue_depth
+    command: python -m src.cli.distributed_typer master start --host 0.0.0.0 --port 5000 --distribution-strategy capability_based --worker-timeout 60 --auto-scaling --min-nodes 3 --max-nodes 10
     restart: unless-stopped
     networks:
       - sniper-network
@@ -40,7 +44,8 @@ services:
     environment:
       - SNIPER_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
-    command: python -m src.cli.distributed_typer worker start --master master:5000 --capabilities autonomous_test,vulnerability_scan,recon,enum --max-tasks 5
+      - SNIPER_WORKER_AUTO_REGISTER=true
+    command: python -m src.cli.distributed_typer worker start --master master:5000 --capabilities autonomous_test,vulnerability_scan,recon,enum,fuzzing,web_scan --max-tasks 5 --auto-reconnect
     restart: unless-stopped
     deploy:
       replicas: 3
@@ -56,6 +61,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # Task submitter service - allows submitting tasks to the master without managing workers
+  task-submitter:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: sniper/task-submitter:latest
+    container_name: sniper-task-submitter
+    depends_on:
+      - master
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./results:/app/results
+    environment:
+      - SNIPER_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      - MASTER_HOST=master
+      - MASTER_PORT=5000
+    ports:
+      - "8080:8080"  # Web interface for task submission
+    command: python -m src.cli.task_submitter --master master:5000 --port 8080
+    restart: unless-stopped
+    networks:
+      - sniper-network
 
   # Simple demonstration using the simplified Typer CLI
   simple:
@@ -73,6 +103,7 @@ services:
     environment:
       - SNIPER_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - SNIPER_AUTO_WORKER_MANAGEMENT=true
     command: python -m src.cli.distributed_typer_simple distributed master start --host 0.0.0.0 --port 5000
     restart: unless-stopped
     networks:
@@ -94,8 +125,11 @@ services:
     environment:
       - SNIPER_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - SNIPER_WORKER_AUTO_REGISTER=true
     command: python -m src.cli.distributed_typer_simple distributed worker start --master-host simple --master-port 5000 --capabilities vulnerability_scan,recon,fuzzing --max-tasks 3
     restart: unless-stopped
+    deploy:
+      replicas: 2
     networks:
       - sniper-network
     profiles:

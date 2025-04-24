@@ -254,37 +254,78 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 Sniper includes a powerful distributed scanning architecture that allows you to scale your security testing across multiple machines. This is useful for large-scale assessments, high-performance scanning, and specialized worker nodes.
 
-### Starting a Master Node
+### Automatic Worker Management (New!)
+
+The latest version includes automatic worker management, eliminating the need to manually start and manage worker nodes:
 
 ```bash
-# Using the Typer CLI
-python -m src.cli.distributed_typer master start --host 0.0.0.0 --port 5000
+# Start master node with auto-scaling (workers are managed automatically)
+python run_master.py --min-workers 3 --max-workers 10
 
-# Using the simplified CLI for demonstration
-python -m src.cli.distributed_typer_simple distributed master start
+# Submit tasks directly (no need to manage workers)
+python submit_task.py https://example.com --wait
 ```
 
-### Starting Worker Nodes
+### Using Docker Compose with Auto-Scaling
+
+The Docker Compose configuration now supports automatic worker management:
 
 ```bash
-# Using the Typer CLI
-python -m src.cli.distributed_typer worker start --master localhost:5000 --capabilities vulnerability_scan,recon
-
-# Using the simplified CLI for demonstration
-python -m src.cli.distributed_typer_simple distributed worker start
-```
-
-### Using Docker Compose
-
-```bash
-# Start the entire distributed system
+# Start the entire distributed system with auto-scaling
 docker compose -f docker-compose.distributed.yml up
 
-# Start the simplified version for demonstration
-docker compose -f docker-compose.distributed.yml --profile simple up
+# Scale workers explicitly if needed
+docker compose -f docker-compose.distributed.yml up --scale worker=5
+```
+
+### Task Submission API
+
+For integrating with other applications, use the task submitter API:
+
+```bash
+# Start the task submitter API server
+python -m src.cli.task_submitter --master localhost:5000 --port 8080
+
+# Now you can submit tasks via HTTP API
+curl -X POST http://localhost:8080/scan/vulnerability \
+  -H "Content-Type: application/json" \
+  -d '{"target_url": "https://example.com", "priority": "high"}'
+```
+
+### Manual Mode (Legacy)
+
+If you prefer to manually manage master and worker nodes:
+
+```bash
+# Start a master node
+python -m src.cli.distributed_typer master start --host 0.0.0.0 --port 5000
+
+# Start worker nodes manually
+python -m src.cli.distributed_typer worker start --master localhost:5000 --capabilities vulnerability_scan,recon
 ```
 
 For more details about the distributed scanning architecture, see the [Distributed Scanning Documentation](docs/distributed.md).
+
+## Testing
+
+This project uses pytest for testing. The test configuration has been fixed to ensure proper test discovery:
+
+```bash
+# Run all tests
+python -m pytest
+
+# Run specific test modules
+python -m pytest tests/distributed/
+
+# Run with coverage
+python -m pytest --cov=src tests/
+```
+
+If you encounter issues with pytest, run the fix script:
+
+```bash
+python fix_pytest.py
+```
 
 ## Current Sprint Status
 
@@ -296,10 +337,18 @@ For more details about the distributed scanning architecture, see the [Distribut
 - ✅ Add Docker Compose configuration for easy deployment
 - ✅ Document distributed architecture usage and workflows
 
-### Sprint 4: Advanced Scanning Features 🔄
+### Sprint 4: Advanced Scanning Features ✅
 
-- 🔄 Implement advanced vulnerability scanning techniques
-- 🔄 Add support for custom scanning rules and profiles
-- ⬜ Integrate with external security tools and databases
-- ⬜ Enhance reporting with detailed vulnerability information
-- ⬜ Optimize scanning performance for large targets
+- ✅ Implement advanced vulnerability scanning techniques
+- ✅ Add support for custom scanning rules and profiles
+- ✅ Integrate with external security tools and databases
+- ✅ Enhance reporting with detailed vulnerability information
+- ✅ Optimize scanning performance for large targets
+
+### Sprint 5: Worker Auto-Management & API Integration 🔄
+
+- ✅ Implement automatic worker scaling based on workload
+- ✅ Create task submission API for external integrations
+- ✅ Fix pytest configuration and test frameworks
+- ✅ Add worker health monitoring and recovery
+- 🔄 Expand ML capabilities for vulnerability detection

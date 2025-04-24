@@ -41,9 +41,22 @@ plugin_manager = PluginManager(plugin_dirs=[str(plugins_dir_abs)])
 # Register a cleanup function to unload plugins on exit
 @atexit.register
 def cleanup_plugins() -> None:
-    log.info("Unloading plugins before exit...")
-    plugin_manager.unload_all_plugins()
-    log.info("Plugin cleanup complete.")
+    try:
+        log.info("Unloading plugins before exit...")
+    except ValueError:
+        # Catch the "I/O operation on closed file" error
+        print("Unloading plugins before exit...")
+    
+    # Still execute the actual cleanup logic
+    try:
+        plugin_manager.unload_all_plugins()
+    except Exception as e:
+        print(f"Error during plugin unloading: {e}")
+    
+    try:
+        log.info("Plugin cleanup complete.")
+    except ValueError:
+        print("Plugin cleanup complete.")
 
 
 # --- End Plugin Manager Setup ---
