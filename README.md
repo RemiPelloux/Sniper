@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+" />
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License" />
   <img src="https://img.shields.io/badge/version-0.1.0-orange.svg" alt="Version 0.1.0" />
-  <img src="https://img.shields.io/badge/tests-407%20passing-brightgreen.svg" alt="407 Tests Passing" />
+  <img src="https://img.shields.io/badge/tests-414%20passing-brightgreen.svg" alt="414 Tests Passing" />
 </div>
 
 <hr>
