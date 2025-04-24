@@ -9,14 +9,14 @@ load, and task dependencies.
 import abc
 import heapq
 import logging
+import math
 import random
 import time
+from collections import Counter
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
-import math
-from datetime import datetime, timezone
-from collections import Counter
 
 from src.distributed.base import (
     DistributedTask,
@@ -26,7 +26,7 @@ from src.distributed.base import (
     TaskPriority,
     TaskStatus,
 )
-from src.distributed.worker_metrics import WorkerMetricsManager, WorkerMetrics
+from src.distributed.worker_metrics import WorkerMetrics, WorkerMetricsManager
 from src.utils.exceptions import DistributionError
 
 # Create module logger
@@ -444,7 +444,7 @@ class SmartDistribution(DistributionAlgorithm):
     """
     Advanced distribution algorithm that combines multiple strategies and uses
     machine learning techniques to optimize task assignment.
-    
+
     Features:
     - Uses historical performance data to predict execution time
     - Considers worker specialization for specific task types
@@ -456,7 +456,7 @@ class SmartDistribution(DistributionAlgorithm):
     def __init__(self, use_ml: bool = True, alpha: float = 0.2):
         """
         Initialize the smart distribution algorithm.
-        
+
         Args:
             use_ml: Whether to use machine learning for predictions
             alpha: Learning rate for performance history updates (0-1)
@@ -465,12 +465,21 @@ class SmartDistribution(DistributionAlgorithm):
         self.worker_specialization = {}  # {worker_id: {task_type: score}}
         self.use_ml = use_ml
         self.alpha = alpha  # Learning rate for exponential moving average
-        self.min_history_size = 5  # Minimum samples before using history-based decisions
+        self.min_history_size = (
+            5  # Minimum samples before using history-based decisions
+        )
 
-    def update_history(self, task_id: str, worker_id: str, task_type: str, execution_time: float, success: bool):
+    def update_history(
+        self,
+        task_id: str,
+        worker_id: str,
+        task_type: str,
+        execution_time: float,
+        success: bool,
+    ):
         """
         Update execution history with a new data point.
-        
+
         Args:
             task_id: ID of the completed task
             worker_id: ID of the worker that executed the task
@@ -479,29 +488,29 @@ class SmartDistribution(DistributionAlgorithm):
             success: Whether the task was completed successfully
         """
         key = (task_type, worker_id)
-        
+
         # Initialize history if needed
         if key not in self.execution_history:
             self.execution_history[key] = []
-            
+
         # Add execution time to history
         self.execution_history[key].append((execution_time, success, task_id))
-        
+
         # Limit history size to avoid memory growth
         if len(self.execution_history[key]) > 100:
             self.execution_history[key] = self.execution_history[key][-100:]
-            
+
         # Update worker specialization score
         if worker_id not in self.worker_specialization:
             self.worker_specialization[worker_id] = {}
-            
+
         if task_type not in self.worker_specialization[worker_id]:
             self.worker_specialization[worker_id][task_type] = 1.0
-            
+
         # Calculate new score based on performance
         current_score = self.worker_specialization[worker_id][task_type]
         performance_factor = 1.0
-        
+
         if not success:
             # Penalize failures
             performance_factor = 0.8
@@ -513,7 +522,7 @@ class SmartDistribution(DistributionAlgorithm):
                     successful_times = [t for t, s, _ in history if s]
                     if successful_times:
                         all_times.extend(successful_times)
-            
+
             if all_times:
                 avg_time = sum(all_times) / len(all_times)
                 if avg_time > 0:
@@ -521,82 +530,95 @@ class SmartDistribution(DistributionAlgorithm):
                     performance_factor = avg_time / execution_time
                     # Clip to reasonable range
                     performance_factor = max(0.5, min(1.5, performance_factor))
-        
+
         # Update score using exponential moving average
-        new_score = (current_score * (1 - self.alpha)) + (performance_factor * self.alpha)
+        new_score = (current_score * (1 - self.alpha)) + (
+            performance_factor * self.alpha
+        )
         self.worker_specialization[worker_id][task_type] = new_score
 
     def get_expected_execution_time(self, task_type: str, worker_id: str) -> float:
         """
         Predict expected execution time for a task on a specific worker.
-        
+
         Args:
             task_type: Type of task
             worker_id: ID of the worker
-            
+
         Returns:
             Predicted execution time in seconds
         """
         key = (task_type, worker_id)
-        
+
         if key in self.execution_history:
             history = self.execution_history[key]
-            successful_history = [(time, tid) for time, success, tid in history if success]
-            
+            successful_history = [
+                (time, tid) for time, success, tid in history if success
+            ]
+
             if len(successful_history) >= self.min_history_size:
                 # Use weighted average with recent executions weighted more heavily
                 times, _ = zip(*successful_history[-10:])
                 weights = list(range(1, len(times) + 1))
                 weighted_avg = sum(t * w for t, w in zip(times, weights)) / sum(weights)
                 return weighted_avg
-        
+
         # Fallback: return default time if no history
         return 60.0  # Default expected execution time in seconds
 
-    def get_worker_score(self, worker_id: str, task_type: str, worker_metrics: Dict[str, WorkerMetrics]) -> float:
+    def get_worker_score(
+        self, worker_id: str, task_type: str, worker_metrics: Dict[str, WorkerMetrics]
+    ) -> float:
         """
         Calculate a score for a worker for a specific task type.
         Higher score means better suitability.
-        
+
         Args:
             worker_id: ID of the worker
             task_type: Type of task
             worker_metrics: Dictionary of worker metrics
-            
+
         Returns:
             Worker score (higher is better)
         """
         metrics = worker_metrics.get(worker_id)
         if not metrics:
             return 0.0
-            
+
         # Start with base score
         score = 1.0
-        
+
         # Factor 1: Current load (higher load = lower score)
-        load_factor = 1.0 - (metrics.current_load * 0.8)  # Allow for some tasks even at high load
+        load_factor = 1.0 - (
+            metrics.current_load * 0.8
+        )  # Allow for some tasks even at high load
         score *= load_factor
-        
+
         # Factor 2: Specialization score for this task type
         specialization = 1.0
-        if worker_id in self.worker_specialization and task_type in self.worker_specialization[worker_id]:
+        if (
+            worker_id in self.worker_specialization
+            and task_type in self.worker_specialization[worker_id]
+        ):
             specialization = self.worker_specialization[worker_id][task_type]
         score *= specialization
-        
+
         # Factor 3: Success rate (penalize workers with failures)
         score *= metrics.success_rate
-        
+
         # Factor 4: Response time (faster response = higher score)
         if metrics.response_time > 0:
             # Normalize response time with exponential decay
-            response_factor = math.exp(-metrics.response_time / 60.0)  # 60 seconds base scale
+            response_factor = math.exp(
+                -metrics.response_time / 60.0
+            )  # 60 seconds base scale
             score *= response_factor
-        
+
         # Factor 5: Penalty score (reduce score for problematic workers)
         if metrics.penalty_score > 0:
             penalty_factor = math.exp(-metrics.penalty_score / 10.0)
             score *= penalty_factor
-        
+
         return score
 
     def distribute(
@@ -607,29 +629,29 @@ class SmartDistribution(DistributionAlgorithm):
     ) -> Dict[str, List[str]]:
         """
         Distribute tasks to workers using the smart distribution algorithm.
-        
+
         Args:
             tasks: List of tasks to distribute
             workers: Dictionary of worker information
             worker_metrics: Dictionary of worker metrics
-            
+
         Returns:
             Dictionary mapping worker IDs to lists of task IDs
         """
         distribution = {worker_id: [] for worker_id in workers}
-        
+
         # Skip if no tasks or workers
         if not tasks or not workers:
             return distribution
-            
+
         # Phase 1: Analyze tasks and workers
         task_priorities = {}
         task_types = {}
-        
+
         for task in tasks:
             # Calculate task priority value (higher = more important)
             priority_value = task.priority.value
-            
+
             # Adjust priority based on waiting time
             if task.created_at:
                 # Ensure the created_at is timezone-aware
@@ -638,72 +660,82 @@ class SmartDistribution(DistributionAlgorithm):
                     task_created_at = task.created_at.replace(tzinfo=timezone.utc)
                 else:
                     task_created_at = task.created_at
-                    
-                wait_time = (datetime.now(timezone.utc) - task_created_at).total_seconds()
+
+                wait_time = (
+                    datetime.now(timezone.utc) - task_created_at
+                ).total_seconds()
                 # Increase priority with waiting time (avoid starvation)
-                priority_factor = min(3.0, 1.0 + (wait_time / 3600.0))  # Max 3x boost after 2 hours
+                priority_factor = min(
+                    3.0, 1.0 + (wait_time / 3600.0)
+                )  # Max 3x boost after 2 hours
                 priority_value *= priority_factor
-                
+
             task_priorities[task.id] = priority_value
             task_types[task.id] = task.task_type
-        
+
         # Phase 2: Calculate scores for each worker-task combination
         scores = {}
-        
+
         for task in tasks:
             for worker_id, worker_info in workers.items():
                 # Skip workers that don't support this task type
                 if task.task_type not in worker_info.capabilities:
                     continue
-                    
+
                 # Skip workers that are not active
                 if worker_info.status not in [NodeStatus.ACTIVE, NodeStatus.IDLE]:
                     continue
-                    
+
                 # Calculate worker score for this task
-                worker_score = self.get_worker_score(worker_id, task.task_type, worker_metrics)
-                
+                worker_score = self.get_worker_score(
+                    worker_id, task.task_type, worker_metrics
+                )
+
                 # Combine with task priority
                 final_score = worker_score * task_priorities.get(task.id, 1.0)
-                
+
                 scores[(task.id, worker_id)] = final_score
-        
+
         # Phase 3: Assign tasks using a variant of the Hungarian algorithm
         # First, assign highest-scoring tasks to their best workers
         assigned_tasks = set()
         assigned_workers = Counter()
-        
+
         # Sort task-worker pairs by score (highest first)
         sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        
+
         for (task_id, worker_id), score in sorted_scores:
             # Stop if all tasks are assigned
             if len(assigned_tasks) >= len(tasks):
                 break
-                
+
             # Skip already assigned tasks
             if task_id in assigned_tasks:
                 continue
-                
+
             # Check if worker has capacity
             worker_metrics_data = worker_metrics.get(worker_id)
             max_tasks = 5  # Default limit
             if worker_metrics_data:
                 # Use worker's reported limit or default
-                current_tasks = assigned_workers[worker_id] + worker_metrics_data.task_count
-                max_worker_tasks = getattr(worker_metrics_data, "max_concurrent_tasks", max_tasks)
-                
+                current_tasks = (
+                    assigned_workers[worker_id] + worker_metrics_data.task_count
+                )
+                max_worker_tasks = getattr(
+                    worker_metrics_data, "max_concurrent_tasks", max_tasks
+                )
+
                 if current_tasks >= max_worker_tasks:
                     continue
             else:
                 # Skip workers without metrics data
                 continue
-                
+
             # Assign task to worker
             distribution[worker_id].append(task_id)
             assigned_tasks.add(task_id)
             assigned_workers[worker_id] += 1
-        
+
         return distribution
 
 

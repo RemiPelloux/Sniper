@@ -1,6 +1,6 @@
 import asyncio
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Dict, Any
 
 import pytest
 
@@ -42,7 +42,13 @@ def test_nmap_check_prerequisites_success(
     mock_which.assert_called_once_with("nmap")
 
 
-@patch("src.integrations.nmap.ensure_tool_available", side_effect=[(False, "Tool nmap is not available"), (False, "Tool nmap is not available")])
+@patch(
+    "src.integrations.nmap.ensure_tool_available",
+    side_effect=[
+        (False, "Tool nmap is not available"),
+        (False, "Tool nmap is not available"),
+    ],
+)
 def test_nmap_check_prerequisites_fail(
     mock_ensure_tool: MagicMock, mock_executor: MagicMock
 ) -> None:
@@ -81,13 +87,18 @@ async def test_nmap_run_prereq_fail(
 ) -> None:
     """Test nmap run when prerequisites check fails initially and the Docker fallback also fails."""
     # Simulate nmap not found when instance is created and when run() method tries again
-    with patch("shutil.which", return_value=None), \
-         patch("src.integrations.nmap.ensure_tool_available", return_value=(False, "Tool nmap is not available")):
+    with patch("shutil.which", return_value=None), patch(
+        "src.integrations.nmap.ensure_tool_available",
+        return_value=(False, "Tool nmap is not available"),
+    ):
         integration = NmapIntegration(executor=mock_executor)
         target = "scanme.nmap.org"
-        with pytest.raises(ToolIntegrationError, match="Nmap executable not found and Docker fallback failed"):
+        with pytest.raises(
+            ToolIntegrationError,
+            match="Nmap executable not found and Docker fallback failed",
+        ):
             await integration.run(target)
-    
+
     mock_executor.execute.assert_not_awaited()
 
 
@@ -131,7 +142,9 @@ async def test_nmap_run_timeout(
     result = await integration.run(target)
 
     assert isinstance(result, dict)
-    assert "error" in result  # The run method returns error details when a timeout happens
+    assert (
+        "error" in result
+    )  # The run method returns error details when a timeout happens
 
 
 @patch("shutil.which", return_value="/usr/bin/nmap")
@@ -146,12 +159,12 @@ def test_nmap_parse_output_success_finds_ports(
             # Ensure source_tool is set
             if "source_tool" not in kwargs:
                 kwargs["source_tool"] = "nmap"
-            
+
             # Create a mock PortFinding object with the attributes
             mock_finding = MagicMock()
             for key, value in kwargs.items():
                 setattr(mock_finding, key, value)
-            
+
             # Add specific attributes needed for assertions
             mock_finding.port = kwargs.get("port")
             mock_finding.protocol = kwargs.get("protocol")
@@ -160,13 +173,13 @@ def test_nmap_parse_output_success_finds_ports(
             mock_finding.target = kwargs.get("target", "scanme.nmap.org")
             mock_finding.source_tool = kwargs.get("source_tool")
             mock_finding.raw_evidence = kwargs.get("raw_evidence")
-            
+
             return mock_finding
-            
+
         mock_port_finding.side_effect = side_effect
-        
+
         integration = NmapIntegration(executor=mock_executor)
-        
+
         # Sample output mimicking nmap's text format
         sample_stdout = """
         Starting Nmap 7.92 ( https://nmap.org )
@@ -180,7 +193,7 @@ def test_nmap_parse_output_success_finds_ports(
 
         Nmap done: 1 IP address (1 host up) scanned in 15.75 seconds
         """
-        
+
         # Create a mock XML output
         sample_xml = """<?xml version="1.0" encoding="UTF-8"?>
         <nmaprun>
@@ -192,17 +205,19 @@ def test_nmap_parse_output_success_finds_ports(
             </host>
         </nmaprun>
         """
-        
+
         # Create a dictionary that mimics what the run method would return
         mock_result = {
             "xml_output": sample_xml,
             "stdout": sample_stdout,
             "stderr": "",
-            "return_code": 0
+            "return_code": 0,
         }
-        
+
         # Extract the target from the command
-        with patch.object(integration, '_extract_target_from_command', return_value="scanme.nmap.org"):
+        with patch.object(
+            integration, "_extract_target_from_command", return_value="scanme.nmap.org"
+        ):
             parsed = integration.parse_output(mock_result)
 
         assert parsed is not None
@@ -239,7 +254,7 @@ def test_nmap_parse_output_success_no_ports(
     Not shown: 100 filtered ports
     Nmap done: 1 IP address (1 host up) scanned in 2.35 seconds
     """
-    
+
     # Create a mock XML output with no open ports
     sample_xml = """<?xml version="1.0" encoding="UTF-8"?>
     <nmaprun>
@@ -249,14 +264,14 @@ def test_nmap_parse_output_success_no_ports(
         </host>
     </nmaprun>
     """
-    
+
     mock_result = {
         "xml_output": sample_xml,
         "stdout": sample_stdout,
         "stderr": "",
-        "return_code": 0
+        "return_code": 0,
     }
-    
+
     parsed = integration.parse_output(mock_result)
     assert parsed is None  # Expect None if no findings were generated
 
@@ -265,16 +280,8 @@ def test_nmap_parse_output_success_no_ports(
 @pytest.mark.parametrize(
     "failed_result",
     [
-        {
-            "error": "Error in execution",
-            "stderr": "Error",
-            "return_code": 1
-        },
-        {
-            "error": "Timeout occurred",
-            "stdout": "Partial",
-            "return_code": -1
-        },
+        {"error": "Error in execution", "stderr": "Error", "return_code": 1},
+        {"error": "Timeout occurred", "stdout": "Partial", "return_code": -1},
     ],
 )
 def test_nmap_parse_output_failure(

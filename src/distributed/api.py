@@ -186,7 +186,7 @@ class DistributedAPI:
             Status string or None if task not found
         """
         url = f"{self.base_url}/api/tasks/{task_id}/status"
-        
+
         try:
             response = requests.get(url)
             if response.status_code == 200:
@@ -208,7 +208,7 @@ class DistributedAPI:
             Task result or None if task not found or not completed
         """
         url = f"{self.base_url}/api/tasks/{task_id}/result"
-        
+
         try:
             response = requests.get(url)
             if response.status_code == 200:
@@ -229,7 +229,7 @@ class DistributedAPI:
             True if task was cancelled, False otherwise
         """
         url = f"{self.base_url}/api/tasks/{task_id}/cancel"
-        
+
         try:
             response = requests.post(url)
             return response.status_code == 200
@@ -245,7 +245,7 @@ class DistributedAPI:
             List of worker information dictionaries
         """
         url = f"{self.base_url}/api/workers"
-        
+
         try:
             response = requests.get(url)
             if response.status_code == 200:
@@ -263,7 +263,7 @@ class DistributedAPI:
             List of pending task dictionaries
         """
         url = f"{self.base_url}/api/tasks/pending"
-        
+
         try:
             response = requests.get(url)
             if response.status_code == 200:
@@ -288,19 +288,23 @@ class DistributedAPI:
         """
         start_time = time.time()
         poll_interval = 2  # seconds between status checks
-        
+
         while time.time() - start_time < timeout:
             status = await self.check_task_status(task_id)
-            
-            if status in [TaskStatus.COMPLETED.name, TaskStatus.FAILED.name, TaskStatus.CANCELLED.name]:
+
+            if status in [
+                TaskStatus.COMPLETED.name,
+                TaskStatus.FAILED.name,
+                TaskStatus.CANCELLED.name,
+            ]:
                 return await self.get_task_result(task_id)
-                
+
             await asyncio.sleep(poll_interval)
-            
+
             # Increase poll interval gradually to avoid hammering the server
             if poll_interval < 10:
                 poll_interval += 0.5
-                
+
         # Timeout reached
         logger.warning(f"Timeout waiting for task {task_id} to complete")
         return None
@@ -328,17 +332,17 @@ class DistributedAPI:
             RuntimeError: If task submission fails
         """
         url = f"{self.base_url}/api/tasks"
-        
+
         task_data = {
             "task_type": task_type,
             "target": target,
             "parameters": parameters or {},
             "priority": priority.value,
         }
-        
+
         try:
             response = requests.post(url, json=task_data)
-            
+
             if response.status_code == 200 or response.status_code == 201:
                 result = response.json()
                 return result.get("task_id")
@@ -347,7 +351,7 @@ class DistributedAPI:
                 if response.text:
                     error_msg += f" - {response.text}"
                 raise RuntimeError(error_msg)
-                
+
         except Exception as e:
             raise RuntimeError(f"Error submitting task: {str(e)}")
 
@@ -370,10 +374,10 @@ def get_distributed_api(
         DistributedAPI instance
     """
     global _distributed_api
-    
+
     if _distributed_api is None:
         _distributed_api = DistributedAPI(master_host, master_port)
-        
+
     return _distributed_api
 
 
@@ -400,15 +404,15 @@ async def submit_task(
         Task ID or results if wait_for_result is True
     """
     api = get_distributed_api()
-    
+
     task_id = await api._submit_task(
         task_type=task_type,
         target=target,
         parameters=parameters,
         priority=priority,
     )
-    
+
     if wait_for_result:
         return await api.wait_for_task_completion(task_id, timeout)
-    
-    return task_id 
+
+    return task_id

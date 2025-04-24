@@ -69,7 +69,7 @@ class PluginManager:
 
         Args:
             plugin_dirs: A list of directories to search for plugins.
-                         If None, defaults to ["app/plugins"] or ["src/sniper/plugins"] 
+                         If None, defaults to ["app/plugins"] or ["src/sniper/plugins"]
                          based on directory existence.
         """
         # Use project standard path as the default
@@ -299,7 +299,7 @@ class PluginManager:
             logger.debug(f"Attempting to unload plugin: {plugin_name}")
         except ValueError:
             pass
-            
+
         try:
             if plugin_instance.unload():
                 del self.loaded_plugins[plugin_name]
@@ -314,13 +314,17 @@ class PluginManager:
                 return True
             else:
                 try:
-                    logger.error(f"Plugin '{plugin_name}' unload() method returned False.")
+                    logger.error(
+                        f"Plugin '{plugin_name}' unload() method returned False."
+                    )
                 except ValueError:
                     print(f"Plugin '{plugin_name}' unload() method returned False.")
                 return False
         except Exception as e:
             try:
-                logger.error(f"Error unloading plugin '{plugin_name}': {e}", exc_info=True)
+                logger.error(
+                    f"Error unloading plugin '{plugin_name}': {e}", exc_info=True
+                )
             except ValueError:
                 print(f"Error unloading plugin '{plugin_name}': {e}")
             return False
@@ -356,11 +360,11 @@ class PluginManager:
             logger.info(f"Unloading {len(plugin_names)} loaded plugins...")
         except ValueError:
             print(f"Unloading {len(plugin_names)} loaded plugins...")
-            
+
         for name in plugin_names:
             if self.unload_plugin(name):
                 unloaded_count += 1
-                
+
         try:
             logger.info(f"Unloaded {unloaded_count} plugins successfully.")
         except ValueError:

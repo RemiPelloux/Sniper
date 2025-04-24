@@ -299,7 +299,9 @@ class SniperMasterNode(MasterNode):
 
         try:
             # Start the protocol server first
-            if not self.protocol.start_server(self.host, self.port, self._handle_message):
+            if not self.protocol.start_server(
+                self.host, self.port, self._handle_message
+            ):
                 raise RuntimeError("Failed to start protocol server")
 
             logger.info(f"REST server started at {self.host}:{self.port}")

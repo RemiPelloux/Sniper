@@ -19,9 +19,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from src.cli.distributed_client import create_master_client
 from src.core.logging import setup_logging
 from src.distributed.base import TaskPriority
-from src.cli.distributed_client import create_master_client
 from src.distributed.client import create_worker_client
 from src.distributed.master import MasterNodeServer
 from src.distributed.worker import WorkerNodeClient
@@ -44,7 +44,7 @@ DEFAULT_AUTODISCOVERY_CONFIG = {
         "capabilities": ["autonomous_test", "vulnerability_scan", "recon"],
         "max_tasks": 5,
         "heartbeat_interval": 30,
-    }
+    },
 }
 
 # Configure logging
@@ -102,7 +102,9 @@ def master_start(
         case_sensitive=False,
     ),
     worker_timeout: int = typer.Option(
-        60, "--worker-timeout", help="Seconds after which a worker is considered offline"
+        60,
+        "--worker-timeout",
+        help="Seconds after which a worker is considered offline",
     ),
     config: Optional[Path] = typer.Option(
         None, "--config", help="Path to configuration file"
@@ -189,8 +191,10 @@ def master_start(
         master.start()
 
         # Print success message
-        console.print(f"[green]Master node started successfully on {host}:{port}[/green]")
-        
+        console.print(
+            f"[green]Master node started successfully on {host}:{port}[/green]"
+        )
+
         # Keep the process running
         logger.info("Master node running. Press Ctrl+C to stop.")
         while True:
@@ -251,7 +255,9 @@ def worker_start(
         "localhost:5000", "--master", "-m", help="Master node address (host:port)"
     ),
     worker_id: Optional[str] = typer.Option(
-        None, "--worker-id", help="Unique ID for this worker (generated if not provided)"
+        None,
+        "--worker-id",
+        help="Unique ID for this worker (generated if not provided)",
     ),
     protocol: str = typer.Option(
         "rest",
@@ -291,8 +297,8 @@ def worker_start(
 
     # Process capabilities
     capabilities_list = capabilities.split(",") if capabilities else None
-    if capabilities_list and '' in capabilities_list:
-        capabilities_list.remove('')
+    if capabilities_list and "" in capabilities_list:
+        capabilities_list.remove("")
 
     # Create and start worker node
     try:
@@ -321,7 +327,7 @@ def worker_start(
 
         # Print success message
         console.print("[green]Worker node started[/green]")
-        
+
         # Keep the process running
         logger.info("Worker node running. Press Ctrl+C to stop.")
         while True:
@@ -348,7 +354,7 @@ def worker_stop(
     try:
         # Parse master host:port
         master_host, master_port = parse_host_port(master)
-        
+
         client = create_worker_client(master_host=master_host, master_port=master_port)
         if asyncio.run(client.stop(worker_id)):
             console.print("[green]Worker node stopped[/green]")
@@ -375,7 +381,7 @@ def worker_status(
     try:
         # Parse master host:port
         master_host, master_port = parse_host_port(master)
-        
+
         client = create_worker_client(master_host=master_host, master_port=master_port)
         status = asyncio.run(client.get_status(worker_id))
 
@@ -409,7 +415,7 @@ def list_workers(
     try:
         # Parse master host:port
         master_host, master_port = parse_host_port(master)
-        
+
         client = create_master_client(host=master_host, port=master_port)
         workers = client.get_workers(status=status_filter)
 
@@ -433,7 +439,7 @@ def list_workers(
                 "OFFLINE": "red",
                 "ERROR": "red bold",
             }.get(worker["status"], "white")
-            
+
             table.add_row(
                 worker["id"],
                 worker["hostname"],
@@ -468,7 +474,7 @@ def list_tasks(
     try:
         # Parse master host:port
         master_host, master_port = parse_host_port(master)
-        
+
         client = create_master_client(host=master_host, port=master_port)
         tasks = client.get_tasks(status=status_filter, task_type=task_type)
 
@@ -494,7 +500,7 @@ def list_tasks(
                 "FAILED": "red",
                 "CANCELED": "magenta",
             }.get(task["status"], "white")
-            
+
             table.add_row(
                 task["id"],
                 task["type"],
@@ -522,7 +528,7 @@ def cancel_task(
     try:
         # Parse master host:port
         master_host, master_port = parse_host_port(master)
-        
+
         client = create_master_client(host=master_host, port=master_port)
         if client.cancel_task(task_id):
             console.print(f"[green]Task {task_id} canceled successfully[/green]")
@@ -545,7 +551,7 @@ def task_info(
     try:
         # Parse master host:port
         master_host, master_port = parse_host_port(master)
-        
+
         client = create_master_client(host=master_host, port=master_port)
         task_info = client.get_task_info(task_id)
 
@@ -590,24 +596,28 @@ def auto_discovery(
     setup_logging(level=log_level.upper())
 
     logger.info("Starting Sniper distributed system with auto-discovery")
-    
+
     # Modified to not use the problematic import
-    console.print("[yellow]Auto-discovery mode functionality is currently in development[/yellow]")
+    console.print(
+        "[yellow]Auto-discovery mode functionality is currently in development[/yellow]"
+    )
     console.print("[green]Starting a master node instead with default settings[/green]")
-    
+
     try:
         # Create and start master node with default settings
         master = MasterNodeServer(
             host=DEFAULT_AUTODISCOVERY_CONFIG["master"]["host"],
             port=DEFAULT_AUTODISCOVERY_CONFIG["master"]["port"],
             protocol_type=DEFAULT_AUTODISCOVERY_CONFIG["master"]["protocol"],
-            distribution_strategy=DEFAULT_AUTODISCOVERY_CONFIG["master"]["distribution_strategy"],
+            distribution_strategy=DEFAULT_AUTODISCOVERY_CONFIG["master"][
+                "distribution_strategy"
+            ],
             worker_timeout=DEFAULT_AUTODISCOVERY_CONFIG["master"]["worker_timeout"],
             auto_scaling=DEFAULT_AUTODISCOVERY_CONFIG["master"]["auto_scaling"],
             min_nodes=DEFAULT_AUTODISCOVERY_CONFIG["master"]["min_nodes"],
-            max_nodes=DEFAULT_AUTODISCOVERY_CONFIG["master"]["max_nodes"]
+            max_nodes=DEFAULT_AUTODISCOVERY_CONFIG["master"]["max_nodes"],
         )
-        
+
         # Handle interrupts
         def signal_handler(sig, frame):
             logger.info("Shutting down master node...")
@@ -616,11 +626,13 @@ def auto_discovery(
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
-        
+
         # Start the server
         master.start()
-        console.print(f"[green]Master node started on {DEFAULT_AUTODISCOVERY_CONFIG['master']['host']}:{DEFAULT_AUTODISCOVERY_CONFIG['master']['port']}[/green]")
-        
+        console.print(
+            f"[green]Master node started on {DEFAULT_AUTODISCOVERY_CONFIG['master']['host']}:{DEFAULT_AUTODISCOVERY_CONFIG['master']['port']}[/green]"
+        )
+
         # Keep the process running
         logger.info("Master node running. Press Ctrl+C to stop.")
         try:
@@ -636,4 +648,4 @@ def auto_discovery(
 
 
 if __name__ == "__main__":
-    distributed_app() 
+    distributed_app()

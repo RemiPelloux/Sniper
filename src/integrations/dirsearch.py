@@ -6,9 +6,14 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, List, Optional, Dict
+from typing import Any, Dict, List, Optional
 
-from src.integrations.base import ToolIntegration, ToolIntegrationError, BaseIntegration, ToolNotFoundError
+from src.integrations.base import (
+    BaseIntegration,
+    ToolIntegration,
+    ToolIntegrationError,
+    ToolNotFoundError,
+)
 from src.integrations.executors import ExecutionResult, SubprocessExecutor
 
 # Import result types
@@ -200,14 +205,14 @@ class DirsearchIntegration(BaseIntegration):
 
     async def scan(self, target: str, **kwargs) -> Dict[str, Any]:
         """Execute Dirsearch scan against the target.
-        
+
         Args:
             target: The target URL to scan
             **kwargs: Additional scan parameters
-            
+
         Returns:
             Dict containing scan results
-            
+
         Raises:
             ToolNotFoundError: If Dirsearch is not available
             Exception: For any other errors during scanning
@@ -216,7 +221,10 @@ class DirsearchIntegration(BaseIntegration):
             # Run the scan and get raw results
             scan_result = await self.run(
                 target,
-                options={"wordlist_size": kwargs.get("wordlist_size", "medium"), "verify_ssl": kwargs.get("verify_ssl", True)},
+                options={
+                    "wordlist_size": kwargs.get("wordlist_size", "medium"),
+                    "verify_ssl": kwargs.get("verify_ssl", True),
+                },
             )
 
             # Parse the results
@@ -227,7 +235,11 @@ class DirsearchIntegration(BaseIntegration):
                         "path": finding.url,
                         "status": finding.status_code,
                         "size": "unknown",
-                        "content_type": finding.description.split("Content-Type: ")[1] if "Content-Type: " in finding.description else "unknown"
+                        "content_type": (
+                            finding.description.split("Content-Type: ")[1]
+                            if "Content-Type: " in finding.description
+                            else "unknown"
+                        ),
                     }
                     for finding in findings or []
                 ]

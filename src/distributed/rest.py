@@ -429,9 +429,10 @@ def shutdown_app(app):
 def create_rest_client():
     """
     Create an HTTP client for REST API calls.
-    
+
     Returns:
         A client instance for making HTTP requests.
     """
     import requests
+
     return requests

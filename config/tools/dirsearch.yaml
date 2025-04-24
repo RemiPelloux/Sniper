@@ -1,0 +1,24 @@
+dirsearch:
+  binary: dirsearch
+  category: web
+  check_command: dirsearch -h
+  description: Advanced web path scanner for directory enumeration
+  documentation: https://github.com/maurosoria/dirsearch#readme
+  execution_time: medium
+  install:
+    git: git clone https://github.com/maurosoria/dirsearch.git && cd dirsearch && pip install -r requirements.txt
+    pip: pip install dirsearch
+  name: dirsearch
+  recommendation_score: 92
+  target_types:
+  - url
+  - domain
+  update:
+    git: cd dirsearch && git pull
+  website: https://github.com/maurosoria/dirsearch
+  options:
+    extensions: php,html,js,txt,bak,config,json,xml
+    recursive: true
+    exclude_status: 400,404,500-599
+    threads: 30
+    wordlist: default 

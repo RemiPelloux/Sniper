@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 class MasterClient:
     """Simple client to interact with the master node."""
-    
+
     def __init__(self, host: str = "localhost", port: int = 5000):
         """
         Initialize the master client.
-        
+
         Args:
             host: Master node host
             port: Master node port
@@ -30,23 +30,23 @@ class MasterClient:
         self.host = host
         self.port = port
         self._client = SniperClient(master_host=host, master_port=port)
-        
+
     def stop(self) -> bool:
         """
         Stop the master node.
-        
+
         Returns:
             True if successful, False otherwise
         """
-        # This is a placeholder - in a real implementation, 
+        # This is a placeholder - in a real implementation,
         # there would be a specific API call to stop the master
         logger.info(f"Stopping master node at {self.host}:{self.port}")
         return True
-        
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get the status of the master node.
-        
+
         Returns:
             Dictionary with status information
         """
@@ -59,22 +59,19 @@ class MasterClient:
             else:
                 return {
                     "status": "UNKNOWN",
-                    "error": "Could not connect to master node"
+                    "error": "Could not connect to master node",
                 }
         except Exception as e:
             logger.error(f"Error getting master status: {e}")
-            return {
-                "status": "ERROR",
-                "error": str(e)
-            }
-    
+            return {"status": "ERROR", "error": str(e)}
+
     def get_workers(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get list of workers connected to the master node.
-        
+
         Args:
             status: Optional status to filter workers by
-            
+
         Returns:
             List of worker information dictionaries
         """
@@ -92,21 +89,23 @@ class MasterClient:
             {
                 "id": "worker-2",
                 "hostname": "worker2.example.com",
-                "address": "192.168.1.102", 
+                "address": "192.168.1.102",
                 "status": "IDLE",
                 "capabilities": ["web_scan", "vuln_scan"],
                 "last_heartbeat": "2023-01-01T00:00:00Z",
             },
         ]
-    
-    def get_tasks(self, status: Optional[str] = None, task_type: Optional[str] = None) -> List[Dict[str, Any]]:
+
+    def get_tasks(
+        self, status: Optional[str] = None, task_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Get list of tasks managed by the master node.
-        
+
         Args:
             status: Optional status to filter tasks by
             task_type: Optional task type to filter by
-            
+
         Returns:
             List of task information dictionaries
         """
@@ -132,14 +131,14 @@ class MasterClient:
                 "priority": "MEDIUM",
             },
         ]
-    
+
     def cancel_task(self, task_id: str) -> bool:
         """
         Cancel a task.
-        
+
         Args:
             task_id: ID of the task to cancel
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -151,14 +150,14 @@ class MasterClient:
         except Exception as e:
             logger.error(f"Error canceling task {task_id}: {e}")
             return False
-    
+
     def get_task_info(self, task_id: str) -> Optional[Dict[str, Any]]:
         """
         Get detailed information about a task.
-        
+
         Args:
             task_id: ID of the task to get information for
-            
+
         Returns:
             Dictionary with task information
         """
@@ -175,7 +174,7 @@ class MasterClient:
                     "assigned_worker": "worker-1",
                     "created_at": "2023-01-01T00:00:00Z",
                     "completed_at": "2023-01-01T00:10:00Z",
-                    "result": result
+                    "result": result,
                 }
             else:
                 return None
@@ -187,12 +186,12 @@ class MasterClient:
 def create_master_client(host: str = "localhost", port: int = 5000) -> MasterClient:
     """
     Create a master client.
-    
+
     Args:
         host: Master node host
         port: Master node port
-        
+
     Returns:
         MasterClient instance
     """
-    return MasterClient(host=host, port=port) 
+    return MasterClient(host=host, port=port)

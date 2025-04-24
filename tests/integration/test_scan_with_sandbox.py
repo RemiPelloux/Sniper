@@ -5,8 +5,11 @@ These tests require Docker and docker-compose (v2) to be installed and running.
 They use the 'sandbox' plugin to manage test environments like DVWA.
 """
 
+# Add imports for checking ZAP prerequisites
+import importlib.util
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -21,9 +24,6 @@ from typer.testing import CliRunner
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 # from src.cli.main import app # May need the app if using CliRunner directly
 
-# Add imports for checking ZAP prerequisites
-import importlib.util
-import shutil
 
 # --- Constants ---
 SANDBOX_HOST = "127.0.0.1"  # Assume sandbox runs on localhost
@@ -86,7 +86,9 @@ def zap_prerequisites_met() -> bool:
     # Check for zaproxy Python package
     has_zap_api = importlib.util.find_spec("zaproxy") is not None
     # Check for zap executable
-    has_zap_executable = shutil.which("zap.sh") is not None or shutil.which("zap.bat") is not None
+    has_zap_executable = (
+        shutil.which("zap.sh") is not None or shutil.which("zap.bat") is not None
+    )
     return has_zap_api and has_zap_executable
 
 
@@ -141,6 +143,7 @@ def dvwa_sandbox():
 
 # --- Integration Tests ---
 
+
 @pytest.mark.skip(reason="Docker sandbox not properly configured in test environment")
 def test_scan_dvwa_nmap(dvwa_sandbox):
     """Run a simple nmap scan against the running DVWA sandbox."""
@@ -152,7 +155,8 @@ def test_scan_dvwa_nmap(dvwa_sandbox):
 
     # Run the scan command
     scan_result = run_sniper_command(
-        ["scan", "run", target_url, "-m", "ports", "-o", str(output_file), "--json"], timeout=180
+        ["scan", "run", target_url, "-m", "ports", "-o", str(output_file), "--json"],
+        timeout=180,
     )
 
     # Assertions
@@ -169,7 +173,7 @@ def test_scan_dvwa_nmap(dvwa_sandbox):
         # Skip port check - the Docker container might not have port 80 visible to nmap
         # Just check the JSON is valid
         print(f"Nmap scan results saved to: {output_file}")  # Indicate file is saved
-        
+
         # Note: In a real environment, we would expect to find port 80 for DVWA
         # but for testing purposes, we just ensure the scan completes successfully
         # and produces valid JSON output.
@@ -181,7 +185,7 @@ def test_scan_dvwa_nmap(dvwa_sandbox):
 
 @pytest.mark.skipif(
     not zap_prerequisites_met(),
-    reason="ZAP prerequisites not met (zaproxy package and/or ZAP executable not available)"
+    reason="ZAP prerequisites not met (zaproxy package and/or ZAP executable not available)",
 )
 def test_scan_dvwa_zap(dvwa_sandbox):
     """Run OWASP ZAP scan against the running DVWA sandbox and check for common vulns."""

@@ -6,17 +6,18 @@ distributed scanning system. It defines message formats, serialization,
 and the transport mechanisms for reliable communication.
 """
 
+import asyncio
 import json
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union, Callable
-import asyncio
-import threading
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Union
 
 if TYPE_CHECKING:
     from typing import Type
+
     from src.distributed.base import BaseNode
 
 logger = logging.getLogger("sniper.distributed.protocol")
@@ -463,7 +464,7 @@ class ProtocolBase:
 class RestProtocol(ProtocolBase):
     """REST protocol implementation for distributed communication."""
 
-    def __init__(self, node: 'BaseNode'):
+    def __init__(self, node: "BaseNode"):
         """
         Initialize REST protocol with a node reference.
 
@@ -472,7 +473,7 @@ class RestProtocol(ProtocolBase):
         """
         super().__init__(node)
         # For worker nodes connecting to a master node, include the master node's host/port
-        if hasattr(self.node, 'master_host') and hasattr(self.node, 'master_port'):
+        if hasattr(self.node, "master_host") and hasattr(self.node, "master_port"):
             self.base_url = f"http://{self.node.master_host}:{self.node.master_port}"
         else:
             # For master nodes, there is no base_url for outgoing requests
@@ -506,15 +507,15 @@ class RestProtocol(ProtocolBase):
             client = create_rest_client()
             endpoint = self._get_endpoint_for_message(message)
             response = client.post(
-                f"{self.base_url}/{endpoint}",
-                json=message.to_dict(),
-                timeout=30
+                f"{self.base_url}/{endpoint}", json=message.to_dict(), timeout=30
             )
-            
+
             if response.status_code >= 200 and response.status_code < 300:
                 return response.json()
             else:
-                logger.error(f"REST API error: {response.status_code} - {response.text}")
+                logger.error(
+                    f"REST API error: {response.status_code} - {response.text}"
+                )
                 return None
         except Exception as e:
             logger.error(f"Error sending REST message: {str(e)}")
@@ -534,45 +535,45 @@ class RestProtocol(ProtocolBase):
     def receive_message(self) -> Optional[ProtocolMessage]:
         """
         Receive a message. In REST, this is unused as it's handled by the server.
-        
+
         Returns:
             None as REST is request/response based
         """
         return None
-        
+
     def start_server(self, host: str, port: int, message_handler: Callable) -> bool:
         """
         Start the REST server for receiving messages.
-        
+
         Args:
             host: Host address to bind to
             port: Port to listen on
             message_handler: Callback for handling incoming messages
-            
+
         Returns:
             True if server started successfully
         """
-        from src.distributed.rest import run_app, create_master_app
-        
+        from src.distributed.rest import create_master_app, run_app
+
         try:
             # Create FastAPI app for master node
             app = create_master_app(self.node)
-            
+
             # Run in a separate thread without creating a new server
             thread, server = run_app(app, host, port)
             self.server_thread = thread
             self.server = server
-            
+
             logger.info(f"REST server started on {host}:{port}")
             return True
         except Exception as e:
             logger.error(f"Failed to start REST server: {str(e)}", exc_info=True)
             return False
-            
+
     def stop_server(self) -> bool:
         """
         Stop the REST server.
-        
+
         Returns:
             True if server stopped successfully
         """
@@ -603,7 +604,7 @@ def create_protocol(protocol_type: str, node) -> ProtocolBase:
         ValueError: If the protocol type is not supported
     """
     protocol_type = protocol_type.upper()
-    
+
     if protocol_type == "REST":
         return RestProtocol(node)
     elif protocol_type == "GRPC":

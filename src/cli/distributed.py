@@ -6,20 +6,20 @@ in the Sniper distributed scanning architecture.
 """
 
 import argparse
+import asyncio
 import json
 import logging
 import os
 import signal
 import sys
 import time
-import asyncio
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from src.core.logging import setup_logging
+from src.distributed.autodiscovery import get_discovery_manager
 from src.distributed.master import MasterNodeServer
 from src.distributed.worker import WorkerNodeClient
-from src.distributed.autodiscovery import get_discovery_manager
 
 # Configure logging
 logger = logging.getLogger("sniper.distributed.cli")
@@ -148,10 +148,10 @@ def auto_command(args):
     setup_logging(level=args.log_level.upper())
 
     logger.info("Starting Sniper distributed system with auto-discovery")
-    
+
     # Get the discovery manager with optional configuration
     discovery_manager = get_discovery_manager(args.config)
-    
+
     # Handle interrupts
     def signal_handler(sig, frame):
         logger.info("Shutting down distributed system...")
@@ -160,12 +160,12 @@ def auto_command(args):
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # Start the discovery manager which will start master and workers
     if discovery_manager.start():
         logger.info("Distributed system started successfully")
         logger.info("Press Ctrl+C to stop")
-        
+
         # Keep the process running
         try:
             while True:
@@ -176,7 +176,7 @@ def auto_command(args):
     else:
         logger.error("Failed to start distributed system")
         return 1
-        
+
     return 0
 
 
@@ -204,9 +204,7 @@ def main() -> int:
     auto_parser = subparsers.add_parser(
         "auto", help="Start a complete distributed system with auto-discovery"
     )
-    auto_parser.add_argument(
-        "--config", help="Path to configuration file"
-    )
+    auto_parser.add_argument("--config", help="Path to configuration file")
     auto_parser.set_defaults(func=auto_command)
 
     # Master node command

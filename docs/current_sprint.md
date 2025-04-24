@@ -606,7 +606,9 @@ Status: **Completed** (March 2024)
   - [ ] Support multiple languages in web dashboard
 
 - [ ] Security Tool Integration
-  - [ ] Set up Docker images for DIRSEARCH and SUBLIST3R
+  - [x] Configure Dirsearch with proper YAML configuration
+  - [x] Implement Subfinder integration for subdomain enumeration
+  - [x] Set up Docker images for security tools (Dirsearch, Subfinder)
   - [ ] Improve tool discovery and integration mechanisms
   - [ ] Add fallback mechanisms when tools are unavailable
 

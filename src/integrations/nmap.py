@@ -5,11 +5,10 @@ import re
 import tempfile
 from typing import Any, Dict, List, Optional
 
+from src.core.config import settings
 from src.integrations.base import ToolIntegration, ToolIntegrationError
 from src.integrations.docker_utils import ensure_tool_available
-from src.integrations.executors import SubprocessExecutor, ExecutionResult
-from src.results.types import BaseFinding, PortFinding, FindingSeverity
-from src.core.config import settings
+from src.integrations.executors import ExecutionResult, SubprocessExecutor
 
 # Import the specific finding models
 from src.results.types import BaseFinding, FindingSeverity, PortFinding
@@ -32,21 +31,25 @@ class NmapIntegration(ToolIntegration):
                      If not provided, a new one will be created.
         """
         self._executor = executor or SubprocessExecutor()
-        
+
         # Try to find Nmap using our tool availability checker
         is_available, nmap_path = ensure_tool_available("nmap")
         if is_available:
             self._nmap_path = nmap_path
         else:
             self._nmap_path = None
-            log.warning("Nmap executable not found. Docker fallback will be used if needed.")
+            log.warning(
+                "Nmap executable not found. Docker fallback will be used if needed."
+            )
 
     @property
     def tool_name(self) -> str:
         """Return the name of the tool for this integration."""
         return "nmap"
 
-    async def run(self, target: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def run(
+        self, target: str, options: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Run Nmap scan against a target.
 
         Args:
@@ -64,17 +67,19 @@ class NmapIntegration(ToolIntegration):
             Dictionary with scan results
         """
         log.info(f"Running Nmap scan on {target}...")
-        
+
         # Ensure we have an Nmap executable, either native or Docker fallback
         if not self._nmap_path:
             is_available, nmap_path = ensure_tool_available("nmap")
             if is_available:
                 self._nmap_path = nmap_path
             else:
-                raise ToolIntegrationError("Nmap executable not found and Docker fallback failed")
-                
+                raise ToolIntegrationError(
+                    "Nmap executable not found and Docker fallback failed"
+                )
+
         options = options or {}
-        
+
         # Create a temporary file for XML output
         with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as temp_xml:
             xml_output_file = temp_xml.name
@@ -82,15 +87,15 @@ class NmapIntegration(ToolIntegration):
         try:
             # Base command
             cmd = [self._nmap_path]
-            
+
             # Add XML output
             cmd.extend(["-oX", xml_output_file])
-            
+
             # Handle port specification
             if "ports" in options:
                 ports = options["ports"]
                 cmd.extend(["-p", ports])
-            
+
             # Handle scan type
             if "scan_type" in options:
                 scan_type = options["scan_type"].upper()
@@ -100,62 +105,63 @@ class NmapIntegration(ToolIntegration):
                     cmd.append("-sT")
                 elif scan_type == "UDP":
                     cmd.append("-sU")
-            
+
             # Handle timing template
             if "timing" in options:
                 timing = int(options["timing"])
                 if 0 <= timing <= 5:
                     cmd.append(f"-T{timing}")
-            
+
             # Handle service and OS detection
             if options.get("service_detection", False):
                 cmd.append("-sV")
-            
+
             if options.get("os_detection", False):
                 cmd.append("-O")
-            
+
             # Handle scripts
             if "script" in options:
                 cmd.extend(["--script", options["script"]])
-            
+
             # Add any raw arguments
             if "args" in options:
                 if isinstance(options["args"], list):
                     cmd.extend(options["args"])
                 else:
                     cmd.append(options["args"])
-            
+
             # Add the target
             cmd.append(target)
-            
+
             # Run the nmap scan
             result = await self._executor.execute(cmd)
-            
+
             if result.return_code != 0:
                 log.error(f"Nmap scan failed: {result.stderr}")
                 return {"error": result.stderr}
-            
+
             # Read the XML output
             with open(xml_output_file, "r") as f:
                 xml_output = f.read()
-            
+
             log.info(f"Nmap scan completed for {target}.")
-            
+
             return {
                 "xml_output": xml_output,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "return_code": result.return_code
+                "return_code": result.return_code,
             }
-        
+
         except Exception as e:
             log.exception(f"Error running Nmap scan: {e}")
             raise ToolIntegrationError(f"Nmap scan failed: {str(e)}")
-        
+
         finally:
             # Clean up the temporary file
             try:
                 import os
+
                 os.unlink(xml_output_file)
             except Exception as e:
                 log.warning(f"Failed to delete temporary XML file: {e}")
@@ -170,12 +176,12 @@ class NmapIntegration(ToolIntegration):
             List of BaseFinding objects or None if no findings
         """
         findings: List[BaseFinding] = []
-        
+
         # Check if scan errored out
         if "error" in raw_output:
             log.error(f"Cannot parse Nmap output due to error: {raw_output['error']}")
             return None
-            
+
         if "xml_output" not in raw_output:
             log.error("No XML output found in Nmap results")
             return None
@@ -184,24 +190,24 @@ class NmapIntegration(ToolIntegration):
         xml_output = raw_output["xml_output"]
         # Simple regex to extract port information - in production, use a proper XML parser
         port_pattern = r'<port protocol="(\w+)" portid="(\d+)"><state state="open".*?<service name="([^"]*)"'
-        
+
         port_matches = re.findall(port_pattern, xml_output)
-        
+
         if not port_matches:
             log.info("No open ports found or parsed from Nmap output.")
             return None
-            
+
         # Create finding objects for each open port
         for protocol, port, service in port_matches:
             port_num = int(port)
-            
+
             # Determine severity based on port/service
             severity = FindingSeverity.INFO
             if service in ["ssh", "telnet", "ftp"]:
                 severity = FindingSeverity.LOW
             elif port_num in [22, 23, 21, 445, 3389]:
                 severity = FindingSeverity.LOW
-                
+
             # Create the finding
             finding = PortFinding(
                 title=f"Open Port: {port}/{protocol}",
@@ -211,11 +217,11 @@ class NmapIntegration(ToolIntegration):
                 port=port_num,
                 protocol=protocol,
                 service=service or "unknown",
-                raw_evidence=f"Port {port}/{protocol} is open running {service or 'unknown'}"
+                raw_evidence=f"Port {port}/{protocol} is open running {service or 'unknown'}",
             )
-            
+
             findings.append(finding)
-            
+
         return findings
 
     def _extract_target_from_command(self, command_str: str) -> str | None:
@@ -277,13 +283,13 @@ class NmapIntegration(ToolIntegration):
         if self._nmap_path:
             log.debug(f"Found nmap executable at: {self._nmap_path}")
             return True
-            
+
         # Try to setup Docker fallback
         is_available, nmap_path = ensure_tool_available("nmap")
         if is_available:
             self._nmap_path = nmap_path
             log.info(f"Using Docker fallback for nmap at: {nmap_path}")
             return True
-            
+
         log.error("Nmap executable not found in PATH and Docker fallback failed.")
         return False

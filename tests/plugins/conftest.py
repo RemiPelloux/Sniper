@@ -1,7 +1,7 @@
 import os
 import sys
-import pytest
 from pathlib import Path
 
-# Add specific fixtures for plugins tests here
+import pytest
 
+# Add specific fixtures for plugins tests here

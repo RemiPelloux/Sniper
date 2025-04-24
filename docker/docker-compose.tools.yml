@@ -1,0 +1,27 @@
+services:
+  dirsearch:
+    build:
+      context: ./dirsearch
+    volumes:
+      - ../data:/data
+    tty: true
+    stdin_open: true
+    command: --help
+    networks:
+      - sniper-network
+
+  subfinder:
+    build:
+      context: ./subfinder
+    volumes:
+      - ../data:/data
+      - ~/.config/subfinder:/root/.config/subfinder
+    tty: true
+    stdin_open: true
+    command: -h
+    networks:
+      - sniper-network
+
+networks:
+  sniper-network:
+    driver: bridge 

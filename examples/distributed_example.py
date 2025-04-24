@@ -35,28 +35,28 @@ async def run_example():
     """Run the distributed system example."""
     # Step 1: Start the distributed system
     logger.info("Starting distributed system...")
-    
+
     # Get the discovery manager (singleton)
     discovery_manager = get_discovery_manager()
-    
+
     # Start master node and auto-discovery (will auto-start workers)
     if not discovery_manager.start():
         logger.error("Failed to start distributed system")
         return
-    
+
     logger.info("Distributed system started")
     logger.info("Waiting for workers to register...")
-    
+
     # Give workers time to register with master
     await asyncio.sleep(5)
-    
+
     try:
         # Step 2: Submit some example tasks
         logger.info("Submitting example tasks...")
-        
+
         # Get the API client
         api = get_distributed_api()
-        
+
         # Submit an autonomous testing task
         task1_id = await api.submit_autonomous_test(
             target_url="https://example.com",
@@ -65,7 +65,7 @@ async def run_example():
             wait_for_result=False,
         )
         logger.info(f"Submitted autonomous test task with ID: {task1_id}")
-        
+
         # Submit a vulnerability scanning task
         task2_id = await api.submit_vulnerability_scan(
             target={"url": "https://example.org"},
@@ -74,7 +74,7 @@ async def run_example():
             wait_for_result=False,
         )
         logger.info(f"Submitted vulnerability scan task with ID: {task2_id}")
-        
+
         # Submit a reconnaissance task
         task3_id = await api.submit_recon_task(
             target={"domain": "example.net"},
@@ -83,31 +83,34 @@ async def run_example():
             wait_for_result=False,
         )
         logger.info(f"Submitted reconnaissance task with ID: {task3_id}")
-        
+
         # Step 3: Wait for and retrieve results
         logger.info("Waiting for task results...")
-        
+
         # Check status periodically
         for _ in range(30):  # Wait up to 30 seconds
             # Get status of all tasks
             status1 = await api.check_task_status(task1_id)
             status2 = await api.check_task_status(task2_id)
             status3 = await api.check_task_status(task3_id)
-            
+
             logger.info(f"Task statuses: {status1}, {status2}, {status3}")
-            
+
             # If all tasks are done, break
-            if all(status in ["COMPLETED", "FAILED", "CANCELLED"] 
-                  for status in [status1, status2, status3] if status):
+            if all(
+                status in ["COMPLETED", "FAILED", "CANCELLED"]
+                for status in [status1, status2, status3]
+                if status
+            ):
                 break
-                
+
             await asyncio.sleep(1)
-        
+
         # Retrieve results
         result1 = await api.get_task_result(task1_id)
         result2 = await api.get_task_result(task2_id)
         result3 = await api.get_task_result(task3_id)
-        
+
         # Display results (if available)
         if result1:
             logger.info(f"Task 1 result: {json.dumps(result1, indent=2)}")
@@ -115,11 +118,11 @@ async def run_example():
             logger.info(f"Task 2 result: {json.dumps(result2, indent=2)}")
         if result3:
             logger.info(f"Task 3 result: {json.dumps(result3, indent=2)}")
-        
+
         # Get active workers
         workers = await api.get_active_workers()
         logger.info(f"Active workers: {len(workers)}")
-        
+
     except Exception as e:
         logger.error(f"Error during example execution: {str(e)}")
     finally:
@@ -136,9 +139,9 @@ if __name__ == "__main__":
         discovery_manager = get_discovery_manager()
         discovery_manager.stop()
         sys.exit(0)
-        
+
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # Run the example
-    asyncio.run(run_example()) 
+    asyncio.run(run_example())

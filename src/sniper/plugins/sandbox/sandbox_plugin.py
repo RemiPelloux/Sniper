@@ -58,16 +58,16 @@ class SandboxPlugin(PluginInterface):
             logger.info("Unloading Sandbox Plugin...")
         except ValueError:
             print("Unloading Sandbox Plugin...")
-            
+
         # Comment this out to prevent stopping environments when unloading the plugin
         # for env_name in SANDBOX_ENVIRONMENTS:
         #     self._stop_environment(env_name, silent=True)
-        
+
         try:
             logger.info("Sandbox Plugin unloaded.")
         except ValueError:
             print("Sandbox Plugin unloaded.")
-            
+
         return True
 
     def register_cli_commands(self, cli_app):

@@ -126,11 +126,11 @@ def normalize_features(
             # Special handling for url_depth (divide by 10 to get 0-1 range)
             elif name == "url_depth":
                 normalized_features[name] = min(1.0, value / 10.0)
-                
+
             # Special handling for param_count (divide by 20 to get 0-1 range)
             elif name == "param_count":
                 normalized_features[name] = min(1.0, value / 20.0)
-                
+
             # Special handling for risk values (already 0-5 typically)
             elif name.endswith("_risk"):
                 normalized_features[name] = min(1.0, value / 5.0)
@@ -313,91 +313,122 @@ def extract_finding_features(finding: Any) -> Dict[str, float]:
 def extract_features(target_data: Dict[str, Any]) -> Dict[str, float]:
     """
     Extract features from target data for vulnerability prediction.
-    
+
     Args:
-        target_data: Dictionary containing target information, such as URL, 
+        target_data: Dictionary containing target information, such as URL,
                     parameters, technologies, etc.
-    
+
     Returns:
         Dictionary of feature names and their numerical values
     """
     features: Dict[str, float] = {}
-    
+
     # URL-related features
-    url = target_data.get('url', '')
+    url = target_data.get("url", "")
     if url:
-        from urllib.parse import urlparse, parse_qs
-        
+        from urllib.parse import parse_qs, urlparse
+
         # Parse URL
         parsed_url = urlparse(url)
-        
+
         # Extract path depth
-        path_parts = parsed_url.path.strip('/').split('/')
-        features['url_depth'] = float(len(path_parts))
-        
+        path_parts = parsed_url.path.strip("/").split("/")
+        features["url_depth"] = float(len(path_parts))
+
         # Parameter count
         query_params = parse_qs(parsed_url.query)
-        features['param_count'] = float(len(query_params))
-        
+        features["param_count"] = float(len(query_params))
+
         # Check for high-risk paths
-        high_risk_paths = ['admin', 'login', 'config', 'setup', 'install', 'phpinfo', 
-                          'backup', 'wp-admin', 'administrator', 'manage']
+        high_risk_paths = [
+            "admin",
+            "login",
+            "config",
+            "setup",
+            "install",
+            "phpinfo",
+            "backup",
+            "wp-admin",
+            "administrator",
+            "manage",
+        ]
         path_risk = 0.0
         for segment in path_parts:
             if segment.lower() in high_risk_paths:
                 path_risk += 1.0
-        features['path_risk'] = path_risk
-        
+        features["path_risk"] = path_risk
+
         # Check for high-risk parameters
-        high_risk_params = ['id', 'file', 'page', 'redirect', 'url', 'path', 'exec', 
-                           'cmd', 'password', 'pass', 'key', 'token', 'auth']
+        high_risk_params = [
+            "id",
+            "file",
+            "page",
+            "redirect",
+            "url",
+            "path",
+            "exec",
+            "cmd",
+            "password",
+            "pass",
+            "key",
+            "token",
+            "auth",
+        ]
         param_risk = 0.0
         for param in query_params:
             if param.lower() in high_risk_params:
                 param_risk += 1.0
-        features['param_risk'] = param_risk
+        features["param_risk"] = param_risk
     else:
-        features['url_depth'] = 0.0
-        features['param_count'] = 0.0
-        features['path_risk'] = 0.0
-        features['param_risk'] = 0.0
-    
+        features["url_depth"] = 0.0
+        features["param_count"] = 0.0
+        features["path_risk"] = 0.0
+        features["param_risk"] = 0.0
+
     # Authentication features
-    auth_headers = target_data.get('headers', {}).get('Authorization', '')
-    features['has_auth'] = 1.0 if auth_headers else 0.0
-    
+    auth_headers = target_data.get("headers", {}).get("Authorization", "")
+    features["has_auth"] = 1.0 if auth_headers else 0.0
+
     # Content type risk
-    content_type = target_data.get('headers', {}).get('Content-Type', '').lower()
+    content_type = target_data.get("headers", {}).get("Content-Type", "").lower()
     content_type_risk = 0.0
-    high_risk_content = ['application/json', 'application/xml', 'multipart/form-data']
+    high_risk_content = ["application/json", "application/xml", "multipart/form-data"]
     for risk_type in high_risk_content:
         if risk_type in content_type:
             content_type_risk += 1.0
-    features['content_type_risk'] = content_type_risk
-    
+    features["content_type_risk"] = content_type_risk
+
     # Technology risk
-    technologies = target_data.get('technologies', [])
+    technologies = target_data.get("technologies", [])
     tech_risk = 0.0
-    high_risk_tech = ['wordpress', 'php', 'joomla', 'drupal', 'magento', 'apache', 'iis']
+    high_risk_tech = [
+        "wordpress",
+        "php",
+        "joomla",
+        "drupal",
+        "magento",
+        "apache",
+        "iis",
+    ]
     for tech in technologies:
-        tech_lower = tech.lower() if isinstance(tech, str) else ''
+        tech_lower = tech.lower() if isinstance(tech, str) else ""
         for risk_tech in high_risk_tech:
             if risk_tech in tech_lower:
                 tech_risk += 1.0
-    features['technology_risk'] = tech_risk
-    
+    features["technology_risk"] = tech_risk
+
     # If vulnerability scan data is available
-    if 'scan_results' in target_data:
-        scan_results = target_data.get('scan_results', {})
-        
+    if "scan_results" in target_data:
+        scan_results = target_data.get("scan_results", {})
+
         # Extract text features from scan results if available
-        if isinstance(scan_results, dict) and 'description' in scan_results:
-            text_features = extract_text_features(scan_results['description'])
+        if isinstance(scan_results, dict) and "description" in scan_results:
+            text_features = extract_text_features(scan_results["description"])
             features.update(text_features)
-            
+
         # Add severity as a feature if available
-        if 'severity' in scan_results:
-            severity = scan_results['severity']
-            features['severity_value'] = get_severity_value(severity)
-    
+        if "severity" in scan_results:
+            severity = scan_results["severity"]
+            features["severity_value"] = get_severity_value(severity)
+
     return features

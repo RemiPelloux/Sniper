@@ -121,7 +121,7 @@ class TestWappalyzerIntegration:
         """Test a successful run of Wappalyzer."""
         # Create the expected output for the test
         expected_json = MOCK_SUCCESS_OUTPUT_DICT
-        
+
         # Create a success result for the executor
         # The JSON will be provided by mocking the file read operation
         executor_result = ExecutionResult(
@@ -131,24 +131,31 @@ class TestWappalyzerIntegration:
             stderr="",
             timed_out=False,
         )
-        
+
         # Mock the executor to return our result
-        wappalyzer_integration._executor.execute = AsyncMock(return_value=executor_result)
-        
+        wappalyzer_integration._executor.execute = AsyncMock(
+            return_value=executor_result
+        )
+
         # Create a fully mocked context for the tempfile operations
         mock_tempfile = MagicMock()
         mock_file = MagicMock()
         mock_file.read.return_value = expected_json
-        
+
         # Patch all necessary functions
-        with patch("tempfile.NamedTemporaryFile", return_value=mock_tempfile), \
-             patch("builtins.open", MagicMock(return_value=MagicMock(__enter__=MagicMock(return_value=mock_file)))), \
-             patch("os.unlink"):  # Mock os.unlink to prevent file deletion errors
-            
+        with patch("tempfile.NamedTemporaryFile", return_value=mock_tempfile), patch(
+            "builtins.open",
+            MagicMock(
+                return_value=MagicMock(__enter__=MagicMock(return_value=mock_file))
+            ),
+        ), patch(
+            "os.unlink"
+        ):  # Mock os.unlink to prevent file deletion errors
+
             # Run the function under test
             target_url = "https://example.com"
             result = await wappalyzer_integration.run(target_url)
-            
+
             # Verify the core behavior
             assert wappalyzer_integration._executor.execute.called
             assert result.stdout == expected_json
@@ -173,17 +180,21 @@ class TestWappalyzerIntegration:
 
         # Verify the executor was called
         cast(AsyncMock, wappalyzer_integration._executor.execute).assert_called_once()
-        
+
         # Check parameters in first call - target and options should be used correctly
-        call_args = cast(AsyncMock, wappalyzer_integration._executor.execute).call_args[0][0]
+        call_args = cast(AsyncMock, wappalyzer_integration._executor.execute).call_args[
+            0
+        ][0]
         assert MOCK_WAPPALYZER_EXEC in call_args[0]
         assert target_url in call_args
         assert "fast" in call_args  # scan_type
         assert "3" in call_args  # threads value
-        
-        timeout_arg = cast(AsyncMock, wappalyzer_integration._executor.execute).call_args[1]['timeout_seconds']
+
+        timeout_arg = cast(
+            AsyncMock, wappalyzer_integration._executor.execute
+        ).call_args[1]["timeout_seconds"]
         assert timeout_arg == 1
-        
+
         assert result.timed_out is True
 
     @pytest.mark.asyncio
@@ -205,11 +216,13 @@ class TestWappalyzerIntegration:
 
         # Verify the executor was called
         cast(AsyncMock, wappalyzer_integration._executor.execute).assert_called_once()
-        
+
         # Check that the target URL was passed correctly
-        call_args = cast(AsyncMock, wappalyzer_integration._executor.execute).call_args[0][0]
+        call_args = cast(AsyncMock, wappalyzer_integration._executor.execute).call_args[
+            0
+        ][0]
         assert target_url in call_args
-        
+
         assert result.return_code == 1
         assert "Some error message" in result.stderr
 

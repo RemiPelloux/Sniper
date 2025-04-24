@@ -14,6 +14,7 @@ from src.integrations.docker_utils import (
 from src.integrations.executors import BaseExecutor, ExecutionResult, SubprocessExecutor
 from src.integrations.nmap import NmapIntegration
 from src.integrations.owasp_zap import ZapIntegration
+from src.integrations.subfinder import SubfinderIntegration
 from src.integrations.sublist3r import Sublist3rIntegration
 from src.integrations.wappalyzer import WappalyzerIntegration
 
@@ -28,6 +29,7 @@ __all__ = [
     "DirsearchIntegration",
     "NmapIntegration",
     "Sublist3rIntegration",
+    "SubfinderIntegration",
     "WappalyzerIntegration",
     "ZapIntegration",
     # Docker utilities
