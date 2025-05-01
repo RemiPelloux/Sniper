@@ -33,6 +33,7 @@ from src.integrations.nmap import NmapIntegration
 from src.integrations.wappalyzer import WappalyzerIntegration
 from src.integrations.zap import ZAPIntegration
 from src.results.normalizer import ResultNormalizer
+from src.results.types import FindingSeverity
 
 # Initialize logger
 log = logging.getLogger(__name__)
@@ -466,26 +467,46 @@ async def run_technology_scan(
     log.info(f"Starting technology scan on {target}")
 
     try:
-        wappalyzer = WappalyzerIntegration(
-            verify_ssl=not ignore_ssl,
-            options=tool_options.get("wappalyzer", {}) if tool_options else {},
-        )
+        wappalyzer = WappalyzerIntegration()
 
-        results = await wappalyzer.scan(target)
+        # Get any Wappalyzer-specific options
+        wappalyzer_options = tool_options.get("wappalyzer", {}) if tool_options else {}
+        
+        # Run the scan with verify_ssl parameter
+        results = await wappalyzer.scan(target, verify_ssl=not ignore_ssl)
         findings = []
 
-        for tech in results.get("technologies", []):
-            finding = Finding(
-                title=f"Technology Detected: {tech['name']}",
-                description=f"Version: {tech.get('version', 'Unknown')}\n"
-                f"Categories: {', '.join(tech.get('categories', []))}",
-                severity=Severity.INFO,
-                confidence=tech.get("confidence", 100),
-                target=target,
-                tool="wappalyzer",
-                raw_data=tech,
-            )
-            findings.append(finding)
+        # Check if results is a list (newer version) or a dict (older version)
+        if isinstance(results, dict) and "technologies" in results:
+            # Handle as dict with technologies key
+            for tech in results.get("technologies", []):
+                finding = Finding(
+                    title=f"Technology Detected: {tech['name']}",
+                    description=f"Version: {tech.get('version', 'Unknown')}\n"
+                    f"Categories: {', '.join(tech.get('categories', []))}",
+                    severity=Severity.INFO,
+                    confidence=tech.get("confidence", 100),
+                    target=target,
+                    tool="wappalyzer",
+                    raw_data=tech,
+                )
+                findings.append(finding)
+        elif isinstance(results, list):
+            # Handle as list of findings
+            for tech in results:
+                finding = Finding(
+                    title=f"Technology Detected: {tech.technology_name if hasattr(tech, 'technology_name') else 'Unknown'}",
+                    description=f"Version: {tech.version if hasattr(tech, 'version') else 'Unknown'}\n"
+                    f"Categories: {', '.join(tech.categories) if hasattr(tech, 'categories') else 'Unknown'}",
+                    severity=Severity.INFO,
+                    confidence=100,
+                    target=target,
+                    tool="wappalyzer",
+                    raw_data=tech.__dict__ if hasattr(tech, "__dict__") else {},
+                )
+                findings.append(finding)
+        else:
+            log.warning(f"Unexpected Wappalyzer results format: {type(results)}")
 
         return findings
 
@@ -525,13 +546,26 @@ async def run_subdomain_scan(
                 if not tool_class:
                     continue
 
+                # Initialize without verify_ssl param
                 tool = tool_class(
-                    verify_ssl=not ignore_ssl, options=tools_config.get(tool_name, {})
+                    options=tools_config.get(tool_name, {})
                 )
 
-                subdomains = await tool.scan(
-                    target, max_results=max_subdomains, timeout=timeout
-                )
+                # Pass verify_ssl to scan method if supported
+                try:
+                    subdomains = await tool.scan(
+                        target, 
+                        max_results=max_subdomains, 
+                        timeout=timeout,
+                        verify_ssl=not ignore_ssl
+                    )
+                except TypeError:
+                    # If verify_ssl is not supported, call without it
+                    subdomains = await tool.scan(
+                        target, 
+                        max_results=max_subdomains, 
+                        timeout=timeout
+                    )
 
                 for subdomain in subdomains:
                     finding = Finding(
@@ -571,45 +605,49 @@ async def run_port_scan(
 
         # Configure scan parameters based on depth
         if depth == ScanDepth.QUICK:
-            ports = "top-100"
+            ports = "80,443,8080,8443"  # Common web ports for quick scan
             timing = 4
         elif depth == ScanDepth.COMPREHENSIVE:
-            ports = "1-65535"
+            ports = "1-65535"  # All ports
             timing = 4
         else:  # STANDARD
-            ports = "top-1000"
+            ports = "1-1000"  # First 1000 ports
             timing = 3
 
-        nmap = NmapIntegration(
-            options={
-                **nmap_config,
-                "ports": nmap_config.get("ports", ports),
-                "timing": nmap_config.get("timing", timing),
-            }
-        )
-
-        results = await nmap.scan(target)
+        # Initialize NmapIntegration without options parameter
+        nmap = NmapIntegration()
+        
+        # Extract hostname from target URL
+        import re
+        hostname = re.sub(r'^https?://', '', target)
+        hostname = hostname.split('/')[0]  # Remove any path component
+        
+        # Call scan with just the ports parameter
+        port_findings = await nmap.scan(hostname, ports=ports)
+        
+        # Convert PortFinding objects to our Finding model
         findings = []
-
-        for host in results.get("hosts", []):
-            for port in host.get("ports", []):
-                service = port.get("service", {})
-                finding = Finding(
-                    title=f"Open Port: {port['port']}/{port['protocol']}",
-                    description=(
-                        f"Service: {service.get('name', 'unknown')}\n"
-                        f"Version: {service.get('version', 'unknown')}\n"
-                        f"State: {port.get('state', 'unknown')}"
-                    ),
-                    severity=(
-                        Severity.LOW if port["port"] in [80, 443] else Severity.MEDIUM
-                    ),
-                    confidence=90,
-                    target=f"{target}:{port['port']}",
-                    tool="nmap",
-                    raw_data=port,
-                )
-                findings.append(finding)
+        for finding in port_findings:
+            finding_dict = {}
+            if hasattr(finding, "__dict__"):
+                finding_dict = finding.__dict__.copy()
+            elif hasattr(finding, "dict"):
+                # Use dict method if available
+                try:
+                    finding_dict = finding.dict()
+                except:
+                    pass
+            
+            finding = Finding(
+                title=finding.title,
+                description=finding.description,
+                severity=Severity.MEDIUM if finding.severity == FindingSeverity.MEDIUM else Severity.LOW,
+                confidence=90,
+                target=f"{target}:{finding.port}",
+                tool="nmap",
+                raw_data=finding_dict
+            )
+            findings.append(finding)
 
         return findings
 
@@ -703,8 +741,8 @@ async def run_directory_scan(
             wordlist = "standard.txt"
             threads = 20
 
+        # Initialize DirsearchIntegration without verify_ssl parameter
         dirsearch = DirsearchIntegration(
-            verify_ssl=not ignore_ssl,
             options={
                 **dirsearch_config,
                 "wordlist": dirsearch_config.get("wordlist", wordlist),
@@ -712,7 +750,8 @@ async def run_directory_scan(
             },
         )
 
-        results = await dirsearch.scan(target)
+        # Pass verify_ssl to scan method
+        results = await dirsearch.scan(target, verify_ssl=not ignore_ssl)
         findings = []
 
         for entry in results.get("entries", []):
@@ -806,6 +845,13 @@ def output_scan_results(
 ) -> None:
     """Output scan results to console and/or file."""
     try:
+        # Debug output to see what's in the findings
+        for target, target_findings in findings.items():
+            log.info(f"Findings for target {target}: {len(target_findings)}")
+            for i, finding in enumerate(target_findings):
+                log.info(f"Finding {i}: {type(finding)}")
+                log.info(f"Finding {i} attributes: {dir(finding)}")
+        
         # Process and normalize findings
         normalizer = ResultNormalizer()
         all_findings = []
@@ -813,19 +859,29 @@ def output_scan_results(
             all_findings.extend(target_findings)
 
         correlated_findings = normalizer.correlate_findings(all_findings)
+        log.info(f"After correlation, have findings for {len(correlated_findings)} targets")
+        
+        # Flatten all findings
+        flattened_findings = []
+        for target, target_findings in correlated_findings.items():
+            flattened_findings.extend(target_findings)
+        
+        log.info(f"Total findings after flattening: {len(flattened_findings)}")
 
         # Console output
         console.print("\nScan Results Summary:", style="bold blue")
-
-        # Group findings by severity
-        findings_by_severity = {}
-        for finding in correlated_findings:
-            findings_by_severity.setdefault(finding.severity, []).append(finding)
 
         # Display summary table
         table = Table(title="Findings by Severity")
         table.add_column("Severity", style="bold")
         table.add_column("Count")
+
+        # Group findings by severity
+        findings_by_severity = {}
+        for i, finding in enumerate(flattened_findings):
+            log.info(f"Processing finding {i}: {type(finding)}")
+            log.info(f"Finding {i} severity: {type(finding.severity)}")
+            findings_by_severity.setdefault(finding.severity, []).append(finding)
 
         for severity in Severity:
             count = len(findings_by_severity.get(severity, []))
@@ -844,7 +900,7 @@ def output_scan_results(
                 # JSON output
                 with output_file.open("w") as f:
                     json.dump(
-                        [finding.model_dump() for finding in correlated_findings],
+                        [finding.model_dump() for finding in flattened_findings],
                         f,
                         indent=2,
                     )

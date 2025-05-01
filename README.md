@@ -86,17 +86,17 @@ Built with a modular architecture, Sniper orchestrates specialized security tool
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/sniper.git
+git clone https://github.com/security-labs/sniper.git
 cd sniper
 
 # Install with Poetry
 poetry install
 
 # Run a basic scan
-poetry run sniper scan run --target example.com
+poetry run sniper scan run --target https://example.org
 
 # Generate a report
-poetry run sniper report data/results/example.com_*.json --format html
+poetry run sniper report data/results/example.org_*.json --format html
 ```
 
 ## Installation
@@ -108,7 +108,7 @@ poetry run sniper report data/results/example.com_*.json --format html
 docker compose up -d
 
 # Run a scan
-docker compose run --rm sniper scan run --target example.com
+docker compose run --rm sniper scan run --target https://example.org
 ```
 
 ### Manual Installation
@@ -123,7 +123,7 @@ docker compose run --rm sniper scan run --target example.com
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-username/sniper.git
+   git clone https://github.com/security-labs/sniper.git
    cd sniper
    ```
 
@@ -151,13 +151,13 @@ Sniper can use many external security tools. You have three options:
 
 ```bash
 # Run a basic scan against a target
-poetry run sniper scan run --target example.com
+poetry run sniper scan run --target https://example.org
 
 # Specify output file
-poetry run sniper scan run --target example.com --output my-scan-results.json
+poetry run sniper scan run --target https://example.org --output my-scan-results.json
 
 # Use specific modules
-poetry run sniper scan run --target example.com --module ports,web,subdomains
+poetry run sniper scan run --target https://example.org --module ports,web,subdomains
 ```
 
 ### Viewing Results
@@ -197,8 +197,8 @@ Sniper supports predefined scan modes for different scenarios:
 poetry run sniper scan modes
 
 # Use a specific scan mode
-poetry run sniper scan run --target example.com --mode stealth
-poetry run sniper scan run --target example.com --mode comprehensive
+poetry run sniper scan run --target https://example.org --mode stealth
+poetry run sniper scan run --target https://example.org --mode comprehensive
 ```
 
 Available modes include:
@@ -217,10 +217,10 @@ Sniper's distributed architecture allows you to scale your scanning capabilities
 poetry run sniper distributed master start --host 0.0.0.0 --port 5000
 
 # Start a worker node
-poetry run sniper distributed worker start --master example.com:5000 --capabilities web,ports,subdomains
+poetry run sniper distributed worker start --master scanner.example.org:5000 --capabilities web,ports,subdomains
 
 # Submit a task to the distributed system
-poetry run sniper distributed tasks submit --target example.com --type scan --priority high
+poetry run sniper distributed tasks submit --target https://example.org --type scan --priority high
 
 # List workers connected to the master
 poetry run sniper distributed workers list

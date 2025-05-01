@@ -3,6 +3,7 @@
 import logging
 import re
 import tempfile
+import os
 from typing import Any, Dict, List, Optional
 
 from src.core.config import settings
@@ -80,8 +81,11 @@ class NmapIntegration(ToolIntegration):
 
         options = options or {}
 
-        # Create a temporary file for XML output
-        with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as temp_xml:
+        # Create a temporary file for XML output, ensuring parent directory exists
+        temp_dir = tempfile.gettempdir()
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        with tempfile.NamedTemporaryFile(dir=temp_dir, suffix=".xml", delete=False) as temp_xml:
             xml_output_file = temp_xml.name
 
         try:
@@ -134,11 +138,14 @@ class NmapIntegration(ToolIntegration):
             cmd.append(target)
 
             # Run the nmap scan
+            log.info(f"Running Nmap command: {' '.join(cmd)}")
             result = await self._executor.execute(cmd)
 
             if result.return_code != 0:
                 log.error(f"Nmap scan failed: {result.stderr}")
                 return {"error": result.stderr}
+
+            log.info(f"Nmap scan stdout: {result.stdout}")
 
             # Read the XML output
             with open(xml_output_file, "r") as f:
@@ -160,8 +167,6 @@ class NmapIntegration(ToolIntegration):
         finally:
             # Clean up the temporary file
             try:
-                import os
-
                 os.unlink(xml_output_file)
             except Exception as e:
                 log.warning(f"Failed to delete temporary XML file: {e}")
@@ -217,6 +222,7 @@ class NmapIntegration(ToolIntegration):
                 port=port_num,
                 protocol=protocol,
                 service=service or "unknown",
+                source_tool=self.tool_name,
                 raw_evidence=f"Port {port}/{protocol} is open running {service or 'unknown'}",
             )
 
@@ -245,35 +251,85 @@ class NmapIntegration(ToolIntegration):
         return None
 
     async def scan(
-        self, target: str, ports: Optional[str] = None, options: List[str] = []
+        self, target: str, ports: Optional[str] = None, options: List = []
     ) -> List[BaseFinding]:
         """
-        Legacy method for backward compatibility.
-
-        This is a wrapper around the run and parse_output methods that simplifies the interface
-        for callers that don't need the full flexibility of the run method.
-
+        Scan a target using Nmap and return findings.
+        
         Args:
-            target: The host or network to scan.
-            ports: The ports to scan (e.g., "22,80,443" or "top1000").
-            options: Additional options to pass to the scan.
-
+            target: The target to scan.
+            ports: The ports to scan, e.g. "22,80,443" or "1-1000".
+            options: List of additional options as tuples.
+            
         Returns:
-            List of findings from the scan.
+            List of PortFinding objects.
         """
-        log.warning(
-            "The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead."
-        )
-
+        log.warning("The 'scan' method is deprecated. Use 'run' followed by 'parse_output' instead.")
+        
         try:
-            # Run the scan and get raw results
-            scan_result = await self.run(
-                target, options={"ports": ports, "additional_options": options}
-            )
+            # Ensure we have an Nmap executable
+            if not self._nmap_path:
+                is_available, nmap_path = ensure_tool_available("nmap")
+                if is_available:
+                    self._nmap_path = nmap_path
+                else:
+                    raise ToolIntegrationError("Nmap executable not found")
 
-            # Parse the results
-            findings = self.parse_output(scan_result)
-            return findings if findings is not None else []
+            # Build command without relying on XML output
+            cmd = [self._nmap_path, "-sV"]
+            
+            # Add port specification
+            if ports:
+                cmd.extend(["-p", ports])
+                
+            # Add target
+            cmd.append(target)
+            
+            # Run the command
+            log.info(f"Running Nmap command: {' '.join(cmd)}")
+            result = await self._executor.execute(cmd)
+            
+            if result.return_code != 0:
+                log.error(f"Nmap scan failed: {result.stderr}")
+                return []
+                
+            log.info(f"Nmap scan stdout: {result.stdout}")
+            
+            # Parse the output directly
+            findings = []
+            
+            # Simple regex to extract port information from stdout
+            port_pattern = r"(\d+)/tcp\s+(open|filtered|closed)\s+(\w+)(?:\s+(.+))?"
+            port_matches = re.findall(port_pattern, result.stdout)
+            
+            for port, state, service, version in port_matches:
+                port_num = int(port)
+                
+                # Determine severity based on port/service and state
+                severity = FindingSeverity.INFO
+                if state == "open":
+                    if service in ["ssh", "telnet", "ftp"]:
+                        severity = FindingSeverity.LOW
+                    elif port_num in [22, 23, 21, 445, 3389]:
+                        severity = FindingSeverity.LOW
+                
+                # Create the finding
+                finding = PortFinding(
+                    title=f"Port: {port}/tcp ({state})",
+                    description=f"Detected {state} port {port}/tcp running {service or 'unknown'} service{f' version {version}' if version else ''}",
+                    severity=severity,
+                    target=port,
+                    port=port_num,
+                    protocol="tcp",
+                    service=service or "unknown",
+                    source_tool=self.tool_name,
+                    raw_evidence=f"Port {port}/tcp is {state} running {service or 'unknown'}{f' version {version}' if version else ''}",
+                )
+                
+                findings.append(finding)
+                
+            return findings
+            
         except Exception as e:
             log.exception(f"Error in scan method: {e}")
             return []

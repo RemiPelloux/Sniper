@@ -28,8 +28,16 @@ DEFAULT_EXTENSIONS = "php,html,js,txt,bak,config,json,xml"
 class DirsearchIntegration(BaseIntegration):
     """Integration with Dirsearch for directory/file discovery."""
 
-    def __init__(self, executor: SubprocessExecutor | None = None) -> None:
+    def __init__(self, executor: SubprocessExecutor | None = None, options: dict = None) -> None:
+        """Initialize the DirsearchIntegration.
+        
+        Args:
+            executor: Optional. A SubprocessExecutor to use for running dirsearch.
+                     If not provided, a new one will be created.
+            options: Optional. Dictionary of configuration options.
+        """
         self._executor = executor or SubprocessExecutor()
+        self._options = options or {}
         # Check for dirsearch.py or dirsearch executable
         self._dirsearch_path = shutil.which("dirsearch") or shutil.which("dirsearch.py")
         self._is_script = self._dirsearch_path and self._dirsearch_path.endswith(".py")

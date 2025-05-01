@@ -1,29 +1,57 @@
 services:
+  # Main Sniper application container
   sniper:
     build:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - ./config:/app/config
+      - ./config:/app/config:ro
       - ./data:/app/data
+      - ./reports:/app/reports
     environment:
       - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - ZAP_API_KEY=${ZAP_API_KEY:-zap-api-key-for-automation}
+      - DOCKER_HOST=unix:///var/run/docker.sock
     entrypoint: ["python", "-m", "src.cli.scan"]
     command: ["--help"]
+    networks:
+      - sniper-network
   
-  # OWASP ZAP service
+  # OWASP ZAP container for web vulnerability scanning
   zap:
-    image: owasp/zap2docker-stable
+    image: zaproxy/zap-stable
     volumes:
       - ./data:/zap/wrk
+      - ./reports:/zap/reports
     ports:
-      - "8080:8080"
-      - "8090:8090"
+      - "8080:8080"  # ZAP API and GUI
+      - "8090:8090"  # ZAP WebSwing interface
     command: zap-webswing.sh
     environment:
       - ZAP_PORT=8080
+      - ZAP_API_KEY=${ZAP_API_KEY:-zap-api-key-for-automation}
+    networks:
+      - sniper-network
     
+  # Database for storing scan results (optional)
+  db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=sniper
+      - POSTGRES_PASSWORD=sniper-secure-password
+      - POSTGRES_DB=sniper
+    volumes:
+      - sniper-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - sniper-network
+
+volumes:
+  sniper-data:
+    driver: local
 
 networks:
-  default:
+  sniper-network:
     driver: bridge 
